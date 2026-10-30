@@ -514,5 +514,6 @@ export const en = {
   "infoTab": "Info",
   "videoClipSettings": "Video clip settings",
   "keyIsOn": "Key is on",
-  "clipIsCropped": "Clip is cropped"
+  "clipIsCropped": "Clip is cropped",
+  "library": "Library"
 };
