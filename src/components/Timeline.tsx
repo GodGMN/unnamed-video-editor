@@ -1,8 +1,8 @@
-import type { MouseEvent, PointerEvent, ReactNode } from 'react';
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useRef } from 'react';
-import { MAIN_IDS, PPS, SOURCES, TRANSITION_BETWEEN, TRANSITION_NAMES, curveName, filmstrip } from '../editor/model';
-import type { ClipId, Tool, TrackKey } from '../editor/model';
-import type { Project } from '../editor/useProject';
+import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, filmstrip, findClip, partnersOf } from '../editor/model';
+import type { AudioClip, Tool, Track, VideoClip } from '../editor/model';
+import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { CutLine, Crossfade, Cursor, Duplicate, Eye, FadeBlack, Link, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
 
@@ -17,22 +17,17 @@ const TOOLS: { k: Tool; label: string; key: string; icon: ReactNode }[] = [
   { k: 'text', label: 'Text', key: 'T', icon: <TextT size={14} /> },
 ];
 
-const HEADERS: { key: TrackKey | 'T1'; label: string; sub: string; h: number; type: 'text' | 'video' | 'audio' }[] = [
-  { key: 'T1', label: 'Text', sub: '', h: TEXT_TRACK_H, type: 'text' },
-  { key: 'V2', label: 'V2', sub: 'Overlay', h: VIDEO_TRACK_H, type: 'video' },
-  { key: 'V1', label: 'V1', sub: 'Main', h: VIDEO_TRACK_H, type: 'video' },
-  { key: 'A1', label: 'A1', sub: 'Clip audio', h: AUDIO_TRACK_H, type: 'audio' },
-  { key: 'A2', label: 'A2', sub: 'Overlay audio', h: AUDIO_TRACK_H, type: 'audio' },
-];
+const TRACK_H = { text: TEXT_TRACK_H, video: VIDEO_TRACK_H, audio: AUDIO_TRACK_H };
 
-export function Timeline({ project }: { project: Project }) {
-  const { state, layout, select, setTool, setPlayhead, toggleTrack, openMenu, closeMenu } = project;
+const isOff = (t: Track) => (t.kind === 'audio' ? t.muted : t.hidden);
+
+export function Timeline({ editor }: { editor: Editor }) {
+  const { project, ui, layout, select, setTool, setPlayhead, toggleTrack, openMenu, closeMenu } = editor;
   const rootRef = useRef<HTMLElement>(null);
   const startDrag = useDrag();
-  const hid = state.hidden;
-  const tlWidth = (Math.ceil(layout.seqEnd) + 2) * PPS + 20;
+  const tlWidth = (Math.ceil(layout.end) + 2) * PPS + 20;
 
-  const onContextMenu = (kind: 'clip' | 'audio', id: ClipId) => (e: MouseEvent) => {
+  const onContextMenu = (kind: 'clip' | 'audio', id: string) => (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const root = rootRef.current;
@@ -47,7 +42,7 @@ export function Timeline({ project }: { project: Project }) {
   const onRulerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     const left = e.currentTarget.getBoundingClientRect().left;
-    const seek = (clientX: number) => setPlayhead(Math.max(0, Math.min(layout.seqEnd, (clientX - left) / PPS)));
+    const seek = (clientX: number) => setPlayhead(Math.max(0, Math.min(layout.end, (clientX - left) / PPS)));
     const x0 = e.clientX;
     seek(x0);
     startDrag(e, (dx) => seek(x0 + dx));
@@ -64,17 +59,12 @@ export function Timeline({ project }: { project: Project }) {
     );
   }
 
-  const texts = [
-    { key: 't1' as const, start: 10, dur: Number(state.text.dur) || 5, label: state.text.content },
-    { key: 't2' as const, start: 19, dur: 4, label: state.text2.content },
-  ];
-
   return (
     <section ref={rootRef} className="panel timeline" onClick={closeMenu}>
       <div className="tl-tools">
         <div className="toolbar" role="toolbar" aria-label="Timeline tools">
           {TOOLS.map((o) => (
-            <button key={o.k} aria-pressed={state.tool === o.k} title={`${o.label} · ${o.key}`} onClick={() => setTool(o.k)}>
+            <button key={o.k} aria-pressed={ui.tool === o.k} title={`${o.label} · ${o.key}`} onClick={() => setTool(o.k)}>
               {o.icon}
               {o.label}<span className="kbd">{o.key}</span>
             </button>
@@ -90,16 +80,16 @@ export function Timeline({ project }: { project: Project }) {
       <div className="tl-body">
         <div className="track-heads">
           <div style={{ height: 28, borderBottom: '1px solid var(--line)' }} />
-          {HEADERS.map((h) => {
-            const off = h.type !== 'text' && !!hid[h.key as TrackKey];
+          {project.tracks.map((t) => {
+            const off = isOff(t);
             return (
-              <div key={h.key} className="track-head" style={{ height: h.h }}>
-                <span className="track-head-label"><span>{h.label}</span><span>{h.sub}</span></span>
-                {h.type !== 'text' && (
+              <div key={t.id} className="track-head" style={{ height: TRACK_H[t.kind] }}>
+                <span className="track-head-label"><span>{t.name}</span><span>{t.label}</span></span>
+                {t.kind !== 'text' && (
                   <button className="ib" style={{ width: 28, height: 28, color: off ? 'var(--warn)' : 'var(--text-muted)' }}
-                    aria-label={`${h.type === 'audio' ? (off ? 'Unmute' : 'Mute') : (off ? 'Show' : 'Hide')} track ${h.label}`}
-                    aria-pressed={off} onClick={() => toggleTrack(h.key as TrackKey)}>
-                    {h.type === 'video' ? <Eye size={14} /> : <Volume size={14} />}
+                    aria-label={`${t.kind === 'audio' ? (off ? 'Unmute' : 'Mute') : (off ? 'Show' : 'Hide')} track ${t.name}`}
+                    aria-pressed={off} onClick={() => toggleTrack(t.id)}>
+                    {t.kind === 'video' ? <Eye size={14} /> : <Volume size={14} />}
                   </button>
                 )}
               </div>
@@ -111,61 +101,64 @@ export function Timeline({ project }: { project: Project }) {
           <div style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
             <div className="ruler" onPointerDown={onRulerDown}>{ticks}</div>
 
-            <div className="track" style={{ height: TEXT_TRACK_H }}>
-              {texts.map((x) => (
-                <button key={x.key} className="text-clip" style={{ left: x.start * PPS + 1, width: x.dur * PPS - 2 }}
-                  aria-label={`Text overlay: ${x.label}`}
-                  aria-pressed={state.sel.kind === 'text' && state.sel.id === x.key}
-                  onClick={() => select({ kind: 'text', id: x.key })}>
-                  <TextT size={12} strokeWidth={2.2} />
-                  <span>{x.label}</span>
-                </button>
-              ))}
-            </div>
+            {project.tracks.map((t) => (
+              <div key={t.id} className="track" style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
+                {t.kind === 'text' && t.items.map((x) => (
+                  <button key={x.id} className="text-clip" style={{ left: x.start * PPS + 1, width: x.duration * PPS - 2 }}
+                    aria-label={`Text overlay: ${x.content}`}
+                    aria-pressed={ui.sel?.kind === 'text' && ui.sel.id === x.id}
+                    onClick={() => select({ kind: 'text', id: x.id })}>
+                    <TextT size={12} strokeWidth={2.2} />
+                    <span>{x.content}</span>
+                  </button>
+                ))}
+                {t.kind === 'video' && (
+                  <>
+                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} clip={c} onMenu={onContextMenu('clip', c.id)} />)}
+                    <Transitions editor={editor} clips={t.clips} />
+                  </>
+                )}
+                {t.kind === 'audio' && t.clips.map((c) => (
+                  <AudioClipView key={c.id} editor={editor} clip={c} onMenu={onContextMenu('audio', c.id)} />
+                ))}
+              </div>
+            ))}
 
-            <div className="track" style={{ height: VIDEO_TRACK_H, opacity: hid.V2 ? 0.35 : 1 }}>
-              <VideoClip project={project} id="e" onMenu={onContextMenu('clip', 'e')} />
-            </div>
-            <div className="track" style={{ height: VIDEO_TRACK_H, opacity: hid.V1 ? 0.35 : 1 }}>
-              {MAIN_IDS.map((id) => <VideoClip key={id} project={project} id={id} onMenu={onContextMenu('clip', id)} />)}
-              <Transitions project={project} />
-            </div>
-            <div className="track" style={{ height: AUDIO_TRACK_H, opacity: hid.A1 ? 0.35 : 1 }}>
-              {MAIN_IDS.map((id) => <AudioClip key={id} project={project} id={id} onMenu={onContextMenu('audio', id)} />)}
-            </div>
-            <div className="track" style={{ height: AUDIO_TRACK_H, opacity: hid.A2 ? 0.35 : 1 }}>
-              <AudioClip project={project} id="e" onMenu={onContextMenu('audio', 'e')} />
-            </div>
-
-            <div className="playhead" style={{ left: state.playhead * PPS }} />
+            <div className="playhead" style={{ left: ui.playhead * PPS }} />
           </div>
         </div>
       </div>
 
-      {state.menu && <ClipMenu project={project} />}
+      {ui.menu && <ClipMenu editor={editor} />}
     </section>
   );
 }
 
-interface ClipProps {
-  project: Project;
-  id: ClipId;
+interface ClipProps<C> {
+  editor: Editor;
+  clip: C;
   onMenu: (e: MouseEvent) => void;
 }
 
-function VideoClip({ project, id, onMenu }: ClipProps) {
-  const { state, layout, select } = project;
-  const src = SOURCES[id];
-  const cs = state.clips[id];
-  const l = layout.lay[id];
+/** Whether the selection is a linked partner of `clip` (of the given selection kind). */
+function partnerSelected({ project, ui }: Editor, clip: VideoClip | AudioClip, kind: 'clip' | 'audio') {
+  const sel = ui.sel;
+  return !!sel && sel.kind === kind && clip.linked && clip.linkId !== null && findClip(project, sel.id)?.clip.linkId === clip.linkId;
+}
+
+function VideoClipView({ editor, clip: cs, onMenu }: ClipProps<VideoClip>) {
+  const { project, ui, layout, select } = editor;
+  const id = cs.id;
+  const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
+  const l = layout.clips[id];
   const width = (l.ve - l.vs) * PPS - 3;
   const dur = cs.outS - cs.inS;
-  const selected = state.sel.kind === 'clip' && state.sel.id === id;
-  const partner = state.sel.kind === 'audio' && state.sel.id === id && cs.linked;
+  const selected = ui.sel?.kind === 'clip' && ui.sel.id === id;
+  const partner = partnerSelected(editor, cs, 'audio');
 
   return (
     <button className={'clip' + (partner ? ' partner' : '')}
-      style={{ left: l.vs * PPS + 1, width, background: src.tone, cursor: state.tool === 'split' ? 'crosshair' : 'pointer' }}
+      style={{ left: l.vs * PPS + 1, width, background: src.tone, cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
       aria-label={`Video: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
       aria-pressed={selected}
       onClick={() => select({ kind: 'clip', id })}
@@ -190,19 +183,21 @@ function VideoClip({ project, id, onMenu }: ClipProps) {
   );
 }
 
-function Transitions({ project }: { project: Project }) {
-  const { state, layout, select } = project;
+/** A chip on every boundary between adjacent clips. */
+function Transitions({ editor, clips }: { editor: Editor; clips: VideoClip[] }) {
+  const { ui, layout, select } = editor;
   return (
     <>
-      {state.trans.map((tt, i) => {
-        const w = tt.type === 'cut' ? 26 : Math.max(26, tt.dur * PPS);
-        const at = layout.lay[MAIN_IDS[i]].ve;
-        const [from, to] = TRANSITION_BETWEEN[i];
+      {clips.map((c) => {
+        const l = layout.clips[c.id];
+        if (!l.nextId) return null;
+        const tt = c.transitionOut ?? DEFAULT_TRANSITION;
+        const w = tt.type === 'cut' ? 26 : Math.max(26, tt.duration * PPS);
         return (
-          <button key={i} className="trans-chip" style={{ left: at * PPS - w / 2, width: w }}
-            aria-label={`${TRANSITION_NAMES[tt.type]} transition between ${from} and ${to}`}
-            aria-pressed={state.sel.kind === 'trans' && state.sel.id === i}
-            onClick={() => select({ kind: 'trans', id: i })}>
+          <button key={c.id} className="trans-chip" style={{ left: l.ve * PPS - w / 2, width: w }}
+            aria-label={`${TRANSITION_NAMES[tt.type]} transition between ${l.name} and ${layout.clips[l.nextId].name}`}
+            aria-pressed={ui.sel?.kind === 'trans' && ui.sel.id === c.id}
+            onClick={() => select({ kind: 'trans', id: c.id })}>
             {tt.type === 'crossfade' && <Crossfade size={14} />}
             {tt.type === 'fade' && <FadeBlack size={14} />}
             {tt.type === 'cut' && <CutLine size={14} />}
@@ -215,17 +210,17 @@ function Transitions({ project }: { project: Project }) {
 
 const f1 = (x: number) => x.toFixed(1);
 
-function AudioClip({ project, id, onMenu }: ClipProps) {
-  const { state, layout, select, updateClip } = project;
+function AudioClipView({ editor, clip: cs, onMenu }: ClipProps<AudioClip>) {
+  const { project, ui, layout, select, updateAudioClip: updateClip } = editor;
   const startDrag = useDrag();
-  const src = SOURCES[id];
-  const cs = state.clips[id];
-  const l = layout.lay[id];
+  const id = cs.id;
+  const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
+  const l = layout.clips[id];
   const span = (l.ve - l.vs) || 1;
   const width = (l.ve - l.vs) * PPS - 3;
   const pxs = width / span;
-  const selected = state.sel.kind === 'audio' && state.sel.id === id;
-  const partner = state.sel.kind === 'clip' && state.sel.id === id && cs.linked;
+  const selected = ui.sel?.kind === 'audio' && ui.sel.id === id;
+  const partner = partnerSelected(editor, cs, 'clip');
   const half = (cs.outS - cs.inS) / 2;
 
   const bars = [];
@@ -260,10 +255,25 @@ function AudioClip({ project, id, onMenu }: ClipProps) {
     });
   };
 
+  // Gain line: the clip's height spans 0–200%, the line sits at the level and follows the pointer.
+  const volY = Math.round(H * (1 - Math.min(200, cs.vol) / 200));
+  const volDown = (e: PointerEvent<HTMLButtonElement>) => {
+    select({ kind: 'audio', id });
+    const v0 = cs.vol;
+    startDrag(e, (_dx, dy) => updateClip(id, { vol: Math.round(Math.max(0, Math.min(200, v0 - dy * 200 / H))) }));
+  };
+  const volKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const step = e.shiftKey ? 10 : 1;
+    const d = e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0;
+    if (!d) return;
+    e.preventDefault();
+    updateClip(id, { vol: Math.max(0, Math.min(200, cs.vol + d)) });
+  };
+
   return (
     <div className={'audio-clip' + (selected ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked')}
       style={{ left: l.vs * PPS + 1, width }}>
-      <button className="audio-wave" style={{ cursor: state.tool === 'split' ? 'crosshair' : 'pointer' }}
+      <button className="audio-wave" style={{ cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
         aria-label={`Audio: ${src.name}, volume ${cs.vol}%${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
         aria-pressed={selected}
         onClick={() => select({ kind: 'audio', id })}
@@ -272,6 +282,7 @@ function AudioClip({ project, id, onMenu }: ClipProps) {
           <span key={i} style={{ height: h, background: cs.muted ? 'rgba(241,244,240,0.22)' : 'rgba(198,240,191,0.7)' }} />
         ))}
       </button>
+      <span className="vol-headroom" style={{ height: volY }} aria-hidden="true" />
       <svg width={f1(fiW)} height={H} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', borderRadius: '8px 0 0 8px' }} aria-hidden="true">
         <path d={`M0,0 L${f1(fiW)},0 Q${f1(ci.cx)},${f1(ci.cy)} 0,${H} Z`} fill="rgba(12,14,13,0.62)" />
         <path d={`M0,${H} Q${f1(ci.cx)},${f1(ci.cy)} ${f1(fiW)},0`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
@@ -280,14 +291,17 @@ function AudioClip({ project, id, onMenu }: ClipProps) {
         <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H} L${f1(foW)},0 Z`} fill="rgba(12,14,13,0.62)" />
         <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H}`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
       </svg>
-      {fiW >= 14 && (
+      <button className={'vol-line' + (cs.muted ? ' muted' : '')} style={{ top: volY - 6 }}
+        aria-label={`Volume ${cs.vol}%, drag up or down to adjust`} title={`Volume ${cs.vol}% · drag to adjust`}
+        onPointerDown={volDown} onKeyDown={volKey} />
+      {selected && fiW >= 14 && (
         <button className="curve-handle" style={{ left: ciM.x - 9, top: ciM.y - 9 }}
           aria-label={`Fade-in curve ${curveName(cs.curveIn)}, drag up or down to adjust`}
           title="Drag up or down to shape the fade-in curve" onPointerDown={curveDown('curveIn')}>
           <span />
         </button>
       )}
-      {foW >= 14 && (
+      {selected && foW >= 14 && (
         <button className="curve-handle" style={{ left: width - foW + coM.x - 9, top: coM.y - 9 }}
           aria-label={`Fade-out curve ${curveName(cs.curveOut)}, drag up or down to adjust`}
           title="Drag up or down to shape the fade-out curve" onPointerDown={curveDown('curveOut')}>
@@ -299,25 +313,34 @@ function AudioClip({ project, id, onMenu }: ClipProps) {
         {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
         {cs.vol}%
       </span>
-      <button className="fade-handle" style={{ left: fiW - 10 }}
-        aria-label={`Fade in ${cs.fadeIn.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade in"
-        onPointerDown={fadeDown('fadeIn', 1)}>
-        <span />
-      </button>
-      <button className="fade-handle" style={{ right: foW - 10 }}
-        aria-label={`Fade out ${cs.fadeOut.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade out"
-        onPointerDown={fadeDown('fadeOut', -1)}>
-        <span />
-      </button>
+      {selected && (
+        <>
+          <button className="fade-handle" style={{ left: fiW - 10 }}
+            aria-label={`Fade in ${cs.fadeIn.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade in"
+            onPointerDown={fadeDown('fadeIn', 1)}>
+            <span />
+          </button>
+          <button className="fade-handle" style={{ right: foW - 10 }}
+            aria-label={`Fade out ${cs.fadeOut.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade out"
+            onPointerDown={fadeDown('fadeOut', -1)}>
+            <span />
+          </button>
+        </>
+      )}
     </div>
   );
 }
 
-function ClipMenu({ project }: { project: Project }) {
-  const { state, updateClip, closeMenu } = project;
-  const m = state.menu!;
-  const cs = state.clips[m.id];
-  const label = `${m.kind === 'audio' ? 'Audio' : 'Video'} · ${SOURCES[m.id].name}`;
+function ClipMenu({ editor }: { editor: Editor }) {
+  const { project, ui, updateVideoClip, updateAudioClip, closeMenu } = editor;
+  const m = ui.menu!;
+  const found = findClip(project, m.id);
+  if (!found) return null;
+  const cs = found.clip;
+  const audio = audioFor(project, m.id);
+  const label = `${m.kind === 'audio' ? 'Audio' : 'Video'} · ${(project.media[cs.mediaId] ?? MISSING_MEDIA).name}`;
+  const canLink = cs.linkId !== null && partnersOf(project, cs).length > 0;
+  const updateClip = m.kind === 'audio' ? updateAudioClip : updateVideoClip;
   const act = (fn?: () => void) => (e: MouseEvent) => { e.stopPropagation(); fn?.(); closeMenu(); };
 
   return (
@@ -330,13 +353,17 @@ function ClipMenu({ project }: { project: Project }) {
         <Duplicate size={14} stroke="#C8CEC9" /><span>Duplicate</span><span className="kbd">Ctrl D</span>
       </button>
       <div className="menu-sep" />
-      <button role="menuitem" className="ib" onClick={act(() => updateClip(m.id, { linked: !cs.linked }))}>
-        {cs.linked ? <Unlink size={14} stroke="var(--warn)" /> : <Link size={14} stroke="var(--accent)" />}
-        <span>{cs.linked ? 'Unlink audio and video' : 'Link audio and video'}</span><span className="kbd">Ctrl L</span>
-      </button>
-      <button role="menuitem" className="ib" onClick={act(() => updateClip(m.id, { muted: !cs.muted }))}>
-        <Mute size={14} stroke="#C8CEC9" /><span>{cs.muted ? 'Unmute audio' : 'Mute audio'}</span><span className="kbd">M</span>
-      </button>
+      {canLink && (
+        <button role="menuitem" className="ib" onClick={act(() => updateClip(m.id, { linked: !cs.linked }))}>
+          {cs.linked ? <Unlink size={14} stroke="var(--warn)" /> : <Link size={14} stroke="var(--accent)" />}
+          <span>{cs.linked ? 'Unlink audio and video' : 'Link audio and video'}</span><span className="kbd">Ctrl L</span>
+        </button>
+      )}
+      {audio && (
+        <button role="menuitem" className="ib" onClick={act(() => updateAudioClip(audio.id, { muted: !audio.muted }))}>
+          <Mute size={14} stroke="#C8CEC9" /><span>{audio.muted ? 'Unmute audio' : 'Mute audio'}</span><span className="kbd">M</span>
+        </button>
+      )}
       <div className="menu-sep" />
       <button role="menuitem" className="ib danger" onClick={act()}>
         <Trash size={14} /><span>Delete</span><span className="kbd">Del</span>
