@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react';
 import { clearPreviewCache, PREVIEW_BUDGET, previewCacheBytes } from '../media/files';
-import { Dialog } from './Dialog';
 
-export function ProjectStorage({ onClose }: { onClose: () => void }) {
+export function StorageSettings() {
   const [bytes, setBytes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   useEffect(() => { void previewCacheBytes().then(setBytes, e => setError(String(e))); }, []);
-  return <Dialog id="storage-title" title="Settings" subtitle="Storage on this device" width={520} onClose={onClose}>
-    <div className="dialog-body storage-dialog">
+  return <div className="storage-dialog">
       <div><h3>Preview cache</h3><p>Thumbnails and waveforms help you browse your edits. You can clear them at any time and rebuild them from your media.</p></div>
       <div className="storage-meter-label"><span>{bytes === null ? 'Checking usage…' : `${(bytes / 1048576).toFixed(1)} MiB used`}</span><span>{PREVIEW_BUDGET / 1048576} MiB limit</span></div>
       <meter min={0} max={PREVIEW_BUDGET} value={bytes ?? 0} aria-label="Preview cache usage" />
@@ -19,6 +17,5 @@ export function ProjectStorage({ onClose }: { onClose: () => void }) {
       }}>{busy ? 'Clearing…' : 'Clear preview cache'}</button>
       <p className="storage-note">Project edits and media links are saved in this browser. Keep a downloaded project or a package as a backup.</p>
       <p role="status">{message}</p>{error && <p role="alert" className="error">{error}</p>}
-    </div>
-  </Dialog>;
+    </div>;
 }

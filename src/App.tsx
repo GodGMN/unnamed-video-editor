@@ -11,6 +11,7 @@ import { DesktopOnly } from './components/DesktopOnly';
 import { ExportDialog } from './components/ExportDialog';
 import { MediaPanel } from './components/MediaPanel';
 import { PreviewPanel } from './components/PreviewPanel';
+import { SettingsDialog } from './components/SettingsDialog';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { Timeline } from './components/Timeline';
 import { TopBar } from './components/TopBar';
@@ -62,6 +63,7 @@ function EditorApp({ id, initial, onHome }: { id: string; initial: Project; onHo
   const [mediaRevision, setMediaRevision] = useState(0);
   const job = useConversionJob();
   const [exporting, setExporting] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [converting, setConverting] = useState<Pick<Media, 'id' | 'name'> | null>(null);
   const converted = useConvertedMedia(editor);
 
@@ -77,7 +79,7 @@ function EditorApp({ id, initial, onHome }: { id: string; initial: Project; onHo
       <TopBar onProjects={() => {
         if (pendingImports || converted.pending || job) { setNavigationError('Finish importing or finish/cancel the conversion before leaving the editor.'); return; }
         void editor.flush().then(() => onHome(editor.project), e => setNavigationError(String(e)));
-      }} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
+      }} onSettings={() => setSettings(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onShowConversion={(id, name) => setConverting({ id, name })} />
       {navigationError && <div role="alert" className="editor-navigation-error">{navigationError}<button onClick={() => setNavigationError('')} aria-label="Dismiss error">×</button></div>}
       {converted.error && <p role="alert" className="error">{converted.error}</p>}
@@ -91,6 +93,7 @@ function EditorApp({ id, initial, onHome }: { id: string; initial: Project; onHo
         <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project, editor.layout)}
           onClose={() => setExporting(false)} />
       )}
+      {settings && <SettingsDialog output={project.output} onClose={() => setSettings(false)} />}
       {converting && <ConvertDialog mediaId={converting.id} fileName={converting.name} onClose={() => setConverting(null)} />}
     </div>
   );

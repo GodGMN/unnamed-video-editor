@@ -12,8 +12,8 @@ import { downloadProject, openProjectFile, packageProject, reconnectPackage } fr
 import { ActionMenu } from './ActionMenu';
 import { Brand } from './Brand';
 import { Dialog } from './Dialog';
-import { ProjectStorage } from './ProjectStorage';
-import { ChevronDown, ChevronRight, Clock, Film, LibraryGrid, Play, Plus, Search, Settings, Star } from './icons';
+import { SettingsDialog } from './SettingsDialog';
+import { ChevronDown, ChevronRight, Clock, Film, LibraryGrid, Play, Plus, Search, Cog, Star } from './icons';
 
 type Filter = 'all' | 'recent' | 'favorites';
 function artworkId(project: Project) {
@@ -123,7 +123,7 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
       <nav aria-label="Project library">
         {([{ key: 'all', label: 'All projects', icon: LibraryGrid, count: entries.length }, { key: 'recent', label: 'Recent', icon: Clock, count: Math.min(entries.length, 8) }, { key: 'favorites', label: 'Favorites', icon: Star, count: favoriteCount }] as const).map(item => <button key={item.key} className={`home-nav ${filter === item.key ? 'active' : ''}`} aria-current={filter === item.key ? 'page' : undefined} onClick={() => { setFilter(item.key); setQuery(''); }}><item.icon size={18} /><span>{item.label}</span><small>{item.count}</small></button>)}
       </nav>
-      <div className="home-sidebar-bottom"><button className="home-nav" onClick={() => setSettings(true)}><Settings size={18} /><span>Settings</span></button><p><i />Saved on this device</p></div>
+      <div className="home-sidebar-bottom"><button className="home-nav" onClick={() => setSettings(true)}><Cog size={18} /><span>Settings</span></button><p><i />Saved on this device</p></div>
     </aside>
     <main className="home-main">
       <div className="home-content">
@@ -154,7 +154,7 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
     </main>
     <input ref={importInput} aria-label="Import project file" type="file" accept=".json,.uvepack" hidden onChange={e => { const file = e.target.files?.[0]; if (file) void run('Opening project…', () => importFile({ file })); e.target.value = ''; }} />
     <input ref={reconnectInput} aria-label="Reconnect package" type="file" accept=".uvepack" hidden onChange={e => { const file = e.target.files?.[0], target = reconnectTarget.current; if (file && target) void run('Reconnecting media…', async () => { await reconnectPackage(target.project, { file }); await refresh(); }); e.target.value = ''; }} />
-    {settings && <ProjectStorage onClose={() => setSettings(false)} />}
+    {settings && <SettingsDialog output={last?.project.output ?? { width: 1920, height: 1080 }} onClose={() => setSettings(false)} />}
     {rename && <Dialog id="rename-project" title="Rename project" subtitle="Choose a name you can find later." width={440} onClose={() => { if (!busy) setRename(null); }}><form className="dialog-body" onSubmit={e => { e.preventDefault(); const next = name.trim(); if (next) void run('Renaming project…', async () => { await updateProjectDetails(rename.id, { name: next }); await refresh(); setRename(null); }); }}><label className="field-label">Project name<input className="fld" aria-label="Project name" autoFocus onFocus={e => e.target.select()} maxLength={80} value={name} onChange={e => setName(e.target.value)} /></label>{error && <p role="alert" className="error">{error}</p>}<div className="dialog-actions"><button type="button" className="gb" disabled={!!busy} onClick={() => setRename(null)}>Cancel</button><button className="primary" disabled={!!busy || !name.trim()}>Save name</button></div></form></Dialog>}
     {deleting && <Dialog id="delete-project" title="Delete project?" subtitle={deleting.project.name} warn width={450} onClose={() => { if (!busy) setDeleting(null); }}><div className="dialog-body"><p>This removes the saved edit from this browser. Your original media stays on disk. Download a backup first if you want to keep the project.</p>{error && <p role="alert" className="error">{error}</p>}<div className="dialog-actions"><button className="gb" disabled={!!busy} onClick={() => setDeleting(null)}>Keep project</button><button className="home-delete" disabled={!!busy} onClick={() => void run('Deleting project…', () => remove(deleting))}>Delete project</button></div></div></Dialog>}
   </div>;

@@ -10,6 +10,7 @@ import { useDrag } from '../editor/useProject';
 import { Checker, ChevronLeft, ChevronRight, Close, Dropper, Maximize, Minimize, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
 import { NumberField } from './NumberField';
 import { Slider } from './Slider';
+import { previewSize, useSettings } from '../settings';
 import { useFullscreen } from './useFullscreen';
 
 interface Props {
@@ -23,7 +24,8 @@ export function PreviewPanel({ editor, totalTime }: Props) {
   const [muted, setMuted] = useState(false);
   const [grid, setGrid] = useState(false);
   const silent = muted || volume === 0;
-  const playback = usePlayback(editor, silent ? 0 : volume / 100, grid);
+  const preview = previewSize(project.output, useSettings().previewResolution);
+  const playback = usePlayback(editor, silent ? 0 : volume / 100, grid, preview.height);
   const source = ui.source ? project.media[ui.source] ?? null : null;
   const still = source?.still ? source : null;
   const sourcePlayer = useSourcePlayer(still ? null : source, silent ? 0 : volume / 100);
@@ -68,7 +70,7 @@ export function PreviewPanel({ editor, totalTime }: Props) {
       <div className="stage-wrap">
         <div className="stage-fit">
           <div className={grid && !source ? 'stage grid' : 'stage'} style={{ aspectRatio: `${project.output.width} / ${oh}` }}>
-            <canvas ref={playback.canvas} width={960} height={Math.round(960 * oh / project.output.width)} aria-label="Timeline preview" style={{ width: '100%', height: '100%', display: 'block' }} />
+            <canvas ref={playback.canvas} width={preview.width} height={preview.height} aria-label="Timeline preview" style={{ width: '100%', height: '100%', display: 'block' }} />
             {!source && ui.keyPick && <KeyPicker editor={editor} clipId={ui.keyPick} sample={playback.sample} />}
             <video ref={sourcePlayer.video} className="source-video" hidden={!source || !!still} playsInline preload="auto" aria-label={source && !still ? `Source preview: ${source.name}` : undefined} />
             {still && stillSource.url && (

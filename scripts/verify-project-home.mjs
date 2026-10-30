@@ -63,6 +63,9 @@ try {
   await page.keyboard.press('End');assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Delete project');
   await page.keyboard.press('Escape');assert.equal(await page.getByRole('menu').count(),0);
   await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await page.getByRole('tab',{name:'Playback',exact:true}).focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.getByRole('tab',{name:'Storage',exact:true}).getAttribute('aria-selected'),'true');
   await page.getByRole('button',{name:'Clear preview cache',exact:true}).click();
   await page.getByRole('status').filter({hasText:'Preview cache cleared'}).waitFor();
   await page.screenshot({path:`${dir}/settings.png`});
