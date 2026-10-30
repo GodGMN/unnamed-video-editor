@@ -11,3 +11,8 @@ export async function projectAction(page, name, action) {
   await row.getByRole('button', { name: `Actions for ${name}`, exact: true }).click();
   await page.getByRole('menuitem', { name: action, exact: true }).click();
 }
+export async function returnHome(page) {
+  await page.locator('.media-status').filter({ hasText: /^Importing/ }).waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await page.locator('.project-home').waitFor();
+}

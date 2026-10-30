@@ -1,4 +1,4 @@
-import { openEditor, projectAction } from './browser-helpers.mjs';
+import { openEditor, projectAction, returnHome } from './browser-helpers.mjs';
 // Start Vite on TEST_URL. PLAYWRIGHT_MODULE can point to a local playwright-core/index.mjs.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -35,7 +35,7 @@ try {
   });
   assert.equal(source.copied, false); assert.equal(source.size, bytes.length); checks.push('UI imports source without OPFS copy');
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await returnHome(page);
   await projectAction(page, 'Untitled project', 'Package with media');
   const packageFile = await download; const packagePath = join(dir, packageFile.suggestedFilename()); await packageFile.saveAs(packagePath);
   await openEditor(page);
@@ -50,10 +50,10 @@ try {
   await page.locator('input[aria-label="Reconnect original.mp4"]').setInputFiles(fixture);
   await item.getByRole('button', { name: 'Rebuild previews' }).waitFor();
   checks.push('Reconnect restores source and previews');
-  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await returnHome(page);
   await projectAction(page, 'Untitled project', 'Duplicate');
   await page.getByRole('button', { name: 'Rename project Untitled project copy' }).waitFor();
-  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await returnHome(page);
   await page.waitForFunction(() => document.querySelectorAll('.home-project-row').length === 2);
   assert.equal(await page.locator('.home-project-row').count(), 2);
   const originalRow = page.locator('.home-project-row').filter({ has: page.locator('strong', { hasText: /^Untitled project$/ }) });
@@ -71,7 +71,7 @@ try {
   assert.notEqual(restored.id, source.media.id); assert.equal(restored.size, bytes.length); checks.push('Portable package roundtrip remaps media and reads slices without copying');
   await page.reload();
   await openEditor(page);
-  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await returnHome(page);
   await projectAction(page, 'Untitled project', 'Reconnect package');
   await page.locator('input[aria-label="Reconnect package"]').setInputFiles(packagePath);
   await openEditor(page);
@@ -124,7 +124,7 @@ try {
     return { used, budget: PREVIEW_BUDGET, cleared: await previewCacheBytes() };
   });
   assert.ok(cache.used > 0 && cache.used <= cache.budget); assert.equal(cache.cleared, 0); checks.push('Preview cache evicts within 128 MiB and clears');
-  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await returnHome(page);
   const documentDownload = page.waitForEvent('download');
   await projectAction(page, 'Untitled project', 'Download project');
   const projectFile = await documentDownload;
