@@ -152,7 +152,12 @@ export function Timeline({ editor }: { editor: Editor }) {
             <div className="ruler" onPointerDown={onRulerDown} onDoubleClick={clearFocus}
               title={focused ? 'Double-click to release the selected clip' : undefined}>
               {ticks}
-              {focus && <div className="focus-band" style={{ left: focus.start * pps, width: (focus.end - focus.start) * pps }} aria-hidden="true" />}
+              {focus && (
+                <div className="focus-band" style={{ left: focus.start * pps, width: (focus.end - focus.start) * pps }} aria-hidden="true">
+                  <span className="focus-handle start"><span className="grip" /></span>
+                  <span className="focus-handle end"><span className="grip" /></span>
+                </div>
+              )}
             </div>
 
             {project.tracks.map((t) => (
