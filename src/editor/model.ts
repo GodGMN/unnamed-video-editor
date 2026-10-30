@@ -464,6 +464,28 @@ export function snapClipStart(start: number, duration: number, targets: number[]
   return result;
 }
 
+/** Every clip and text item start and end on the timeline, plus 0, skipping the items in `skip`. */
+export function edgeTargets(p: Project, skip: Set<string>): number[] {
+  const targets = [0];
+  for (const track of p.tracks) {
+    if (track.kind === 'text') {
+      for (const item of track.items) if (!skip.has(item.id)) targets.push(item.start, item.start + item.duration);
+    } else for (const clip of track.clips) if (!skip.has(clip.id)) targets.push(clip.start, clipEnd(clip));
+  }
+  return targets;
+}
+
+/** The target closest to `time` within the snap radius (8 screen pixels), or null if none is that close. */
+export function snapEdge(time: number, targets: number[], pixelsPerSecond: number): number | null {
+  let result: number | null = null;
+  let distance = 8 / pixelsPerSecond;
+  for (const target of targets) {
+    const d = Math.abs(target - time);
+    if (d < distance) { result = target; distance = d; }
+  }
+  return result;
+}
+
 export function patchTextItem(p: Project, id: string, patch: Partial<TextItem>): Project {
   return {
     ...p,
