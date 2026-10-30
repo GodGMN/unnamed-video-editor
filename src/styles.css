@@ -512,9 +512,11 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .home-new-more { background: var(--accent); color: var(--bg); height: 40px; width: 34px; display: grid; place-items: center; border: 0; border-left: 1px solid rgb(23 25 24 / .18); border-radius: 0 7px 7px 0; }
 .home-resume { display: grid; grid-template-columns: 52% minmax(0, 1fr); height: clamp(220px, 29vh, 290px); flex: none; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 12px; position: relative; }
 .project-artwork { width: 68px; height: 40px; border-radius: 5px; overflow: hidden; flex: none; position: relative; background: var(--inset); }
-.project-artwork img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.project-artwork img { position: relative; width: 100%; height: 100%; object-fit: contain; display: block; }
+/* A frame at a different aspect sits on a blurred, dimmed copy of itself. */
+.project-artwork img.artwork-backdrop { position: absolute; inset: 0; object-fit: cover; filter: blur(8px) brightness(.45); transform: scale(1.2); }
 .hero-artwork { width: 100%; height: 100%; border-radius: 11px 0 0 11px; }
-.hero-artwork img { object-fit: cover; image-rendering: auto; }
+.hero-artwork img.artwork-backdrop { filter: blur(24px) brightness(.4); }
 .project-artwork-placeholder { width: 100%; height: 100%; display: grid; place-items: center; overflow: hidden; position: relative; isolation: isolate; background: linear-gradient(140deg, #364d46, #20312e 55%, #182a28); color: #adc8b7; }
 .project-artwork-placeholder > svg { opacity: .5; z-index: 1; }
 .artwork-orbit { position: absolute; width: 80%; aspect-ratio: 1; top: -35%; right: -15%; border: 1px solid rgb(198 240 191 / .11); border-radius: 50%; box-shadow: 0 0 0 38px rgb(198 240 191 / .025), 0 0 0 76px rgb(198 240 191 / .02); }
