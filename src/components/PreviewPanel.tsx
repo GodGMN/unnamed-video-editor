@@ -6,7 +6,7 @@ import { findClip, fmtTime } from '../editor/model';
 import type { Clip, Media } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { ChevronLeft, ChevronRight, Mute, Play, SkipEnd, SkipStart, Volume } from './icons';
+import { ChevronLeft, ChevronRight, Mute, Pause, Play, SkipEnd, SkipStart, Volume } from './icons';
 import { Slider } from './Slider';
 
 interface Props {
@@ -53,7 +53,7 @@ export function PreviewPanel({ editor, totalTime }: Props) {
         <div style={{ flex: '1 1 auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
           <button className="ib transport" onClick={() => playback.seek(editor.range.start)} aria-label="Go to start"><SkipStart fill="#C8CEC9" /></button>
           <button className="ib transport" onClick={() => playback.seek(ui.playhead - 1 / project.output.fps)} aria-label="Back one frame"><ChevronLeft stroke="#C8CEC9" strokeWidth={2.2} /></button>
-          <button className="play-btn" onClick={() => void playback.toggle()} aria-label={playback.playing ? 'Pause (Space)' : 'Play (Space)'} title="Play / pause · Space">{playback.playing ? <span aria-hidden="true">Ⅱ</span> : <Play fill="var(--bg)" />}</button>
+          <button className="play-btn" onClick={() => void playback.toggle()} aria-label={playback.playing ? 'Pause (Space)' : 'Play (Space)'} title="Play / pause · Space">{playback.playing ? <Pause fill="var(--bg)" /> : <Play fill="var(--bg)" />}</button>
           <button className="ib transport" onClick={() => playback.seek(ui.playhead + 1 / project.output.fps)} aria-label="Forward one frame"><ChevronRight stroke="#C8CEC9" strokeWidth={2.2} /></button>
           <button className="ib transport" onClick={() => playback.seek(editor.range.end)} aria-label="Go to end"><SkipEnd fill="#C8CEC9" /></button>
         </div>
