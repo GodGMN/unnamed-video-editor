@@ -66,6 +66,7 @@ export function Timeline({ editor }: { editor: Editor }) {
   const focused = !!focus;
   const rootRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [pps, setPps] = useState(PPS);
   const scaleRef = useRef(PPS);
   const pendingScroll = useRef<number | null>(null);
@@ -200,6 +201,58 @@ export function Timeline({ editor }: { editor: Editor }) {
     startDrag(e, (dx) => seek(x0 + dx));
   };
 
+  // Drag on empty timeline space to draw a box; every video and audio clip it touches is picked.
+  // Ctrl, Cmd or Shift adds the boxed clips to the current selection.
+  const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const onMarqueeDown = (e: PointerEvent<HTMLDivElement>) => {
+    const content = contentRef.current;
+    const target = e.target as Element;
+    if (e.button !== 0 || ui.tool !== 'select' || !content) return;
+    if (target !== e.currentTarget && target !== content && !target.classList.contains('track')) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    const base = additive(e) || e.shiftKey ? ui.picked : [];
+    const snapshot = project;
+    const at = (ev: { clientX: number; clientY: number }) => {
+      const r = content.getBoundingClientRect();
+      return { x: Math.max(0, Math.min(r.width, ev.clientX - r.left)), y: Math.max(0, Math.min(r.height, ev.clientY - r.top)) };
+    };
+    const p0 = at(e);
+    let dragging = false;
+    let lastKey = '';
+    const move = (ev: globalThis.PointerEvent) => {
+      const p = at(ev);
+      if (!dragging && Math.hypot(p.x - p0.x, p.y - p0.y) < 3) return;
+      dragging = true;
+      const box = { left: Math.min(p0.x, p.x), top: Math.min(p0.y, p.y), right: Math.max(p0.x, p.x), bottom: Math.max(p0.y, p.y) };
+      setMarquee({ left: box.left, top: box.top, width: box.right - box.left, height: box.bottom - box.top });
+      const scale = scaleRef.current;
+      const top = content.getBoundingClientRect().top;
+      const picked = [...base];
+      for (const row of content.querySelectorAll<HTMLElement>('.track')) {
+        const r = row.getBoundingClientRect();
+        const t = snapshot.tracks.find((x) => x.id === row.dataset.trackId);
+        if (!t || t.kind === 'text' || r.bottom - top <= box.top || r.top - top >= box.bottom) continue;
+        for (const c of t.clips) {
+          if (c.start * scale < box.right && clipEnd(c) * scale > box.left && !picked.some((x) => x.id === c.id))
+            picked.push({ kind: t.kind === 'video' ? 'clip' : 'audio', id: c.id });
+        }
+      }
+      const key = picked.map((x) => x.id).join();
+      if (key !== lastKey) { lastKey = key; editor.pickClips(picked); }
+    };
+    const end = () => {
+      setMarquee(null);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', end);
+      el.removeEventListener('pointercancel', end);
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  };
+
   // Media drops place a clip; transition drops land anywhere over an overlap, including its trim handles.
   const transitionTarget = (e: DragEvent<HTMLDivElement>, t: Track) =>
     transitionTargetAt(project, t, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps, 6 / pps);
@@ -315,8 +368,8 @@ export function Timeline({ editor }: { editor: Editor }) {
           })}
         </div>
 
-        <div ref={scrollRef} className="tl-scroll">
-          <div style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
+        <div ref={scrollRef} className="tl-scroll" onPointerDown={onMarqueeDown}>
+          <div ref={contentRef} style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
             <div className="ruler" onPointerDown={onRulerDown} onDoubleClick={unlock}
               title={focused ? 'Double-click to release the locked clip' : undefined}>
               {ticks}
@@ -389,6 +442,7 @@ export function Timeline({ editor }: { editor: Editor }) {
               </>
             )}
             <div className="playhead" style={{ left: ui.playhead * pps }} />
+            {marquee && <div className="marquee" style={marquee} aria-hidden="true" />}
           </div>
         </div>
       </div>
