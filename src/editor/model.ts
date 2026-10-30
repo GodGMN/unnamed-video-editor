@@ -150,8 +150,10 @@ export interface Project {
 
 /* ---------- Editor UI state (not persisted) ---------- */
 
+export interface ClipSelection { kind: 'clip' | 'audio'; id: string }
+
 export type Selection =
-  | { kind: 'clip' | 'audio'; id: string }
+  | ClipSelection
   /** The transition after the given video clip. */
   | { kind: 'trans'; id: string }
   | { kind: 'text'; id: string };
@@ -165,6 +167,8 @@ export interface MenuState {
 
 export interface EditorUi {
   sel: Selection | null;
+  /** Video and audio clips in the selection; Ctrl-click adds or removes one. */
+  picked: ClipSelection[];
   /** The clip shown in the trim scrubber: the last selected video or audio clip. */
   focusClip: string | null;
   tool: Tool;
@@ -359,6 +363,22 @@ export function patchClip<C extends Clip>(p: Project, id: string, patch: Partial
     return { ...t, clips } as Track;
   });
   return { ...p, tracks };
+}
+
+/** Links a video and an audio clip as a fresh pair, detaching each from any earlier partner. */
+export function linkClips(p: Project, videoId: string, audioId: string, linkId: string): Project {
+  if (!findVideoClip(p, videoId) || !findAudioClip(p, audioId)) return p;
+  return { ...p, tracks: p.tracks.map(t => t.kind === 'text' ? t : {
+    ...t, clips: t.clips.map(c => c.id === videoId || c.id === audioId ? { ...c, linkId, linked: true } : c),
+  } as Track) };
+}
+
+/** The picked clips as a video and audio pair, when they are exactly one of each. */
+export function pickedPair(p: Project, picked: ClipSelection[]): { video: VideoClip; audio: AudioClip } | null {
+  if (picked.length !== 2) return null;
+  const video = findVideoClip(p, picked.find((x) => x.kind === 'clip')?.id);
+  const audio = findAudioClip(p, picked.find((x) => x.kind === 'audio')?.id);
+  return video && audio ? { video, audio } : null;
 }
 
 /** Move linked clips by a common delta without packing away the user's placement. */
