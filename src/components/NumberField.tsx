@@ -29,20 +29,40 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
     const el = e.currentTarget;
     const x0 = e.clientX;
     const v0 = value;
+    let dx = 0;
+    let lastX = x0;
+    let cursorY = e.clientY;
     let moved = false;
+    let cursor: HTMLDivElement | null = null;
     const listening = new AbortController();
     el.setPointerCapture(e.pointerId);
     el.classList.add('drag');
+    // Once scrubbing starts, lock the pointer and draw a stand-in cursor that wraps across the window edges,
+    // so the drag never runs out of screen.
+    const lock = () => {
+      Promise.resolve(el.requestPointerLock()).catch(() => {});
+      cursor = document.body.appendChild(document.createElement('div'));
+      cursor.className = 'scrub-cursor';
+    };
     const move = (ev: globalThis.PointerEvent) => {
-      const dx = ev.clientX - x0;
-      if (Math.abs(dx) > 2) moved = true;
+      const locked = document.pointerLockElement === el;
+      dx += locked ? ev.movementX : ev.clientX - lastX;
+      lastX = ev.clientX;
+      if (!moved && Math.abs(dx) > 2) { moved = true; lock(); }
       if (!moved) return;
       commit(v0 + Math.round(dx / PX_PER_STEP) * step);
       ticks.current?.style.setProperty('--jog', `${dx}px`);
+      if (!cursor) return;
+      cursor.hidden = !locked;
+      const w = window.innerWidth;
+      cursorY = Math.min(window.innerHeight - 1, Math.max(0, cursorY + ev.movementY));
+      cursor.style.translate = `${(((x0 + dx) % w) + w) % w}px ${cursorY}px`;
     };
     const up = () => {
       listening.abort();
       el.classList.remove('drag');
+      cursor?.remove();
+      if (document.pointerLockElement === el) document.exitPointerLock();
       if (!moved) { input.current?.focus(); input.current?.select(); }
     };
     el.addEventListener('pointermove', move, { signal: listening.signal });
