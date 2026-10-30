@@ -107,8 +107,8 @@ export interface VideoClip extends ClipBase, Fades {
 }
 
 export interface AudioClip extends ClipBase, Fades {
-  /** Percent. */
-  vol: number;
+  /** Decibels, from GAIN_MIN_DB (silence) to GAIN_MAX_DB. */
+  gainDb: number;
   muted: boolean;
 }
 
@@ -226,7 +226,7 @@ export const VIDEO_CLIP_DEFAULTS: ClipDefaults<VideoClip> = {
   linked: true, x: 0, y: 0, scale: 100, rot: 0, fit: 'fit', cropT: 0, cropR: 0, cropB: 0, cropL: 0, transitionOut: null, key: NO_KEY, ...NO_FADES,
 };
 export const AUDIO_CLIP_DEFAULTS: ClipDefaults<AudioClip> = {
-  linked: true, vol: 100, muted: false, ...NO_FADES,
+  linked: true, gainDb: 0, muted: false, ...NO_FADES,
 };
 
 export const TRANSITION_NAMES: Record<TransitionType, string> = { cut: 'Cut', fade: 'Fade', crossfade: 'Crossfade' };
@@ -634,7 +634,34 @@ export function newId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+/* ---------- Audio gain ---------- */
+
+/** Clip gain range. The floor is treated as −∞: silence. */
+export const GAIN_MIN_DB = -60;
+export const GAIN_MAX_DB = 12;
+
+export const dbToGain = (db: number) => db <= GAIN_MIN_DB ? 0 : 10 ** (db / 20);
+export const gainToDb = (gain: number) =>
+  gain <= 0 ? GAIN_MIN_DB : Math.max(GAIN_MIN_DB, Math.min(GAIN_MAX_DB, Math.round(200 * Math.log10(gain)) / 10));
+
+/** Fader taper as [position, dB] points: 0 dB sits three quarters up and the quiet end is squeezed, like a mixing console. */
+const TAPER: [number, number][] = [[0, GAIN_MIN_DB], [0.15, -40], [0.3, -24], [0.5, -12], [0.75, 0], [1, GAIN_MAX_DB]];
+
+function interpolate(x: number, from: 0 | 1, to: 0 | 1) {
+  const i = Math.max(1, TAPER.findIndex((pt) => pt[from] >= x));
+  const a = TAPER[i - 1], b = TAPER[i];
+  return a[to] + (b[to] - a[to]) * (x - a[from]) / (b[from] - a[from]);
+}
+
+/** Fader position (0–1) for a gain in dB. */
+export const dbToFader = (db: number) => interpolate(Math.max(GAIN_MIN_DB, Math.min(GAIN_MAX_DB, db)), 1, 0);
+/** Gain in dB, to 0.1 dB, for a fader position (0–1). */
+export const faderToDb = (pos: number) => Math.round(interpolate(Math.max(0, Math.min(1, pos)), 0, 1) * 10) / 10;
+
 /* ---------- Formatting ---------- */
+
+/** A gain without its unit: `+3.0`, `-6.0`, `−∞`. */
+export const fmtDb = (db: number) => db <= GAIN_MIN_DB ? '−∞' : `${db > 0 ? '+' : ''}${db.toFixed(1)}`;
 
 export const fmtTime = (s: number) => {
   const m = Math.floor(s / 60);

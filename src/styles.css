@@ -200,6 +200,12 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 
 .transport-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .play-btn { width: 44px; height: 44px; border-radius: 999px; border: 0; background: var(--accent); display: flex; align-items: center; justify-content: center; }
+/* Fullscreen keeps only the stage and the transport; the stage grows to fill the screen. */
+.preview:fullscreen { border: 0; border-radius: 0; background: #000; }
+.preview:fullscreen > .preview-head, .preview:fullscreen > .trim { display: none; }
+.preview:fullscreen .stage-wrap { padding: 0; background: #000; }
+.preview:fullscreen .stage { width: min(100cqw, 100cqh * 16 / 9); border-radius: 0; }
+.preview:fullscreen .transport-bar { background: var(--panel); }
 
 /* Properties */
 .props { flex: 1 1 288px; max-width: 320px; }
@@ -300,11 +306,12 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .fade-layer > * { pointer-events: auto; }
 .fade-handle { position: absolute; top: -6px; width: 20px; height: 20px; padding: 0; border: 0; background: transparent; cursor: ew-resize; touch-action: none; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .fade-handle > span { width: 10px; height: 10px; border-radius: 3px; background: var(--text-bright); border: 2px solid var(--accent); }
-.vol-headroom { position: absolute; left: 0; right: 0; top: 0; border-radius: 8px 8px 0 0; background: rgba(12, 14, 13, 0.45); backdrop-filter: grayscale(1) brightness(0.55); pointer-events: none; }
+.vol-clip { position: absolute; inset: 0; border-radius: 8px; overflow: hidden; pointer-events: none; }
+.vol-headroom { position: absolute; left: 0; right: 0; top: 0; background: rgba(12, 14, 13, 0.45); backdrop-filter: grayscale(1) brightness(0.55); }
 .vol-line { position: absolute; left: 0; right: 0; height: 12px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 1; }
-.vol-line::after { content: ''; position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: var(--accent); box-shadow: 0 0 0 1px rgba(12, 14, 13, 0.5); }
-.vol-line.muted::after { background: var(--warn); }
-.vol-line:hover::after, .vol-line:active::after { top: 4px; height: 4px; background: var(--text-bright); }
+.vol-mark { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); box-shadow: 0 0 0 1px rgba(12, 14, 13, 0.5); }
+.vol-line.muted + .vol-clip .vol-mark { background: var(--warn); }
+.vol-line:hover + .vol-clip .vol-mark, .vol-line:active + .vol-clip .vol-mark { margin-top: -1px; height: 4px; background: var(--text-bright); }
 .curve-handle { position: absolute; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .curve-handle > span { width: 9px; height: 9px; border-radius: 999px; background: var(--accent); border: 2px solid var(--bg); box-sizing: content-box; }
 .focus-dim { position: absolute; top: 0; bottom: 0; background: rgba(12, 14, 13, 0.62); backdrop-filter: grayscale(0.8); pointer-events: none; z-index: 2; }

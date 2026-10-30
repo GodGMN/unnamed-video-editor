@@ -1,4 +1,4 @@
-import { NO_FADES, NO_KEY } from './model';
+import { NO_FADES, NO_KEY, gainToDb } from './model';
 import type { Project } from './model';
 
 /*
@@ -45,11 +45,17 @@ export async function loadProject(): Promise<Project | null> {
 
 /**
  * Older saves keep text tracks' clips in `items`, and the oldest have text without an x/y
- * offset; those get a zero offset. Video clips from before video fades or keys get none.
+ * offset; those get a zero offset. Video clips from before video fades or keys get none. Audio
+ * clips from before dB gain store volume as a linear percent.
  */
-function upgrade(p: Project): Project {
+export function upgrade(p: Project): Project {
   return { ...p, tracks: p.tracks.map((t) => {
     if (t.kind === 'video') return { ...t, clips: t.clips.map((c) => ({ ...NO_FADES, ...c, key: c.key ?? NO_KEY })) };
+    if (t.kind === 'audio') return { ...t, clips: t.clips.map((c) => {
+      if (!('vol' in c)) return c;
+      const { vol, ...clip } = c as typeof c & { vol: number };
+      return { ...clip, gainDb: gainToDb(vol / 100) };
+    }) };
     if (t.kind !== 'text') return t;
     const { items, ...track } = t as typeof t & { items?: typeof t.clips };
     const clips = (track.clips ?? items ?? []).map((x) => ({ ...x, x: x.x ?? 0, y: x.y ?? 0 }));

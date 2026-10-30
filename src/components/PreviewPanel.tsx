@@ -1,14 +1,15 @@
 import { usePlayback } from '../playback/usePlayback';
 import { useSourcePlayer } from '../playback/useSourcePlayer';
 import { PreviewStrip } from '../media/PreviewStrip';
-import { useEffect, useState } from 'react';
-import type { PointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { MouseEvent, PointerEvent } from 'react';
 import { clipEnd, findMediaClip, findVideoClip, fmtTime } from '../editor/model';
 import type { Media, MediaClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { Checker, ChevronLeft, ChevronRight, Close, Dropper, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
+import { Checker, ChevronLeft, ChevronRight, Close, Dropper, Maximize, Minimize, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
 import { Slider } from './Slider';
+import { useFullscreen } from './useFullscreen';
 
 interface Props {
   editor: Editor;
@@ -25,6 +26,13 @@ export function PreviewPanel({ editor, totalTime }: Props) {
   const source = ui.source ? project.media[ui.source] ?? null : null;
   const sourcePlayer = useSourcePlayer(source, silent ? 0 : volume / 100);
   const { height: oh } = project.output;
+  const panel = useRef<HTMLElement>(null);
+  const [fullscreen, toggleFullscreen] = useFullscreen(useCallback(() => panel.current, []));
+  const onFullscreen = (e: MouseEvent<HTMLButtonElement>) => {
+    // A focused button would swallow Space, which should keep playing and pausing.
+    if (e.detail) e.currentTarget.blur();
+    toggleFullscreen();
+  };
 
   const focus = findMediaClip(project, ui.focusClip);
   const focusMedia = focus && project.media[focus.clip.mediaId];
@@ -38,21 +46,16 @@ export function PreviewPanel({ editor, totalTime }: Props) {
         seek: playback.seek, start: editor.range.start, end: editor.range.end, status: playback.status };
 
   return (
-    <section className="panel preview">
+    <section className="panel preview" ref={panel}>
       <div className="preview-head">
         <span className="panel-title">Preview</span>
-        {source ? (
+        {source && (
           <div className="preview-pills">
             <span className="pill source-pill">Source · {source.name}</span>
             <button className="ib outlined back-btn" onClick={editor.closeSource} title="Show the timeline in the preview again">
               <Close size={12} strokeWidth={2.2} />
               Back to timeline
             </button>
-          </div>
-        ) : (
-          <div className="preview-pills">
-            <span className="pill">Preview at 540p</span>
-            <span className="pill">{`Export ${oh}p · ${project.output.fps} fps`}</span>
           </div>
         )}
       </div>
@@ -100,6 +103,10 @@ export function PreviewPanel({ editor, totalTime }: Props) {
             <Slider label="Preview volume" hideLabel className="compact" value={muted ? 0 : volume} unit="%" min={0} max={100}
               onChange={(v) => { setVolume(v); setMuted(false); }} />
           </div>
+          <button className="ib transport" onClick={onFullscreen} aria-pressed={fullscreen}
+            aria-label={fullscreen ? 'Exit full screen preview' : 'Full screen preview'} title={fullscreen ? 'Exit full screen preview · Esc' : 'Full screen preview'}>
+            {fullscreen ? <Minimize stroke="#C8CEC9" /> : <Maximize stroke="#C8CEC9" />}
+          </button>
         </div>
       </div>
     </section>
