@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Editor } from '../editor/useProject';
 import { PlaybackEngine } from './engine';
@@ -70,7 +71,7 @@ export function usePlayback(editor: Editor, volume: number, transparent: boolean
       await engine.current?.resumeAudio();
       if (editor.ui.playhead >= editor.range.end) editor.setPlayhead(editor.range.start);
       setPlaying(true);
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Audio could not start.'); }
+    } catch (error) { setStatus(error instanceof Error ? error.message : translate('audioCouldNotStart')); }
   }, []);
 
   useEffect(() => {

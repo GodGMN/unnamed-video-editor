@@ -1,3 +1,4 @@
+import { t as translate, setLocale } from '../i18n/core';
 import { ALL_FORMATS, BlobSource, Input, VideoSampleSink } from 'mediabunny';
 import type { VideoSample } from 'mediabunny';
 import { clipEnd, videoTracks } from './model';
@@ -5,7 +6,7 @@ import type { Project, VideoClip } from './model';
 import type { RenderReply, RenderRequest } from './renderProtocol';
 
 const scope = self as unknown as {
-  onmessage: ((e: MessageEvent<RenderRequest>) => void) | null;
+  onmessage: ((e: MessageEvent<RenderRequest & { locale?: string }>) => void) | null;
   postMessage(message: RenderReply, transfer?: Transferable[]): void;
 };
 let project: Project;
@@ -32,12 +33,12 @@ async function frame(time: number) {
           const input = new Input({ source: new BlobSource(files[clip.mediaId]), formats: ALL_FORMATS });
           inputs.set(clip.id, input);
           const video = await input.getPrimaryVideoTrack();
-          if (!video || !await video.canDecode()) throw new Error(`Cannot decode video from "${project.media[clip.mediaId]?.name}". Convert it to MP4 first.`);
+          if (!video || !await video.canDecode()) throw new Error(translate('cannotDecodeVideoFromConvertItToMP4First', { value1: project.media[clip.mediaId]?.name }));
           stream = new VideoSampleSink(video).samplesAtTimestamps(timestamps(clip));
           streams.set(clip.id, stream);
         }
         const { value: sample } = await stream.next();
-        if (!sample) throw new Error(`No video frame at ${time.toFixed(3)} s for "${project.media[clip.mediaId]?.name}".`);
+        if (!sample) throw new Error(translate('noVideoFrameAtSFor', { value1: time.toFixed(3), value2: project.media[clip.mediaId]?.name }));
         try {
           const canvas = new OffscreenCanvas(sample.displayWidth, sample.displayHeight);
           sample.draw(canvas.getContext('2d')!, 0, 0);
@@ -60,6 +61,7 @@ async function frame(time: number) {
 }
 
 scope.onmessage = async ({ data }) => {
+  if (data.locale) setLocale(data.locale);
   try {
     if (data.type === 'init') {
       project = data.project; files = data.files;

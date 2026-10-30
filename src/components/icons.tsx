@@ -19,7 +19,7 @@ function Fill({ size = 16, fill = 'currentColor', children, ...rest }: IconProps
   );
 }
 
-export const LogoPlay = (p: IconProps) => <Fill {...p}><path d="M6 4l14 8-14 8z" /></Fill>;
+export const LogoFilm = (p: IconProps) => <Fill viewBox="0 0 64 64" fillRule="evenodd" {...p}><path d="M12 12H28V20H20V44H28V52H12ZM14 23h4v4h-4zM14 30h4v4h-4zM14 37h4v4h-4zM52 12H36V20H44V44H36V52H52ZM46 23h4v4h-4zM46 30h4v4h-4zM46 37h4v4h-4zM28 25L40 32L28 39Z" /></Fill>;
 export const Play = (p: IconProps) => <Fill {...p}><path d="M7 4l13 8-13 8z" /></Fill>;
 export const Pause = (p: IconProps) => <Fill {...p}><path d="M6 4h4v16H6zM14 4h4v16h-4z" /></Fill>;
 export const Pencil = (p: IconProps) => <Stroke {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></Stroke>;
