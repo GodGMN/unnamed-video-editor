@@ -411,19 +411,45 @@ export function movingGroup(p: Project, ids: string[]): Clip[] {
 /**
  * Moves clip `id` to `start` and shifts `others` (plus everyone's linked partners) by the same
  * delta, without packing away the user's placement. No clip goes before 0.
+ *
+ * `trackShift` also moves `id` and those of `others` on the same kind of track that many tracks
+ * down (or up, when negative) among the tracks of that kind; linked partners stay on their tracks.
+ * The shift is clamped so every moved clip lands on an existing track.
  */
-export function moveClip(p: Project, id: string, start: number, others: string[] = []): Project {
+export function moveClip(p: Project, id: string, start: number, others: string[] = [], trackShift = 0): Project {
   const found = findClip(p, id);
   if (!found) return p;
   const group = movingGroup(p, [id, ...others]);
   const ids = new Set(group.map(c => c.id));
   const delta = Math.max(start - found.clip.start, -Math.min(...group.map(c => c.start)));
-  return { ...p, tracks: p.tracks.map(t => {
+
+  // Index of each vertically moving clip's track among the tracks of its kind.
+  const lanes = p.tracks.filter(t => t.kind === found.track.kind) as (VideoTrack | AudioTrack)[];
+  const lane = new Map<string, number>();
+  for (const x of [id, ...others]) {
+    const i = lanes.findIndex(t => (t.clips as Clip[]).some(c => c.id === x));
+    if (i >= 0) lane.set(x, i);
+  }
+  const shift = Math.max(-Math.min(...lane.values()), Math.min(lanes.length - 1 - Math.max(...lane.values()), Math.round(trackShift)));
+
+  const moved = new Map<string, Clip>();
+  const tracks = p.tracks.map(t => {
     if (t.kind === 'text') return t;
-    const clips = t.clips.map(c => ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c)
-      .sort((a, b) => a.start - b.start);
+    const clips = (t.clips as Clip[]).flatMap(c => {
+      const next = ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c;
+      if (!shift || !lane.has(c.id)) return [next];
+      moved.set(c.id, next);
+      return [];
+    });
     return { ...t, clips } as Track;
-  }) };
+  });
+  if (shift) for (const [x, i] of lane) {
+    const dest = lanes[i + shift].id;
+    const k = tracks.findIndex(t => t.id === dest);
+    const t = tracks[k] as VideoTrack | AudioTrack;
+    tracks[k] = { ...t, clips: [...t.clips, moved.get(x)!] } as Track;
+  }
+  return { ...p, tracks: tracks.map(t => t.kind === 'text' ? t : { ...t, clips: [...t.clips].sort((a, b) => a.start - b.start) } as Track) };
 }
 
 /** Both edges can snap; the radius stays constant in screen pixels at every zoom. */
