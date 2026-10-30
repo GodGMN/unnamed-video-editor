@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, linkClips, DEFAULT_TRANSITION, clipEnd, deleteItems, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, videoTracks } from './model';
+import { newId, placeMedia, linkClips, DEFAULT_TRANSITION, clipEnd, deleteItems, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, trimTextItem, videoTracks } from './model';
 import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
@@ -175,6 +175,8 @@ export function useProject() {
       /** Links a video and an audio clip so they move and trim together. */
       linkClips: (videoId: string, audioId: string) => edit((p) => linkClips(p, videoId, audioId, newId())),
       updateText: (id: string, patch: Partial<TextItem>) => edit((p) => patchTextItem(p, id, patch)),
+      /** Moves a text item's start or end edge to `time`; the other edge stays put. */
+      trimText: (id: string, edge: 'in' | 'out', time: number) => edit((p) => trimTextItem(p, id, edge, time)),
       toggleTrack: (id: string) => edit((p) => {
         const t = p.tracks.find((x) => x.id === id);
         if (!t) return p;
