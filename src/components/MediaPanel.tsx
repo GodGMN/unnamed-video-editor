@@ -5,6 +5,7 @@ import { Convert, Plus, Trash, Warning } from './icons';
 
 import { importMedia } from '../media/import';
 import { PreviewStrip } from '../media/PreviewStrip';
+import { MEDIA_MIME, mediaDrag } from '../media/drag';
 
 const TRANSITIONS = [
   { type: 'crossfade', name: 'Cross dissolve', swatch: 'linear-gradient(90deg, #35503F, #4A5B6E)' },
@@ -101,7 +102,8 @@ export function MediaPanel({ project, onConvert, onImport, onRemove }: Props) {
       <div className="media-list">
         {media.map((m) => (
           <div key={m.id} className="media-item" draggable={m.decodable}
-            onDragStart={(e) => { e.dataTransfer.setData('application/x-editor-media', m.id); e.dataTransfer.effectAllowed = 'copy'; }}
+            onDragStart={(e) => { e.dataTransfer.setData(MEDIA_MIME, m.id); e.dataTransfer.effectAllowed = 'copy'; mediaDrag.id = m.id; }}
+            onDragEnd={() => { mediaDrag.id = null; }}
             onContextMenu={(e) => {
               e.preventDefault();
               setMenu({ id: m.id, left: Math.min(e.clientX + 4, window.innerWidth - 240), top: Math.min(e.clientY + 4, window.innerHeight - 110) });
