@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, MISSING_MEDIA, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextItem, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
 import type { AudioClip, FitMode, TextAnchor, TextItem, TransitionType, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
-import { Mute, Waveform } from './icons';
+import { Dropper, Mute, Waveform } from './icons';
 import { NumberField } from './NumberField';
 import { Slider } from './Slider';
 
@@ -261,7 +261,8 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
             <button key={name} className="swatch" style={{ background: hex }} aria-label={name}
               aria-pressed={tx.color.toUpperCase() === hex} onClick={() => updateText({ color: hex })} />
           ))}
-          <label className={'swatch custom' + (custom ? ' on' : '')} style={custom ? { background: tx.color } : undefined} title="Custom color">
+          <label className={'swatch custom' + (custom ? ' on' : '')} title="Custom color">
+            <Dropper size={14} stroke={custom ? tx.color : 'var(--text-soft)'} />
             <input type="color" aria-label="Custom color" value={tx.color.toLowerCase()} onChange={(e) => updateText({ color: e.target.value.toUpperCase() })} />
           </label>
         </div>
@@ -275,7 +276,7 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
             Reset offset
           </button>
         </div>
-        <div className="anchor-grid" role="group" aria-label="Text position">
+        <div className="anchor-grid" style={{ alignSelf: 'center' }} role="group" aria-label="Text position">
           {(['t', 'c', 'b'] as const).flatMap((v) => (['l', 'c', 'r'] as const).map((h) => {
             const k: TextAnchor = `${v}${h}`;
             return (
