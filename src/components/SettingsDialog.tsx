@@ -26,7 +26,7 @@ export function SettingsDialog({ output, onClose }: { output: { width: number; h
     { key: 'full', label: translate('full'), sub: translate('pSlowest', { value1: full }) },
   ];
   return (
-    <Dialog id="settings-title" title={translate('settings')} subtitle={translate('savedInThisBrowserForEveryProject')} width={520} onClose={onClose}>
+    <Dialog className="settings-dialog" id="settings-title" title={translate('settings')} subtitle={translate('savedInThisBrowserForEveryProject')} width={520} onClose={onClose}>
       <div className="dialog-body">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{translate('language')}</span>
@@ -45,11 +45,14 @@ export function SettingsDialog({ output, onClose }: { output: { width: number; h
           const next = e.key === 'Home' ? 'playback' : e.key === 'End' ? 'storage' : tab === 'playback' ? 'storage' : 'playback';
           setTab(next); document.getElementById(`${next}-tab`)?.focus();
         }}><button id="playback-tab" role="tab" tabIndex={tab === 'playback' ? 0 : -1} aria-selected={tab === 'playback'} aria-controls="playback-settings" onClick={() => setTab('playback')}>{translate('projectHomePlayback')}</button><button id="storage-tab" role="tab" tabIndex={tab === 'storage' ? 0 : -1} aria-selected={tab === 'storage'} aria-controls="storage-settings" onClick={() => setTab('storage')}>{translate('projectHomeStorage')}</button></div>
-        {tab === 'playback' ? <div className="settings-panel" role="tabpanel" id="playback-settings" aria-labelledby="playback-tab">
+        <div className="settings-panels">
+        <div className="settings-panel" inert={tab !== 'playback'} aria-hidden={tab !== 'playback'} role="tabpanel" id="playback-settings" aria-labelledby="playback-tab">
         <Choice label={translate('previewResolution')} options={options} value={`${previewResolution}`}
           onChange={(k) => updateSettings({ previewResolution: k === 'full' ? 'full' : Number(k) as PreviewResolution })} />
         <Note>{translate('lowerResolutionsKeepPlaybackSmoothOnSlowerMachinesExport')}</Note>
-        </div> : <div role="tabpanel" id="storage-settings" aria-labelledby="storage-tab"><StorageSettings /></div>}
+        </div>
+        <div className="settings-panel" inert={tab !== 'storage'} aria-hidden={tab !== 'storage'} role="tabpanel" id="storage-settings" aria-labelledby="storage-tab"><StorageSettings /></div>
+        </div>
       </div>
       <footer className="dialog-foot">
         <span className="made-by">

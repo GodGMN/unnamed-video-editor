@@ -376,7 +376,7 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: MediaClip; src:
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
         {outside
-          ? translate('playheadIsThisClipClickTheBarToJump', { value1: outside })
+          ? translate('playheadIsThisClipClickTheBarToJump', { value1: translate(outside === 'before' ? 'uiBefore' : 'uiAfter') })
           : <>{translate('playhead')}<span className="mono" style={{ color: 'var(--text)' }}>{fmtTime(scrub)}</span></>}
       </div>
     </div>

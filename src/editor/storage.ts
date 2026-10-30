@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import { NO_FADES, NO_KEY, gainToDb, newId } from './model';
 import type { Project } from './model';
 
@@ -29,7 +30,7 @@ function openDb() {
         tx.objectStore('settings').put(id, 'active');
       };
     };
-    request.onblocked = () => { blocked = true; database = undefined; reject(new Error('Close other editor tabs, then retry the storage upgrade.')); };
+    request.onblocked = () => { blocked = true; database = undefined; reject(new Error(translate('storageCloseOtherTabs'))); };
     request.onsuccess = () => {
       if (blocked) { request.result.close(); return; }
       request.result.onversionchange = () => { request.result.close(); database = undefined; };
@@ -43,7 +44,7 @@ async function run<T>(store: string, mode: IDBTransactionMode, op: (s: IDBObject
   return new Promise((resolve, reject) => {
     const req = op(tx.objectStore(store));
     tx.oncomplete = () => resolve(req.result);
-    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Project storage failed.'));
+    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error(translate('storageProjectFailed')));
   });
 }
 export async function listProjects(): Promise<ProjectEntry[]> {
@@ -60,7 +61,7 @@ export async function loadProject(id?: string): Promise<Project | null> {
   const key = id ?? await activeProjectId();
   if (!key) return null;
   const saved = await run<ProjectEntry | undefined>('projects', 'readonly', s => s.get(key));
-  if (saved && saved.schema !== 1) throw new Error('This project needs a newer version of the editor.');
+  if (saved && saved.schema !== 1) throw new Error(translate('storageNeedsNewerVersion'));
   return saved ? upgrade(saved.project) : null;
 }
 export async function createProject(project: Project, id = newId()): Promise<string> {
@@ -79,7 +80,7 @@ export async function saveProject(project: Project, id?: string): Promise<void> 
       store.put({ ...req.result, project, updatedAt: Date.now() }, key);
     };
     tx.oncomplete = () => resolve();
-    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Project no longer exists.'));
+    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error(translate('projectNoLongerExists')));
   });
 }
 export async function updateProjectDetails(id: string, patch: { name?: string; favorite?: boolean }): Promise<void> {
@@ -93,7 +94,7 @@ export async function updateProjectDetails(id: string, patch: { name?: string; f
       store.put({ ...entry, ...(patch.favorite !== undefined && { favorite: patch.favorite }), project: { ...entry.project, ...(patch.name !== undefined && { name: patch.name }) } }, id);
     };
     tx.oncomplete = () => resolve();
-    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Project no longer exists.'));
+    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error(translate('projectNoLongerExists')));
   });
 }
 export async function clearProject(id?: string): Promise<void> {

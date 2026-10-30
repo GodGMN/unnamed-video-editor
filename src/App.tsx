@@ -7,6 +7,7 @@ import { useProject } from './editor/useProject';
 import type { Editor } from './editor/useProject';
 import { useConversionJob } from './convert/job';
 import { importMedia } from './media/import';
+import { useImports } from './media/useImports';
 import { ConvertDialog } from './components/ConvertDialog';
 import { DesktopOnly } from './components/DesktopOnly';
 import { ExportDialog } from './components/ExportDialog';
@@ -51,7 +52,7 @@ function useConvertedMedia(editor: Editor | null) {
       add(media);
       // V1 is magnetic, so the clip goes after its last clip whatever time is passed.
       if (addToTimeline && main) place(media.id, main, 0);
-    }, (error: unknown) => setError(error instanceof Error ? error.message : 'Could not import converted media.')).finally(() => setPending(false));
+    }, (error: unknown) => setError(error instanceof Error ? error.message : translate('couldNotImportConvertedMedia'))).finally(() => setPending(false));
   }, [output, add, place, addToTimeline, main]);
   return { pending, error };
 }
@@ -67,6 +68,7 @@ function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Projec
   const [settings, setSettings] = useState(false);
   const [converting, setConverting] = useState<Pick<Media, 'id' | 'name'> | null>(null);
   const converted = useConvertedMedia(editor);
+  const imports = useImports(editor);
 
   if (width < MIN_WIDTH) return <DesktopOnly width={width} />;
   if (!editor) return null;
@@ -78,18 +80,18 @@ function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Projec
   return (
     <div className="editor">
       <TopBar onProjects={() => {
-        if (pendingImports || converted.pending || job) { setNavigationError('Finish importing or finish/cancel the conversion before leaving the editor.'); return; }
+        if (pendingImports || converted.pending || job) { setNavigationError(translate('finishBeforeLeavingEditor')); return; }
         void editor.flush().then(() => onHome(editor.project), e => setNavigationError(String(e)));
       }} onSettings={() => setSettings(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onShowConversion={(id, name) => setConverting({ id, name })} />
       {navigationError && <div role="alert" className="editor-navigation-error">{navigationError}<button onClick={() => setNavigationError('')} aria-label={translate('projectHomeDismissError')}>×</button></div>}
       {converted.error && <p role="alert" className="error">{converted.error}</p>}
       <div className="workspace">
-        <MediaPanel onBusy={setPendingImports} onReconnect={() => setMediaRevision(n => n + 1)} onImport={editor.addMedia} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
+        <MediaPanel onBusy={setPendingImports} onReconnect={() => setMediaRevision(n => n + 1)} onImport={imports.ingest} importing={imports.pending} importErrors={imports.errors} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
         <PreviewPanel key={mediaRevision} editor={editor} totalTime={totalTime} />
         <PropertiesPanel editor={editor} />
       </div>
-      <Timeline key={mediaRevision} editor={editor} />
+      <Timeline key={mediaRevision} editor={editor} onDropFiles={imports.ingest} />
       {exporting && (
         <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project, editor.layout)}
           onClose={() => setExporting(false)} />
