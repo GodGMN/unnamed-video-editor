@@ -70,6 +70,9 @@ export class PlaybackEngine {
     }
   }
 
+  /** A newer pause supersedes async work. Playback queues a request every frame, so those must not. */
+  private get superseded() { return !!this.latest && !this.latest.playing; }
+
   private async flush() {
     this.busy = true;
     try {
@@ -98,8 +101,7 @@ export class PlaybackEngine {
               await waitFor(element, 'seeked', () => { element.currentTime = target; });
             }
             if (this.disposed) return;
-            // A newer pause/seek supersedes this async load.
-            if (this.latest) return;
+            if (this.superseded) return;
             if (audio && this.context) {
               if (!player.gain) {
                 player.source = this.context.createMediaElementSource(element);
@@ -116,7 +118,7 @@ export class PlaybackEngine {
           });
         }));
         for (const [id, player] of this.players) if (!active.has(id)) { player.element.pause(); this.release(id); }
-        if (this.disposed || this.latest) continue;
+        if (this.disposed || this.superseded) continue;
         const ctx = this.canvas.getContext('2d');
         if (ctx) renderFrame(project, time, ctx, (clip) => ready.get(clip.id) ?? null);
         this.status([...messages].join(' '));

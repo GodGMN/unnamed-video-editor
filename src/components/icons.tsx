@@ -21,6 +21,7 @@ function Fill({ size = 16, fill = 'currentColor', children, ...rest }: IconProps
 
 export const LogoPlay = (p: IconProps) => <Fill {...p}><path d="M6 4l14 8-14 8z" /></Fill>;
 export const Play = (p: IconProps) => <Fill {...p}><path d="M7 4l13 8-13 8z" /></Fill>;
+export const Pause = (p: IconProps) => <Fill {...p}><path d="M6 4h4v16H6zM14 4h4v16h-4z" /></Fill>;
 export const Pencil = (p: IconProps) => <Stroke {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></Stroke>;
 export const Undo = (p: IconProps) => <Stroke {...p}><path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 010 11H11" /></Stroke>;
 export const Redo = (p: IconProps) => <Stroke {...p}><path d="M15 14l5-5-5-5" /><path d="M20 9H9.5a5.5 5.5 0 000 11H13" /></Stroke>;

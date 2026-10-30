@@ -1,7 +1,7 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, curveName, findClip, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
+import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, curveName, findClip, movingGroup, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
 import type { AudioClip, ClipSelection, Project, TextItem, TransitionType, Tool, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
@@ -64,8 +64,8 @@ function transitionTargetAt(project: Project, track: Track, time: number, slop: 
 }
 
 export function Timeline({ editor }: { editor: Editor }) {
-  const { project, ui, layout, select, setTool, setPlayhead, clearFocus, toggleTrack, openMenu, closeMenu } = editor;
-  const focus = ui.focusClip ? layout.clips[ui.focusClip] : undefined;
+  const { project, ui, layout, select, setTool, setPlayhead, unlock, toggleTrack, openMenu, closeMenu } = editor;
+  const focus = ui.lockClip ? layout.clips[ui.lockClip] : undefined;
   const focused = !!focus;
   const rootRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -136,9 +136,10 @@ export function Timeline({ editor }: { editor: Editor }) {
   };
 
   // Press anywhere on the ruler to jump the playhead there, then drag to scrub. While a clip
-  // is focused the playhead stays inside it; double-click the ruler to release it.
+  // is locked the playhead stays inside it; double-click the ruler to release it.
   const onRulerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    editor.closeSource();
     const left = e.currentTarget.getBoundingClientRect().left;
     const seek = (clientX: number) => setPlayhead((clientX - left) / pps);
     const x0 = e.clientX;
@@ -234,7 +235,7 @@ export function Timeline({ editor }: { editor: Editor }) {
           <span className="tool-separator" role="separator" aria-orientation="vertical" />
           <button aria-label="Snap clips" aria-pressed={snapping} title="Snap clips" onClick={() => setSnapping(v => !v)}><Magnet size={16} /></button>
         </div>
-        <span className="hint">{focused ? 'Playhead locked to the selected clip · Double-click the time bar to release' : 'Drag a transition onto an overlap'}</span>
+        <span className="hint">{focused ? 'Playhead locked to a clip · Double-click the time bar to release' : 'Double-click a clip to lock the playhead to it · Drag a transition onto an overlap'}</span>
         <div className="spacer" />
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Video track</button>
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Audio track</button>
@@ -263,8 +264,8 @@ export function Timeline({ editor }: { editor: Editor }) {
 
         <div ref={scrollRef} className="tl-scroll">
           <div style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
-            <div className="ruler" onPointerDown={onRulerDown} onDoubleClick={clearFocus}
-              title={focused ? 'Double-click to release the selected clip' : undefined}>
+            <div className="ruler" onPointerDown={onRulerDown} onDoubleClick={unlock}
+              title={focused ? 'Double-click to release the locked clip' : undefined}>
               {ticks}
               {focus && (
                 <div className="focus-band" style={{ left: focus.start * pps, width: (focus.end - focus.start) * pps }} aria-hidden="true">
@@ -345,14 +346,26 @@ const additive = (e: { ctrlKey: boolean; metaKey: boolean }) => e.ctrlKey || e.m
 const clickClip = (editor: Editor, clip: ClipSelection) => (e: MouseEvent) =>
   additive(e) ? editor.togglePick(clip) : editor.select(clip);
 
+/** Double-clicking a clip locks the playhead to it. */
+const lockClip = (editor: Editor, id: string) => (e: MouseEvent) => {
+  if (editor.ui.tool === 'select' && !additive(e)) editor.lockTo(id);
+};
+
 const isPicked = ({ ui }: Editor, id: string) => ui.picked.some((x) => x.id === id);
 
-function useClipMove(editor: Editor, clip: VideoClip | AudioClip, snapping: boolean) {
+/**
+ * Dragging a clip moves it with its linked partners. Dragging one of several picked clips moves
+ * the whole selection; a plain click on it (no drag) still selects it alone.
+ */
+function useClipMove(editor: Editor, clip: VideoClip | AudioClip, kind: 'clip' | 'audio', snapping: boolean) {
   const startDrag = useDrag();
-  return (e: PointerEvent<HTMLElement>) => {
+  const dragged = useRef(false);
+  const onPointerDown = (e: PointerEvent<HTMLElement>) => {
+    dragged.current = false;
     if (e.button !== 0 || editor.ui.tool !== 'select' || additive(e)) return;
     const snapshot = editor.project;
-    const moving = new Set([clip.id, ...(clip.linked ? partnersOf(snapshot, clip).map(c => c.id) : [])]);
+    const others = isPicked(editor, clip.id) ? editor.ui.picked.map(x => x.id).filter(id => id !== clip.id) : [];
+    const moving = new Set(movingGroup(snapshot, [clip.id, ...others]).map(c => c.id));
     const targets = [0];
     for (const track of snapshot.tracks) {
       if (track.kind === 'text') {
@@ -361,15 +374,19 @@ function useClipMove(editor: Editor, clip: VideoClip | AudioClip, snapping: bool
     }
     const element = e.currentTarget;
     const pps = ((element.closest('.audio-clip') ?? element).getBoundingClientRect().width + 3) / clipDuration(clip);
-    editor.select({ kind: findClip(snapshot, clip.id)!.track.kind === 'video' ? 'clip' : 'audio', id: clip.id });
-    let dragging = false;
+    if (!others.length) editor.select({ kind, id: clip.id });
     startDrag(e, dx => {
-      if (!dragging && Math.abs(dx) < 3) return;
-      dragging = true;
+      if (!dragged.current && Math.abs(dx) < 3) return;
+      dragged.current = true;
       const start = Math.max(0, clip.start + dx / pps);
-      editor.moveClip(snapshot, clip.id, snapping ? snapClipStart(start, clipDuration(clip), targets, pps) : start);
+      editor.moveClip(snapshot, clip.id, snapping ? snapClipStart(start, clipDuration(clip), targets, pps) : start, others);
     });
   };
+  // The click that ends a drag keeps the selection as it is.
+  const onClick = (e: MouseEvent) => {
+    if (!dragged.current) clickClip(editor, { kind, id: clip.id })(e);
+  };
+  return { onPointerDown, onClick };
 }
 
 interface ClipProps<C> {
@@ -390,7 +407,7 @@ function partnerSelected({ project, ui }: Editor, clip: VideoClip | AudioClip, k
 
 function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<VideoClip>) {
   const { project, ui } = editor;
-  const dragClip = useClipMove(editor, cs, snapping);
+  const move = useClipMove(editor, cs, 'clip', snapping);
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const width = clipDuration(cs) * pps - 3;
@@ -403,8 +420,9 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
       style={{ left: cs.start * pps + 1, width, background: src.tone, cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
       aria-label={`Video: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
       aria-pressed={selected}
-      onPointerDown={dragClip}
-      onClick={clickClip(editor, { kind: 'clip', id })}
+      onPointerDown={move.onPointerDown}
+      onClick={move.onClick}
+      onDoubleClick={lockClip(editor, id)}
       onContextMenu={onMenu}>
       <PreviewStrip media={src} width={width} inS={cs.inS} outS={cs.outS} />
       <span className="clip-label" style={inset && { paddingLeft: 12 + inset.head * pps, paddingRight: 12 + inset.tail * pps }}>
@@ -514,7 +532,7 @@ const f1 = (x: number) => x.toFixed(1);
 function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<AudioClip>) {
   const { project, ui, select, togglePick, updateAudioClip: updateClip } = editor;
   const startDrag = useDrag();
-  const dragClip = useClipMove(editor, cs, snapping);
+  const move = useClipMove(editor, cs, 'audio', snapping);
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const span = clipDuration(cs) || 1;
@@ -584,8 +602,9 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
       <button className="audio-wave" style={{ cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
         aria-label={`Audio: ${src.name}, volume ${cs.vol}%${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
         aria-pressed={picked}
-        onPointerDown={dragClip}
-        onClick={clickClip(editor, { kind: 'audio', id })}
+        onPointerDown={move.onPointerDown}
+        onClick={move.onClick}
+        onDoubleClick={lockClip(editor, id)}
         onContextMenu={onMenu}>
         {bars.map((h, i) => (
           <span key={i} style={{ height: h, background: cs.muted ? 'rgba(241,244,240,0.22)' : 'rgba(198,240,191,0.7)' }} />
