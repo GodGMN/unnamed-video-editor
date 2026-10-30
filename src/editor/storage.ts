@@ -64,8 +64,7 @@ export async function loadProject(id?: string): Promise<Project | null> {
   if (saved && saved.schema !== 1) throw new Error(translate('storageNeedsNewerVersion'));
   return saved ? upgrade(saved.project) : null;
 }
-export async function createProject(project: Project): Promise<string> {
-  const id = newId();
+export async function createProject(project: Project, id = newId()): Promise<string> {
   await run('projects', 'readwrite', s => s.put({ id, schema: 1, project, createdAt: Date.now(), updatedAt: Date.now() } satisfies ProjectEntry, id));
   return id;
 }

@@ -4,7 +4,7 @@ import { newId, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, 
 import type { Aspect, AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
 import { removeMediaFiles } from '../media/files';
 import { SEED_SELECTION } from './seed';
-import { saveProject, listProjects } from './storage';
+import { createProject, listProjects, saveProject, selectProject } from './storage';
 
 const SAVE_DELAY_MS = 250;
 
@@ -40,22 +40,37 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
 
 export type SaveState = { status: 'saved' | 'saving' | 'failed'; error?: string };
 
-function usePersistentProject(id: string, initial: Project) {
+/**
+ * Saves the project as it changes. A draft (a new, blank project) isn't stored until its first
+ * edit, so leaving one untouched doesn't add an empty project to the library.
+ */
+function usePersistentProject(id: string, initial: Project, draft: boolean) {
   const [project, setProject] = useState(initial);
   const [saveState, setSaveState] = useState<SaveState>({ status: 'saved' });
   const latest = useRef(project);
   latest.current = project;
+  const stored = useRef<Promise<void> | null>(draft ? null : Promise.resolve());
+  const persist = useCallback(async (snapshot: Project) => {
+    if (!stored.current) {
+      if (snapshot === initial) return;
+      stored.current = createProject(snapshot, id).then(() => selectProject(id));
+      stored.current.catch(() => { stored.current = null; });
+      return stored.current;
+    }
+    await stored.current;
+    await saveProject(snapshot, id);
+  }, [id, initial]);
   const save = useCallback(async () => {
     const snapshot = latest.current;
     setSaveState({ status: 'saving' });
     try {
-      await saveProject(snapshot, id);
+      await persist(snapshot);
       if (snapshot === latest.current) setSaveState({ status: 'saved' });
     } catch (error) {
       setSaveState({ status: 'failed', error: error instanceof Error ? error.message : undefined });
       throw error;
     }
-  }, [id]);
+  }, [persist]);
   useEffect(() => {
     setSaveState({ status: 'saving' });
     const timer = setTimeout(() => { void save().catch(() => undefined); }, SAVE_DELAY_MS);
@@ -67,7 +82,7 @@ function usePersistentProject(id: string, initial: Project) {
     window.addEventListener('beforeunload', leave);
     return () => window.removeEventListener('beforeunload', leave);
   }, [saveState]);
-  return { project, setProject, saveState, flush: save };
+  return { project, setProject, saveState, flush: save, persist };
 }
 
 export interface PlayRange {
@@ -87,9 +102,9 @@ function playRange(p: Project, end: number, lockClip: string | null): PlayRange 
   return { start: clip.start, end: Math.max(clip.start, clipEnd(clip) - 1 / p.output.fps) };
 }
 
-export function useProject(id: string, initial: Project) {
+export function useProject(id: string, initial: Project, draft = false) {
   const [ui, setUi] = useState<EditorUi>(() => reconcileUi(initial, initialUi));
-  const { project, setProject, saveState, flush } = usePersistentProject(id, initial);
+  const { project, setProject, saveState, flush, persist } = usePersistentProject(id, initial, draft);
   const projectRef = useRef(project);
   projectRef.current = project;
   const uiRef = useRef(ui);
@@ -117,7 +132,7 @@ export function useProject(id: string, initial: Project) {
         const next = removeMedia(p, mediaId);
         setProject(next);
         setUi((u) => reconcileUi(next, u));
-        void saveProject(next, id).then(async () => {
+        void persist(next).then(async () => {
           const entries = await listProjects();
           if (!entries.some(e => Object.hasOwn(e.project.media, mediaId))) await removeMediaFiles(mediaId);
         }).catch(error => console.warn('Could not remove unused media', error));
@@ -224,7 +239,7 @@ export function useProject(id: string, initial: Project) {
         return t.kind === 'audio' ? patchTrack(p, id, { muted: !t.muted }) : patchTrack(p, id, { hidden: !t.hidden });
       }),
     };
-  }, [id, setProject]);
+  }, [persist, setProject]);
 
   if (!project || !layout || !range) return null;
   return { project, ui, layout, range, saveState, flush, ...actions };

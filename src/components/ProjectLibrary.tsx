@@ -2,14 +2,14 @@ import { useT } from '../i18n';
 import { t as translate, formatDateTime } from '../i18n/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project } from '../editor/model';
-import { fmtShortDuration, layoutTimeline } from '../editor/model';
+import { fmtShortDuration, layoutTimeline, newId } from '../editor/model';
 import { seedProject } from '../editor/seed';
 import { clearProject, createProject, listProjects, loadProject, selectProject, updateProjectDetails } from '../editor/storage';
 import type { ProjectEntry } from '../editor/storage';
 import { removeMediaFiles } from '../media/files';
-import { useMediaPreview } from '../media/PreviewStrip';
 import { pickFiles } from '../media/links';
 import type { PickedFile } from '../media/links';
+import { renderPoster } from '../projects/poster';
 import { downloadProject, openProjectFile, packageProject, reconnectPackage } from '../projects/portable';
 import { ActionMenu } from './ActionMenu';
 import { Brand } from './Brand';
@@ -18,14 +18,17 @@ import { SettingsDialog } from './SettingsDialog';
 import { ChevronDown, ChevronRight, Clock, Film, LibraryGrid, Play, Plus, Search, Cog, Star } from './icons';
 
 type Filter = 'all' | 'recent' | 'favorites';
-function artworkId(project: Project) {
-  return project.tracks.flatMap(t => t.kind === 'video' ? t.clips.map(c => c.mediaId) : []).find(id => project.media[id]?.video) ?? Object.values(project.media).find(m => m.video)?.id ?? '';
-}
 function ProjectArtwork({ project, hero = false }: { project: Project; hero?: boolean }) {
-  const preview = useMediaPreview(artworkId(project));
-  const thumbnail = hero ? preview?.cover ?? preview?.thumbnails[0] : preview?.thumbnails[0];
+  const [poster, setPoster] = useState<string | null>();
+  const [revision, setRevision] = useState(0);
+  useEffect(() => { const refresh = () => setRevision(n => n + 1); window.addEventListener('media-preview-change', refresh); return () => window.removeEventListener('media-preview-change', refresh); }, []);
+  useEffect(() => {
+    let live = true;
+    renderPoster(project, hero ? 960 : 240).then(src => { if (live) setPoster(src); }, error => { console.warn(error); if (live) setPoster(null); });
+    return () => { live = false; };
+  }, [project, hero, revision]);
   return <div className={`project-artwork ${hero ? 'hero-artwork' : ''}`}>
-    {thumbnail ? <img src={thumbnail} alt="" /> : <div className="project-artwork-placeholder" aria-hidden="true"><span className="artwork-orbit" /><Film size={hero ? 56 : 24} strokeWidth={1} /><span className="artwork-lines"><i /><i /><i /><i /></span></div>}
+    {poster ? <><img className="artwork-backdrop" src={poster} alt="" /><img src={poster} alt="" /></> : poster === null && <div className="project-artwork-placeholder" aria-hidden="true"><span className="artwork-orbit" /><Film size={hero ? 56 : 24} strokeWidth={1} /><span className="artwork-lines"><i /><i /><i /><i /></span></div>}
   </div>;
 }
 function dateLabel(time: number) {
@@ -40,7 +43,7 @@ function blankProject(): Project {
   return { ...project, name: translate('projectHomeUntitledProject'), media: {}, tracks: project.tracks.map(t => ({ ...t, clips: [] })) };
 }
 
-export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string; onOpen: (id: string, project: Project) => void }) {
+export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string; onOpen: (id: string, project: Project, draft?: boolean) => void }) {
   useT();
   const [entries, setEntries] = useState<ProjectEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,7 +133,7 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
     </aside>
     <main className="home-main">
       <div className="home-content">
-        <header className="home-heading"><div><h1>{translate('projectHomeWelcomeBack')}<span>.</span></h1><p>{translate('projectHomePickUpYourEditOrStartSomethingNew')}</p></div><div className="home-create"><button className="home-primary" disabled={!!busy || loading} onClick={() => void run(translate('projectHomeCreatingProject'), () => create(blankProject()))}><Plus size={17} />{translate('projectHomeNewProject')}</button><ActionMenu label={translate('projectHomeMoreCreationOptions')} disabled={!!busy || loading} actions={[{ label: translate('projectHomeImportProjectFile'), run: importProject }]}><ChevronDown size={17} /></ActionMenu></div></header>
+        <header className="home-heading"><div><h1>{translate('projectHomeWelcomeBack')}<span>.</span></h1><p>{translate('projectHomePickUpYourEditOrStartSomethingNew')}</p></div><div className="home-create"><button className="home-primary" disabled={!!busy || loading} onClick={() => onOpen(newId(), blankProject(), true)}><Plus size={17} />{translate('projectHomeNewProject')}</button><ActionMenu label={translate('projectHomeMoreCreationOptions')} disabled={!!busy || loading} actions={[{ label: translate('projectHomeImportProjectFile'), run: importProject }]}><ChevronDown size={17} /></ActionMenu></div></header>
         {last && <section className="home-resume" aria-label={translate('projectHomeLastOpenedProject')}>
           <ProjectArtwork project={last.project} hero />
           <div className="resume-details"><span className="home-eyebrow">{translate('projectHomeLastOpened')}</span><h2 title={last.project.name}>{last.project.name}</h2><p>{durations.get(last.id) ? `${fmtShortDuration(durations.get(last.id)!)} · ` : ''}{translate('projectHomeEdited')}{' '}{dateLabel(last.updatedAt).toLocaleLowerCase()}</p><button className="home-primary" disabled={!!busy} onClick={() => void run(translate('projectHomeOpeningProject'), () => open(last.id))}><Play size={15} />{translate('projectHomeContinueEditing')}</button></div>

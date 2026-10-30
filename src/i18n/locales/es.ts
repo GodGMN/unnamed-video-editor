@@ -569,7 +569,6 @@ export const es: Record<TranslationKey, Message> = {
   "projectHomeUpdatingFavorite": "Actualizando favorito…",
   "projectHomeDuplicatingProject": "Duplicando proyecto…",
   "projectHomePackagingMedia": "Empaquetando medios…",
-  "projectHomeCreatingProject": "Creando proyecto…",
   "projectHomeRenamingProject": "Renombrando proyecto…",
   "projectHomeDeletingProject": "Eliminando proyecto…",
   "projectHomeCopyName": "{name} (copia)",
@@ -609,5 +608,6 @@ export const es: Record<TranslationKey, Message> = {
   "mediaReconnectName": "Reconectar {name}",
   "mediaSelectOriginalWithReconnect": "Selecciona el archivo original con Reconectar.",
   "saveConverted": "Guardar {name}",
-  "couldNotImportConvertedMedia": "No se han podido importar los medios convertidos."
+  "couldNotImportConvertedMedia": "No se han podido importar los medios convertidos.",
+  "library": "Biblioteca"
 };

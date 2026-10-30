@@ -2,7 +2,7 @@ import { useT } from '../i18n';
 import { t as translate } from '../i18n/core';
 import { useEffect, useRef, useState } from 'react';
 import { Brand } from './Brand';
-import { Cog, Download, Maximize, Minimize, Pencil, Redo, Undo } from './icons';
+import { Cog, Download, LibraryGrid, Maximize, Minimize, Pencil, Redo, Undo } from './icons';
 import { useFullscreen } from './useFullscreen';
 import type { SaveState } from '../editor/useProject';
 import { progressPercent, useConversionJob } from '../convert/job';
@@ -97,7 +97,10 @@ export function TopBar({ onProjects, saveState, onSave, projectName, onRename, c
     <header className="topbar">
       <Brand />
       <div className="vsep" />
-      <button className="ib project-home-link" onClick={onProjects}>{translate('projectHomeProjects')}</button>
+      <button className="ib outlined project-home-link" onClick={onProjects}>
+        <LibraryGrid size={15} />
+        {translate('projectHomeProjects')}
+      </button>
       <ProjectName name={projectName} onRename={onRename} />
       <span className="count">{translate('clipCount', { count: clipCount, time: totalTime })}</span>
       <span className={saveState.status === 'failed' ? 'error save-status' : 'save-status'} role="status">{saveStatus(saveState)}</span>

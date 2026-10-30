@@ -567,7 +567,6 @@ export const en = {
   "projectHomeUpdatingFavorite": "Updating favorite…",
   "projectHomeDuplicatingProject": "Duplicating project…",
   "projectHomePackagingMedia": "Packaging media…",
-  "projectHomeCreatingProject": "Creating project…",
   "projectHomeRenamingProject": "Renaming project…",
   "projectHomeDeletingProject": "Deleting project…",
   "projectHomeCopyName": "{name} copy",
@@ -607,5 +606,6 @@ export const en = {
   "mediaReconnectName": "Reconnect {name}",
   "mediaSelectOriginalWithReconnect": "Select the original file with Reconnect.",
   "saveConverted": "Save {name}",
-  "couldNotImportConvertedMedia": "Could not import converted media."
+  "couldNotImportConvertedMedia": "Could not import converted media.",
+  "library": "Library"
 };

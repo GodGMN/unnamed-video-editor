@@ -1,12 +1,13 @@
+import type { FlagCode } from '../components/Flag';
 import { en } from './locales/en';
 import { es } from './locales/es';
 
 export type TranslationKey = keyof typeof en;
 export type Message = string | Partial<Record<Intl.LDMLPluralRule, string>> & { other: string };
 export type Dictionary = Partial<Record<TranslationKey, Message>>;
-export const locales: Record<string, { name: string; messages: Dictionary }> = {
-  en: { name: 'English', messages: en },
-  es: { name: 'Español', messages: es },
+export const locales: Record<string, { name: string; flag?: FlagCode; messages: Dictionary }> = {
+  en: { name: 'English', flag: 'gb', messages: en },
+  es: { name: 'Español', flag: 'es', messages: es },
 };
 export const LOCALE_KEY = 'editor-locale';
 // Other languages of Spain fall back to Spanish until they get a dictionary of their own.
