@@ -94,7 +94,7 @@ export interface AudioClip extends ClipBase {
   curveOut: number;
 }
 
-export interface TextItem {
+export interface TextClip {
   id: string;
   content: string;
   /** Font size in output pixels. */
@@ -104,6 +104,7 @@ export interface TextItem {
   /** Output-pixel offset from the anchor point. */
   x: number;
   y: number;
+  /** Timeline position of the text's first frame. */
   start: number;
   duration: number;
 }
@@ -137,11 +138,15 @@ export interface AudioTrack extends TrackBase {
 export interface TextTrack extends TrackBase {
   kind: 'text';
   hidden: boolean;
-  items: TextItem[];
+  /** Sorted by `start`. */
+  clips: TextClip[];
 }
 
 export type Track = VideoTrack | AudioTrack | TextTrack;
-export type Clip = VideoClip | AudioClip;
+/** A clip cut from imported media. */
+export type MediaClip = VideoClip | AudioClip;
+/** Anything that sits on a track. */
+export type Clip = MediaClip | TextClip;
 
 export interface Project {
   name: string;
@@ -154,16 +159,17 @@ export interface Project {
 
 /* ---------- Editor UI state (not persisted) ---------- */
 
-export interface ClipSelection { kind: 'clip' | 'audio'; id: string }
+/** A clip on a video (`clip`), audio or text track. */
+export interface ClipSelection { kind: ClipKind; id: string }
+export type ClipKind = 'clip' | 'audio' | 'text';
 
 export type Selection =
   | ClipSelection
   /** The transition after the given video clip. */
-  | { kind: 'trans'; id: string }
-  | { kind: 'text'; id: string };
+  | { kind: 'trans'; id: string };
 
 export interface MenuState {
-  kind: 'clip' | 'audio';
+  kind: ClipKind;
   id: string;
   left: number;
   top: number;
@@ -171,7 +177,7 @@ export interface MenuState {
 
 export interface EditorUi {
   sel: Selection | null;
-  /** Video and audio clips in the selection; Ctrl-click adds or removes one. */
+  /** Clips in the selection; Ctrl-click adds or removes one. */
   picked: ClipSelection[];
   /** The clip shown in the trim scrubber: the last selected video or audio clip. */
   focusClip: string | null;
@@ -216,20 +222,30 @@ export const MISSING_MEDIA: Media = {
 
 /* ---------- Queries ---------- */
 
-export const clipDuration = (c: { inS: number; outS: number }) => c.outS - c.inS;
-export const clipEnd = (c: ClipBase) => c.start + clipDuration(c);
+export const isMediaClip = (c: Clip): c is MediaClip => 'mediaId' in c;
+export const clipDuration = (c: Clip) => (isMediaClip(c) ? c.outS - c.inS : c.duration);
+export const clipEnd = (c: Clip) => c.start + clipDuration(c);
+/** The selection kind for clips on a track of this kind. */
+export const clipKind = (track: Track['kind']): ClipKind => (track === 'video' ? 'clip' : track);
+/** Whether `c` follows its link partners' moves and trims. */
+export const isLinked = (c: Clip) => isMediaClip(c) && c.linked;
 
 export const videoTracks = (p: Project) => p.tracks.filter((t): t is VideoTrack => t.kind === 'video');
 export const audioTracks = (p: Project) => p.tracks.filter((t): t is AudioTrack => t.kind === 'audio');
 export const textTracks = (p: Project) => p.tracks.filter((t): t is TextTrack => t.kind === 'text');
 
-export function findClip(p: Project, id: string | null | undefined): { clip: Clip; track: VideoTrack | AudioTrack } | null {
+export function findClip(p: Project, id: string | null | undefined): { clip: Clip; track: Track } | null {
   for (const track of p.tracks) {
-    if (track.kind === 'text') continue;
     const clip = (track.clips as Clip[]).find((c) => c.id === id);
     if (clip) return { clip, track };
   }
   return null;
+}
+
+/** Like `findClip`, but only clips cut from media. */
+export function findMediaClip(p: Project, id: string | null | undefined): { clip: MediaClip; track: VideoTrack | AudioTrack } | null {
+  const f = findClip(p, id);
+  return f && f.track.kind !== 'text' ? f as { clip: MediaClip; track: VideoTrack | AudioTrack } : null;
 }
 
 export function findVideoClip(p: Project, id: string | null | undefined) {
@@ -242,21 +258,18 @@ export function findAudioClip(p: Project, id: string | null | undefined) {
   return f && f.track.kind === 'audio' ? (f.clip as AudioClip) : null;
 }
 
-export function findTextItem(p: Project, id: string | null | undefined) {
-  for (const t of textTracks(p)) {
-    const item = t.items.find((x) => x.id === id);
-    if (item) return item;
-  }
-  return null;
+export function findTextClip(p: Project, id: string | null | undefined) {
+  const f = findClip(p, id);
+  return f && f.track.kind === 'text' ? (f.clip as TextClip) : null;
 }
 
-/** Clips on other tracks that share this clip's link id. */
-export function partnersOf(p: Project, clip: Clip): Clip[] {
-  if (!clip.linkId) return [];
-  const out: Clip[] = [];
+/** Clips on other tracks that share this clip's link id. Text clips are never linked. */
+export function partnersOf(p: Project, clip: Clip): MediaClip[] {
+  if (!isMediaClip(clip) || !clip.linkId) return [];
+  const out: MediaClip[] = [];
   for (const t of p.tracks) {
     if (t.kind === 'text') continue;
-    for (const c of t.clips as Clip[]) if (c.linkId === clip.linkId && c.id !== clip.id) out.push(c);
+    for (const c of t.clips as MediaClip[]) if (c.linkId === clip.linkId && c.id !== clip.id) out.push(c);
   }
   return out;
 }
@@ -271,7 +284,7 @@ export function audioFor(p: Project, id: string): AudioClip | null {
 }
 
 /** Actual intersection of two clips, independent of the selected effect. */
-export function overlapAfter(clip: VideoClip, next: Clip) {
+export function overlapAfter(clip: VideoClip, next: MediaClip) {
   return Math.max(0, Math.min(clipEnd(clip), clipEnd(next)) - Math.max(clip.start, next.start));
 }
 
@@ -285,13 +298,13 @@ export interface ClipLayout {
   ve: number;
   /** The next clip when it touches or overlaps this one; transitions sit on this boundary. */
   nextId: string | null;
-  /** Display name: the media name, numbered when the same source is used more than once. */
+  /** Display name: the media name, numbered when the same source is used more than once, or the text. */
   name: string;
 }
 
 export interface TimelineLayout {
   clips: Record<string, ClipLayout>;
-  /** End of the last clip or text item. */
+  /** End of the last clip. */
   end: number;
 }
 
@@ -303,10 +316,6 @@ export function layoutTimeline(p: Project): TimelineLayout {
   let end = 0;
 
   for (const track of p.tracks) {
-    if (track.kind === 'text') {
-      for (const x of track.items) end = Math.max(end, x.start + x.duration);
-      continue;
-    }
     const list = [...(track.clips as Clip[])].sort((a, b) => a.start - b.start);
     list.forEach((c, i) => {
       const prev = list[i - 1];
@@ -314,16 +323,20 @@ export function layoutTimeline(p: Project): TimelineLayout {
       const s = c.start;
       const e = clipEnd(c);
       const prevEnd = prev ? clipEnd(prev) : -Infinity;
-      const key = track.kind + ':' + c.mediaId;
-      uses[key] = (uses[key] ?? 0) + 1;
-      const stem = p.media[c.mediaId]?.name.replace(/\.[^.]+$/, '') ?? 'Missing media';
+      let name = isMediaClip(c) ? '' : c.content;
+      if (isMediaClip(c)) {
+        const key = track.kind + ':' + c.mediaId;
+        uses[key] = (uses[key] ?? 0) + 1;
+        const stem = p.media[c.mediaId]?.name.replace(/\.[^.]+$/, '') ?? 'Missing media';
+        name = uses[key] > 1 ? `${stem} (${uses[key]})` : stem;
+      }
       clips[c.id] = {
         start: s,
         end: e,
         vs: prevEnd > s ? (s + prevEnd) / 2 : s,
         ve: next && next.start < e ? (next.start + e) / 2 : e,
         nextId: next && next.start <= e + EPS ? next.id : null,
-        name: uses[key] > 1 ? `${stem} (${uses[key]})` : stem,
+        name,
       };
       end = Math.max(end, e);
     });
@@ -335,28 +348,26 @@ export function layoutTimeline(p: Project): TimelineLayout {
 
 const round6 = (x: number) => Math.round(x * 1e6) / 1e6;
 
+/** Rebuilds every track's clip list with `fn`. */
+const mapClips = (p: Project, fn: (clips: Clip[], t: Track) => Clip[]): Project =>
+  ({ ...p, tracks: p.tracks.map((t) => ({ ...t, clips: fn(t.clips as Clip[], t) }) as Track) });
+
 /** Removes a source from the project along with every clip that uses it. */
 export function removeMedia(p: Project, mediaId: string): Project {
   const media = { ...p.media };
   delete media[mediaId];
-  return { ...p, media, tracks: p.tracks.map(t => t.kind === 'text' ? t : {
-    ...t, clips: t.clips.filter(c => c.mediaId !== mediaId),
-  } as Track) };
+  return mapClips({ ...p, media }, (clips) => clips.filter((c) => !isMediaClip(c) || c.mediaId !== mediaId));
 }
 
-/** Removes clips (with their linked partners) and text items by id. */
-export function deleteItems(p: Project, ids: string[]): Project {
+/** Removes clips, with their linked partners, by id. */
+export function deleteClips(p: Project, ids: string[]): Project {
   const gone = new Set([...ids, ...movingGroup(p, ids).map((c) => c.id)]);
-  return { ...p, tracks: p.tracks.map((t) => (t.kind === 'text'
-    ? { ...t, items: t.items.filter((x) => !gone.has(x.id)) }
-    : { ...t, clips: t.clips.filter((c) => !gone.has(c.id)) } as Track)) };
+  return mapClips(p, (clips) => clips.filter((c) => !gone.has(c.id)));
 }
 
 /** Keep track order deterministic without changing user-authored positions. */
 export function settle(p: Project): Project {
-  return { ...p, tracks: p.tracks.map(t => t.kind === 'text' ? t : {
-    ...t, clips: [...t.clips].sort((a, b) => a.start - b.start),
-  } as Track) };
+  return mapClips(p, (clips) => [...clips].sort((a, b) => a.start - b.start));
 }
 
 /** Clip fields that apply to every linked partner when `linked` is on. */
@@ -366,27 +377,19 @@ const LINKED_KEYS = ['inS', 'outS', 'start'] as const;
 export function patchClip<C extends Clip>(p: Project, id: string, patch: Partial<C>): Project {
   const f = findClip(p, id);
   if (!f) return p;
-  const linked = patch.linked ?? f.clip.linked;
-  const shared: Partial<Clip> = {};
+  const linked = (patch as Partial<MediaClip>).linked ?? isLinked(f.clip);
+  const shared: Partial<MediaClip> = {};
   if (linked) for (const k of LINKED_KEYS) if (k in patch) shared[k] = patch[k as keyof C] as number;
   if ('linked' in patch) shared.linked = linked;
   const partners = new Set(partnersOf(p, f.clip).map((c) => c.id));
-
-  const tracks = p.tracks.map((t) => {
-    if (t.kind === 'text') return t;
-    const clips = (t.clips as Clip[]).map((c) =>
-      c.id === id ? { ...c, ...patch } : partners.has(c.id) ? { ...c, ...shared } : c);
-    return { ...t, clips } as Track;
-  });
-  return { ...p, tracks };
+  return mapClips(p, (clips) => clips.map((c) =>
+    c.id === id ? { ...c, ...patch } : partners.has(c.id) ? { ...c, ...shared } : c));
 }
 
 /** Links a video and an audio clip as a fresh pair, detaching each from any earlier partner. */
 export function linkClips(p: Project, videoId: string, audioId: string, linkId: string): Project {
   if (!findVideoClip(p, videoId) || !findAudioClip(p, audioId)) return p;
-  return { ...p, tracks: p.tracks.map(t => t.kind === 'text' ? t : {
-    ...t, clips: t.clips.map(c => c.id === videoId || c.id === audioId ? { ...c, linkId, linked: true } : c),
-  } as Track) };
+  return mapClips(p, (clips) => clips.map((c) => c.id === videoId || c.id === audioId ? { ...c, linkId, linked: true } : c));
 }
 
 /** The picked clips as a video and audio pair, when they are exactly one of each. */
@@ -403,7 +406,7 @@ export function movingGroup(p: Project, ids: string[]): Clip[] {
   for (const id of ids) {
     const found = findClip(p, id);
     if (!found) continue;
-    for (const c of [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])]) group.set(c.id, c);
+    for (const c of [found.clip, ...(isLinked(found.clip) ? partnersOf(p, found.clip) : [])]) group.set(c.id, c);
   }
   return [...group.values()];
 }
@@ -424,7 +427,7 @@ export function moveClip(p: Project, id: string, start: number, others: string[]
   const delta = Math.max(start - found.clip.start, -Math.min(...group.map(c => c.start)));
 
   // Index of each vertically moving clip's track among the tracks of its kind.
-  const lanes = p.tracks.filter(t => t.kind === found.track.kind) as (VideoTrack | AudioTrack)[];
+  const lanes = p.tracks.filter(t => t.kind === found.track.kind);
   const lane = new Map<string, number>();
   for (const x of [id, ...others]) {
     const i = lanes.findIndex(t => (t.clips as Clip[]).some(c => c.id === x));
@@ -434,7 +437,6 @@ export function moveClip(p: Project, id: string, start: number, others: string[]
 
   const moved = new Map<string, Clip>();
   const tracks = p.tracks.map(t => {
-    if (t.kind === 'text') return t;
     const clips = (t.clips as Clip[]).flatMap(c => {
       const next = ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c;
       if (!shift || !lane.has(c.id)) return [next];
@@ -446,10 +448,9 @@ export function moveClip(p: Project, id: string, start: number, others: string[]
   if (shift) for (const [x, i] of lane) {
     const dest = lanes[i + shift].id;
     const k = tracks.findIndex(t => t.id === dest);
-    const t = tracks[k] as VideoTrack | AudioTrack;
-    tracks[k] = { ...t, clips: [...t.clips, moved.get(x)!] } as Track;
+    tracks[k] = { ...tracks[k], clips: [...tracks[k].clips, moved.get(x)!] } as Track;
   }
-  return { ...p, tracks: tracks.map(t => t.kind === 'text' ? t : { ...t, clips: [...t.clips].sort((a, b) => a.start - b.start) } as Track) };
+  return settle({ ...p, tracks });
 }
 
 /** Both edges can snap; the radius stays constant in screen pixels at every zoom. */
@@ -462,15 +463,6 @@ export function snapClipStart(start: number, duration: number, targets: number[]
     if (candidate >= 0 && d < distance) { result = candidate; distance = d; }
   }
   return result;
-}
-
-export function patchTextItem(p: Project, id: string, patch: Partial<TextItem>): Project {
-  return {
-    ...p,
-    tracks: p.tracks.map((t) => (t.kind === 'text'
-      ? { ...t, items: t.items.map((x) => (x.id === id ? { ...x, ...patch } : x)) }
-      : t)),
-  };
 }
 
 /** Shortest piece a split may leave on either side of the cut, in seconds. */
@@ -486,15 +478,19 @@ const cuts = (start: number, end: number, time: number) => time - start >= MIN_S
 export function splitClip(p: Project, id: string, time: number, rightId: string): Project {
   const found = findClip(p, id);
   if (!found || !cuts(found.clip.start, clipEnd(found.clip), time)) return p;
-  const group = [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])]
+  const group = [found.clip, ...(isLinked(found.clip) ? partnersOf(p, found.clip) : [])]
     .filter((c) => cuts(c.start, clipEnd(c), time));
   const linkId = group.length > 1 ? rightId : null;
   const ids = new Map(group.map((c, i) => [c.id, i === 0 ? rightId : `${rightId}-${i}`]));
-  return { ...p, tracks: p.tracks.map((t) => {
-    if (t.kind === 'text' || !t.clips.some((c) => ids.has(c.id))) return t;
-    const clips = (t.clips as Clip[]).flatMap((c): Clip[] => {
+  return mapClips(p, (clips, t) => {
+    if (!clips.some((c) => ids.has(c.id))) return clips;
+    return clips.flatMap((c): Clip[] => {
       const newId = ids.get(c.id);
       if (!newId) return [c];
+      if (!isMediaClip(c)) {
+        const left = round6(time - c.start);
+        return [{ ...c, duration: left }, { ...c, id: newId, start: round6(time), duration: round6(c.duration - left) }];
+      }
       const cut = round6(c.inS + time - c.start);
       const left = { ...c, outS: cut };
       const right = { ...c, id: newId, start: round6(time), inS: cut, linkId, linked: !!linkId && c.linked };
@@ -505,37 +501,23 @@ export function splitClip(p: Project, id: string, time: number, rightId: string)
         { ...right, fadeIn: 0, fadeOut: Math.min(a.fadeOut, a.outS - cut) } as AudioClip,
       ];
     });
-    return { ...t, clips } as Track;
-  }) };
+  });
 }
 
-/** Cuts text item `id` at `time`; the right piece gets `rightId`. No-op when `time` isn't inside it. */
-export function splitTextItem(p: Project, id: string, time: number, rightId: string): Project {
-  const item = findTextItem(p, id);
-  if (!item || !cuts(item.start, item.start + item.duration, time)) return p;
-  const left = round6(time - item.start);
-  return { ...p, tracks: p.tracks.map((t) => t.kind !== 'text' || !t.items.includes(item) ? t : {
-    ...t, items: t.items.flatMap((x) => x !== item ? [x] : [
-      { ...x, duration: left },
-      { ...x, id: rightId, start: round6(time), duration: round6(x.duration - left) },
-    ]),
-  }) };
-}
+/** Property values of a text clip added from the timeline toolbar. */
+export const TEXT_CLIP_DEFAULTS: Omit<TextClip, 'id' | 'start'> = { content: 'Title', size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, duration: 3 };
 
-/** Property values of a text item added from the timeline toolbar. */
-export const TEXT_ITEM_DEFAULTS: Omit<TextItem, 'id' | 'start'> = { content: 'Title', size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, duration: 3 };
-
-/** Adds a default text item at `time` to the top text track with room for it, or to a new text track on top. */
-export function addTextItem(p: Project, time: number, id: string): Project {
-  const item: TextItem = { ...TEXT_ITEM_DEFAULTS, id, start: round6(Math.max(0, time)) };
-  const end = item.start + item.duration;
+/** Adds a default text clip at `time` to the top text track with room for it, or to a new text track on top. */
+export function addTextClip(p: Project, time: number, id: string): Project {
+  const clip: TextClip = { ...TEXT_CLIP_DEFAULTS, id, start: round6(Math.max(0, time)) };
+  const end = clipEnd(clip);
   const tracks = textTracks(p);
-  const track = tracks.find((t) => t.items.every((x) => x.start + x.duration <= item.start + EPS || x.start >= end - EPS));
+  const track = tracks.find((t) => t.clips.every((x) => clipEnd(x) <= clip.start + EPS || x.start >= end - EPS));
   if (!track) {
     const name = tracks.length ? `Text ${tracks.length + 1}` : 'Text';
-    return { ...p, tracks: [{ kind: 'text', id: `${id}-track`, name, label: '', hidden: false, items: [item] }, ...p.tracks] };
+    return { ...p, tracks: [{ kind: 'text', id: `${id}-track`, name, label: '', hidden: false, clips: [clip] }, ...p.tracks] };
   }
-  return { ...p, tracks: p.tracks.map((t) => t === track ? { ...track, items: [...track.items, item] } : t) };
+  return settle({ ...p, tracks: p.tracks.map((t) => t === track ? { ...track, clips: [...track.clips, clip] } : t) });
 }
 
 /**
@@ -545,35 +527,44 @@ export function addTextItem(p: Project, time: number, id: string): Project {
 export function duplicateClip(p: Project, id: string, copyId: string): Project {
   const found = findClip(p, id);
   if (!found) return p;
-  const group = [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])];
+  const group = [found.clip, ...(isLinked(found.clip) ? partnersOf(p, found.clip) : [])];
   const duration = clipDuration(found.clip);
-  const tracks = p.tracks.filter((t): t is VideoTrack | AudioTrack => t.kind !== 'text' && (t.clips as Clip[]).some((c) => group.includes(c)));
-  const others = tracks.flatMap((t) => t.clips as Clip[]);
+  const others = p.tracks.map((t) => t.clips as Clip[]).filter((clips) => clips.some((c) => group.includes(c))).flat();
   const after = clipEnd(found.clip);
   const free = others.every((c) => clipEnd(c) <= after + EPS || c.start >= after + duration - EPS);
   const start = free ? after : Math.max(...others.map(clipEnd));
   const linkId = group.length > 1 ? copyId : null;
   const ids = new Map(group.map((c, i) => [c.id, i === 0 ? copyId : `${copyId}-${i}`]));
-  return settle({ ...p, tracks: p.tracks.map((t) => {
-    if (t.kind === 'text') return t;
-    const copies = (t.clips as Clip[]).filter((c) => ids.has(c.id)).map((c) => ({
-      ...c, id: ids.get(c.id)!, start: round6(start + c.start - found.clip.start), linkId, linked: !!linkId && c.linked,
-      ...(t.kind === 'video' ? { transitionOut: null } : {}),
-    }));
-    return copies.length ? { ...t, clips: [...t.clips, ...copies] } as Track : t;
-  }) });
+  return settle(mapClips(p, (clips, t) => [...clips, ...clips.filter((c) => ids.has(c.id)).map((c): Clip => {
+    const copy = { ...c, id: ids.get(c.id)!, start: round6(start + c.start - found.clip.start) };
+    if (!isMediaClip(c)) return copy;
+    return { ...copy, linkId, linked: !!linkId && c.linked, ...(t.kind === 'video' ? { transitionOut: null } : {}) } as MediaClip;
+  })]));
 }
 
-export const MIN_TEXT_DURATION = 0.5;
+/** Shortest a trim may leave a clip, in seconds (or the whole source when it's shorter). */
+export const MIN_TRIM_DURATION = 0.5;
 
-/** Moves one edge of a text item to `time`, keeping the other edge where it is. */
-export function trimTextItem(p: Project, id: string, edge: 'in' | 'out', time: number): Project {
-  const item = findTextItem(p, id);
-  if (!item) return p;
-  const end = item.start + item.duration;
-  if (edge === 'out') return patchTextItem(p, id, { duration: round6(Math.max(MIN_TEXT_DURATION, time - item.start)) });
-  const start = round6(Math.max(0, Math.min(end - MIN_TEXT_DURATION, time)));
-  return patchTextItem(p, id, { start, duration: round6(end - start) });
+/**
+ * Moves one edge of clip `id` to sequence time `time`, keeping the other edge where it is. Media
+ * clips can't reach past either end of their source; text clips can be any length.
+ */
+export function trimClipEdge(p: Project, id: string, edge: 'in' | 'out', time: number): Project {
+  const found = findClip(p, id);
+  if (!found) return p;
+  const c = found.clip;
+  const end = clipEnd(c);
+  if (!isMediaClip(c)) {
+    if (edge === 'out') return patchClip<TextClip>(p, id, { duration: round6(Math.max(MIN_TRIM_DURATION, time - c.start)) });
+    const start = round6(Math.max(0, Math.min(end - MIN_TRIM_DURATION, time)));
+    return patchClip<TextClip>(p, id, { start, duration: round6(end - start) });
+  }
+  const source = (p.media[c.mediaId] ?? MISSING_MEDIA).duration;
+  const min = Math.min(MIN_TRIM_DURATION, source);
+  if (edge === 'out') return patchClip<MediaClip>(p, id, { outS: round6(Math.min(source, Math.max(c.inS + min, c.outS + time - end))) });
+  // The start edge moves the clip's start along with its in point.
+  const d = Math.max(-c.inS, -c.start, Math.min(c.outS - min - c.inS, time - c.start));
+  return patchClip<MediaClip>(p, id, { inS: round6(c.inS + d), start: round6(c.start + d) });
 }
 
 export function patchTrack(p: Project, id: string, patch: Partial<{ hidden: boolean; muted: boolean }>): Project {
@@ -662,7 +653,7 @@ export function acceptsMedia(track: Track, media: Media | undefined): media is M
  * Where media dropped at `time` on a magnetic track goes: the cut nearest `time` (the start of
  * clip `index`, or the end of the track). It starts once every earlier clip has ended.
  */
-export function magneticCut(clips: Clip[], time: number): { index: number; start: number } {
+export function magneticCut(clips: MediaClip[], time: number): { index: number; start: number } {
   const sorted = [...clips].sort((a, b) => a.start - b.start);
   const cutAt = (i: number) => (i < sorted.length ? sorted[i].start : Math.max(0, ...sorted.map(clipEnd)));
   let index = 0;
@@ -681,10 +672,9 @@ export function mediaDropStart(track: VideoTrack | AudioTrack, time: number): nu
  */
 function ripple(p: Project, track: VideoTrack | AudioTrack, index: number, delta: number): Project {
   if (delta <= 0) return p;
-  const later = [...track.clips].sort((a, b) => a.start - b.start).slice(index) as Clip[];
+  const later = [...track.clips].sort((a, b) => a.start - b.start).slice(index) as MediaClip[];
   const ids = new Set(later.flatMap((c) => [c.id, ...partnersOf(p, c).map((x) => x.id)]));
-  return { ...p, tracks: p.tracks.map((t) => t.kind === 'text' ? t
-    : { ...t, clips: (t.clips as Clip[]).map((c) => ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c) } as Track) };
+  return mapClips(p, (clips) => clips.map((c) => ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c));
 }
 
 /** Adds a clip of `mediaId` at `time`. Magnetic tracks insert it at the nearest cut and push later clips right. */

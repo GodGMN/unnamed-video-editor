@@ -39,14 +39,20 @@ function run<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequ
 /** The saved project, or null when there is none (or it's from an older schema). */
 export async function loadProject(): Promise<Project | null> {
   const saved = await run<Saved | undefined>('readonly', (s) => s.get(KEY));
-  return saved?.schema === SCHEMA ? withTextOffsets(saved.project) : null;
+  return saved?.schema === SCHEMA ? migrateText(saved.project) : null;
 }
 
-/** Saves from before text items had an x/y offset get a zero offset. */
-function withTextOffsets(p: Project): Project {
-  return { ...p, tracks: p.tracks.map((t) => t.kind === 'text'
-    ? { ...t, items: t.items.map((x) => ({ ...x, x: x.x ?? 0, y: x.y ?? 0 })) }
-    : t) };
+/**
+ * Older saves keep text tracks' clips in `items`, and the oldest have text without an x/y
+ * offset; those get a zero offset.
+ */
+function migrateText(p: Project): Project {
+  return { ...p, tracks: p.tracks.map((t) => {
+    if (t.kind !== 'text') return t;
+    const { items, ...track } = t as typeof t & { items?: typeof t.clips };
+    const clips = (track.clips ?? items ?? []).map((x) => ({ ...x, x: x.x ?? 0, y: x.y ?? 0 }));
+    return { ...track, clips: clips.sort((a, b) => a.start - b.start) };
+  }) };
 }
 
 export function saveProject(project: Project): Promise<void> {

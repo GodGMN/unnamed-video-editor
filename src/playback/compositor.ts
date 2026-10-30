@@ -73,7 +73,7 @@ export function renderFrame(p: Project, time: number, ctx: RenderContext, frameS
   for (const track of [...p.tracks].reverse()) {
     if (track.kind === 'audio' || track.hidden) continue;
     if (track.kind === 'text') {
-      for (const text of track.items) {
+      for (const text of track.clips) {
         if (time < text.start || time >= text.start + text.duration) continue;
         const horizontal = text.pos[1], vertical = text.pos[0];
         ctx.save();

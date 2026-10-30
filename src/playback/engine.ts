@@ -1,5 +1,5 @@
 import { clipEnd } from '../editor/model';
-import type { Clip, Project } from '../editor/model';
+import type { MediaClip, Project } from '../editor/model';
 import { readMediaFile } from '../media/files';
 import { audioGain, renderFrame } from './compositor';
 
@@ -63,7 +63,7 @@ export class PlaybackEngine {
     if (!this.busy) void this.flush();
   }
 
-  private async player(clip: Clip, audio: boolean): Promise<Player | null> {
+  private async player(clip: MediaClip, audio: boolean): Promise<Player | null> {
     if (this.players.has(clip.id)) return this.players.get(clip.id)!;
     if (this.unavailable.has(clip.mediaId)) return null;
     const file = await readMediaFile(clip.mediaId);
