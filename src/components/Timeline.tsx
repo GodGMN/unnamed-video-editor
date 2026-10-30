@@ -281,16 +281,21 @@ export function Timeline({ editor }: { editor: Editor }) {
               <div key={t.id} className="track" onDragOver={(e) => onTrackDragOver(e, t)} onDrop={(e) => onTrackDrop(e, t)}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { setDropTarget(null); setGhost(null); } }}
                 data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
-                {t.kind === 'text' && t.items.map((x) => (
-                  <button key={x.id} className="text-clip" style={{ left: x.start * pps + 1, width: x.duration * pps - 2 }}
-                    aria-label={`Text overlay: ${x.content}`}
-                    aria-pressed={ui.sel?.kind === 'text' && ui.sel.id === x.id}
-                    onPointerDown={onTextDown(x)}
-                    onClick={() => select({ kind: 'text', id: x.id })}>
-                    <TextT size={12} strokeWidth={2.2} />
-                    <span>{x.content}</span>
-                  </button>
-                ))}
+                {t.kind === 'text' && (
+                  <>
+                    {t.items.map((x) => (
+                      <button key={x.id} className="text-clip" style={{ left: x.start * pps + 1, width: x.duration * pps - 3 }}
+                        aria-label={`Text overlay: ${x.content}, ${x.duration.toFixed(1)} seconds`}
+                        aria-pressed={ui.sel?.kind === 'text' && ui.sel.id === x.id}
+                        onPointerDown={onTextDown(x)}
+                        onClick={() => select({ kind: 'text', id: x.id })}>
+                        <span className="text-clip-name"><TextT size={12} strokeWidth={2.2} /><span>{x.content}</span></span>
+                        <span className="mono">{x.duration.toFixed(1)}s</span>
+                      </button>
+                    ))}
+                    <TextTrimHandles editor={editor} items={t.items} pps={pps} />
+                  </>
+                )}
                 {t.kind === 'video' && (
                   <>
                     {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} inset={insets!.get(c.id)} onMenu={onContextMenu('clip', c.id)} />)}
@@ -460,6 +465,29 @@ function TrimHandles({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
     <>
       <span className="clip-edge in" style={{ left }} title="Drag to trim the start" onPointerDown={edgeDown('in')}><span /></span>
       <span className="clip-edge out" style={{ left: right - 8 }} title="Drag to trim the end" onPointerDown={edgeDown('out')}><span /></span>
+    </>
+  );
+}
+
+/** Edge handles for the selected text item: drag either end to change when it starts or ends. */
+function TextTrimHandles({ editor, items, pps }: { editor: Editor; items: TextItem[]; pps: number }) {
+  const { ui, trimText } = editor;
+  const startDrag = useDrag();
+  const item = ui.sel?.kind === 'text' ? items.find((x) => x.id === ui.sel!.id) : undefined;
+  if (!item) return null;
+  const left = item.start * pps + 1;
+  const right = left + item.duration * pps - 3;
+
+  const edgeDown = (which: 'in' | 'out') => (e: PointerEvent<HTMLSpanElement>) => {
+    if (e.button !== 0) return;
+    const t0 = which === 'in' ? item.start : item.start + item.duration;
+    startDrag(e, (dx) => trimText(item.id, which, Math.round((t0 + dx / pps) * 100) / 100));
+  };
+
+  return (
+    <>
+      <span className="clip-edge in" style={{ left }} title="Drag to change the start" onPointerDown={edgeDown('in')}><span /></span>
+      <span className="clip-edge out" style={{ left: right - 8 }} title="Drag to change the end" onPointerDown={edgeDown('out')}><span /></span>
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { ResetButton } from './ResetButton';
 
@@ -21,6 +21,8 @@ const PX_PER_STEP = 4;
 export function NumberField({ value, onChange, step = 1, min = -Infinity, max = Infinity, defaultValue, lead, unit, className, ...aria }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const ticks = useRef<HTMLSpanElement>(null);
+  // Typed text that isn't a number yet (e.g. a lone `-`), so the controlled input doesn't snap it back.
+  const [draft, setDraft] = useState<string | null>(null);
   const decimals = (String(step).split('.')[1] ?? '').length;
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
   const commit = (v: number) => onChange(clamp(Number((Math.round(v / step) * step).toFixed(decimals))));
@@ -80,6 +82,7 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     e.preventDefault();
+    setDraft(null);
     commit(value + step * (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1));
   };
 
@@ -89,13 +92,15 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
       onClick={(e) => e.preventDefault()}>
       {lead}
       <ResetButton value={value} defaultValue={defaultValue} onReset={onChange} />
-      <input ref={input} type="number" step={step} min={min} max={max} value={value} {...aria}
+      <input ref={input} type="number" step={step} min={min} max={max} value={draft ?? value} {...aria}
         onChange={(e) => {
+          setDraft(e.target.value);
           const v = e.target.valueAsNumber;
           if (v >= min && v <= max) onChange(v);
         }}
         onBlur={(e) => {
           const v = Number.isNaN(e.target.valueAsNumber) ? value : clamp(e.target.valueAsNumber);
+          setDraft(null);
           e.target.value = String(v);
           if (v !== value) onChange(v);
         }}
