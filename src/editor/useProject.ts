@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, DEFAULT_TRANSITION, findClip, findTextItem, findVideoClip, layoutTimeline, patchClip, patchTextItem, patchTrack, settle, videoTracks } from './model';
+import { newId, placeMedia, DEFAULT_TRANSITION, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, settle, videoTracks } from './model';
 import type { AudioClip, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
@@ -76,6 +76,7 @@ export function useProject() {
       select: (sel: Selection) => setUi((u) => ({
         ...u, sel, menu: null, focusClip: sel.kind === 'clip' || sel.kind === 'audio' ? sel.id : u.focusClip,
       })),
+      moveClip: (snapshot: Project, id: string, start: number) => setProject(moveClip(snapshot, id, start)),
       setTool: (tool: Tool) => setUi((u) => ({ ...u, tool })),
       setScrub: (scrub: number) => setUi((u) => ({ ...u, scrub })),
       setPlayhead: (playhead: number) => setUi((u) => ({ ...u, playhead })),
