@@ -84,7 +84,7 @@ export function TopBar({ onProjects, saveState, onSave, projectName, onRename, c
     <header className="topbar">
       <Brand />
       <div className="vsep" />
-      <button className="gb" onClick={onProjects}>Projects</button>
+      <button className="ib project-home-link" onClick={onProjects}>Projects</button>
       <ProjectName name={projectName} onRename={onRename} />
       <span className="count">{clipCount} clips · {totalTime}</span>
       <span className={saveState.startsWith('Save failed') ? 'error save-status' : 'save-status'} role="status">{saveState}</span>

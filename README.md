@@ -44,8 +44,13 @@ docker run --rm -p 8080:80 unnamed-video-editor
 
 ## Project storage
 
-Use **Projects** to create, open, duplicate, or delete projects. Names can be
-edited in the top bar. Edits autosave to IndexedDB; switching projects waits for
+The app opens on the project home. **Continue editing** resumes the last opened
+project. Search, sort, or filter the scrollable list by Recent or Favorites.
+Each project has one **…** menu for renaming, favorites, duplication, downloads,
+package reconnection, and deletion. **New project** creates an empty edit; its
+dropdown imports project files. **Settings** contains preview-cache controls.
+Use **Projects** in the editor to return home after pending edits have saved.
+Names can also be edited in the top bar. Edits autosave to IndexedDB; switching projects waits for
 the current save to commit. The former single `current` save migrates into the
 library when the database opens. A failed load never replaces a saved project
 with the demo.
@@ -65,14 +70,14 @@ source affects project duplicates that use that source.
 
 Only generated thumbnails and waveforms enter the new disposable cache. Writes
 and eviction share one IndexedDB transaction and cap it at 128 MiB across tabs.
-**Clear cache** removes them; **Rebuild previews** regenerates a source's previews.
+**Settings → Clear preview cache** removes them; **Rebuild previews** regenerates a source's previews.
 Old OPFS/IndexedDB source copies remain readable. Reconnecting an original or
 deleting its last saved reference removes that old copy, never the external
 original. Copies retained from older versions are outside the preview budget.
 Converted output stays available for the session; save the MP4 from its completed
 conversion dialog and relink that saved file to retain access across sessions.
 
-**Download project** writes a versioned `.uve.json` document containing edits and
+The project menu's **Download project** writes a versioned `.uve.json` document containing edits and
 media identifiers, without browser handles or media. Reconnect sources after
 opening it. **Package with media** writes a self-contained `.uvepack`, streaming
 to the selected destination where a save picker is available. Other browsers use
@@ -107,3 +112,16 @@ package roundtrip, handle persistence, validation, migration, and cache eviction
 Its handle-persistence fixture uses a genuine serializable OPFS handle as a
 controlled stand-in for a handle returned by the native picker. Native permission
 prompts and cross-browser picker behavior still need manual testing.
+
+
+Verify the project home against 40 persisted projects:
+
+```sh
+TEST_URL=http://127.0.0.1:5262 \
+PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs \
+node scripts/verify-project-home.mjs
+```
+
+This checks search, sorting, favorite persistence, rename, keyboard menus at the
+bottom of the list, settings, resume, save-before-navigation, deletion, and the
+1280×720 layout. Sample project covers are generated only in the test profile.

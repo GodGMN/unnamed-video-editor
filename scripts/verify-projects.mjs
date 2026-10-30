@@ -1,3 +1,4 @@
+import { openEditor, projectAction } from './browser-helpers.mjs';
 // Start Vite on TEST_URL. PLAYWRIGHT_MODULE can point to a local playwright-core/index.mjs.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -17,7 +18,6 @@ try {
   const page = await context.newPage();
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(process.env.TEST_URL ?? 'http://127.0.0.1:5262');
-  await page.getByRole('button', { name: 'Projects', exact: true }).click();
   await page.getByRole('button', { name: 'New project', exact: true }).click();
   await page.getByRole('button', { name: 'Rename project Untitled project' }).waitFor();
   await page.locator('input[aria-label="Import media files"]').setInputFiles(fixture);
@@ -36,10 +36,11 @@ try {
   assert.equal(source.copied, false); assert.equal(source.size, bytes.length); checks.push('UI imports source without OPFS copy');
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
-  await page.getByRole('button', { name: 'Package with media', exact: true }).click();
+  await projectAction(page, 'Untitled project', 'Package with media');
   const packageFile = await download; const packagePath = join(dir, packageFile.suggestedFilename()); await packageFile.saveAs(packagePath);
-  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await openEditor(page);
   await page.reload();
+  await openEditor(page);
   await page.locator(`input[aria-label="Reconnect original.mp4"]`).waitFor({ state: 'attached' });
   const missing = await page.evaluate(async id => (await import('/src/media/files.ts')).readMediaFile(id), source.media.id);
   assert.equal(missing, null); checks.push('Session imports require reconnect after reload');
@@ -50,17 +51,18 @@ try {
   await item.getByRole('button', { name: 'Rebuild previews' }).waitFor();
   checks.push('Reconnect restores source and previews');
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
-  await page.getByRole('button', { name: 'Duplicate current', exact: true }).click();
+  await projectAction(page, 'Untitled project', 'Duplicate');
   await page.getByRole('button', { name: 'Rename project Untitled project copy' }).waitFor();
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
-  await page.waitForFunction(() => document.querySelectorAll('.project-row').length === 3);
-  assert.equal(await page.locator('.project-row').count(), 3);
-  const originalRow = page.locator('.project-row').filter({ has: page.locator('strong', { hasText: /^Untitled project$/ }) });
-  page.once('dialog', d => d.accept()); await originalRow.getByRole('button', { name: 'Delete' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.home-project-row').length === 2);
+  assert.equal(await page.locator('.home-project-row').count(), 2);
+  const originalRow = page.locator('.home-project-row').filter({ has: page.locator('strong', { hasText: /^Untitled project$/ }) });
+  await projectAction(page, 'Untitled project', 'Delete project');
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete project', exact: true }).click();
   await originalRow.waitFor({ state: 'detached' });
   const retained = await page.evaluate(async id => !!await (await import('/src/media/files.ts')).readMediaFile(id), source.media.id);
   assert.equal(retained, true); checks.push('Duplicate shares source and deletion preserves references');
-  await page.locator('input[aria-label="Open project file"]').setInputFiles(packagePath);
+  await page.locator('input[aria-label="Import project file"]').setInputFiles(packagePath);
   await page.getByRole('button', { name: 'Rename project Untitled project', exact: true }).waitFor();
   const restored = await page.evaluate(async () => {
     const p = await (await import('/src/editor/storage.ts')).loadProject();
@@ -68,9 +70,11 @@ try {
   });
   assert.notEqual(restored.id, source.media.id); assert.equal(restored.size, bytes.length); checks.push('Portable package roundtrip remaps media and reads slices without copying');
   await page.reload();
+  await openEditor(page);
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await projectAction(page, 'Untitled project', 'Reconnect package');
   await page.locator('input[aria-label="Reconnect package"]').setInputFiles(packagePath);
-  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await openEditor(page);
   await page.locator('.media-item').filter({ hasText: 'original.mp4' }).getByText('Session only', { exact: true }).waitFor();
   assert.equal(await page.evaluate(async id => (await (await import('/src/media/files.ts')).readMediaFile(id))?.size, restored.id), bytes.length);
   checks.push('Reconnect package restores current project media after reload');
@@ -84,6 +88,7 @@ try {
     return media.id;
   }, bytes);
   await page.reload();
+  await openEditor(page);
   assert.equal(await page.evaluate(async id => (await (await import('/src/media/files.ts')).readMediaFile(id))?.size, linked), bytes.length);
   checks.push('Stored FileSystemFileHandle survives reload');
   const changed = await page.evaluate(async id => {
@@ -100,9 +105,16 @@ try {
     let rejected = false; try { parseDocument(bad); } catch { rejected = true; }
     const future = structuredClone(good); future.version = 999;
     let futureRejected = false; try { parseDocument(future); } catch { futureRejected = true; }
-    return { rejected, futureRejected };
+    const legacy = structuredClone(good);
+    for (const track of legacy.project.tracks) for (const clip of track.clips) {
+      if (track.kind === 'video') delete clip.key;
+      if (track.kind === 'audio') { delete clip.gainDb; clip.vol = 80; }
+    }
+    const upgraded = parseDocument(legacy);
+    const legacyAccepted = upgraded.tracks.filter(t => t.kind === 'audio').every(t => t.clips.every(c => Number.isFinite(c.gainDb))) && upgraded.tracks.filter(t => t.kind === 'video').every(t => t.clips.every(c => c.key.enabled === false));
+    return { rejected, futureRejected, legacyAccepted };
   });
-  assert.deepEqual(validation, { rejected: true, futureRejected: true }); checks.push('Rejects malformed documents and future schema versions');
+  assert.deepEqual(validation, { rejected: true, futureRejected: true, legacyAccepted: true }); checks.push('Rejects malformed documents and future schema versions');
   const cache = await page.evaluate(async () => {
     const { writePreview, previewCacheBytes, clearPreviewCache, PREVIEW_BUDGET } = await import('/src/media/files.ts');
     await clearPreviewCache();
@@ -114,7 +126,7 @@ try {
   assert.ok(cache.used > 0 && cache.used <= cache.budget); assert.equal(cache.cleared, 0); checks.push('Preview cache evicts within 128 MiB and clears');
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
   const documentDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download project', exact: true }).click();
+  await projectAction(page, 'Untitled project', 'Download project');
   const projectFile = await documentDownload;
   const documentPath = join(dir, projectFile.suggestedFilename()); await projectFile.saveAs(documentPath);
   const document = JSON.parse(readFileSync(documentPath, 'utf8'));
@@ -142,6 +154,7 @@ try {
     });
   });
   await migrationPage.goto(process.env.TEST_URL ?? 'http://127.0.0.1:5262');
+  await openEditor(migrationPage);
   await migrationPage.getByRole('button', { name: 'Rename project Legacy project' }).waitFor();
   assert.equal(await migrationPage.evaluate(async () => (await (await import('/src/editor/storage.ts')).listProjects()).length), 1);
   checks.push('Migrates single-project v1 save without losing edits');
@@ -151,8 +164,8 @@ try {
   await migrationPage.getByRole('textbox', { name: 'Project name' }).press('Enter');
   await migrationPage.getByRole('status').filter({ hasText: /^Save failed:/ }).waitFor();
   await migrationPage.getByRole('button', { name: 'Projects', exact: true }).click();
-  await migrationPage.getByRole('button', { name: 'New project', exact: true }).click();
   await migrationPage.getByRole('alert').filter({ hasText: 'Project no longer exists' }).waitFor();
+  await migrationPage.getByRole('button', { name: 'Rename project Unsaved edit' }).waitFor();
   assert.equal(await migrationPage.evaluate(async () => (await (await import('/src/editor/storage.ts')).listProjects()).length), 0);
   checks.push('Failed save stays visible and prevents switching away from unsaved edits');
   assert.deepEqual(errors, []);

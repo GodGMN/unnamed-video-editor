@@ -7,6 +7,7 @@ export interface ProjectEntry {
   project: Project;
   createdAt: number;
   updatedAt: number;
+  favorite?: boolean;
 }
 let database: Promise<IDBDatabase> | undefined;
 function openDb() {
@@ -77,6 +78,20 @@ export async function saveProject(project: Project, id?: string): Promise<void> 
     req.onsuccess = () => {
       if (!req.result) { tx.abort(); return; }
       store.put({ ...req.result, project, updatedAt: Date.now() }, key);
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Project no longer exists.'));
+  });
+}
+export async function updateProjectDetails(id: string, patch: { name?: string; favorite?: boolean }): Promise<void> {
+  const tx = (await openDb()).transaction('projects', 'readwrite');
+  await new Promise<void>((resolve, reject) => {
+    const store = tx.objectStore('projects');
+    const req = store.get(id);
+    req.onsuccess = () => {
+      const entry: ProjectEntry | undefined = req.result;
+      if (!entry) { tx.abort(); return; }
+      store.put({ ...entry, ...(patch.favorite !== undefined && { favorite: patch.favorite }), project: { ...entry.project, ...(patch.name !== undefined && { name: patch.name }) } }, id);
     };
     tx.oncomplete = () => resolve();
     tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Project no longer exists.'));

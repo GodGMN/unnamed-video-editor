@@ -15,8 +15,7 @@ import { PropertiesPanel } from './components/PropertiesPanel';
 import { Timeline } from './components/Timeline';
 import { TopBar } from './components/TopBar';
 import { ProjectLibrary } from './components/ProjectLibrary';
-import { activeProjectId, createProject, listProjects, loadProject, selectProject } from './editor/storage';
-import { seedProject } from './editor/seed';
+import { activeProjectId, listProjects, loadProject, selectProject } from './editor/storage';
 
 const MIN_WIDTH = 1280;
 
@@ -55,10 +54,10 @@ function useConvertedMedia(editor: Editor | null) {
   return { pending, error };
 }
 
-function EditorApp({ id, initial, onOpen }: { id: string; initial: Project; onOpen: (id: string, project: Project) => void }) {
+function EditorApp({ id, initial, onHome }: { id: string; initial: Project; onHome: (project: Project) => void }) {
   const width = useWindowWidth();
   const editor = useProject(id, initial);
-  const [library, setLibrary] = useState(false);
+  const [navigationError, setNavigationError] = useState('');
   const [pendingImports, setPendingImports] = useState(false);
   const [mediaRevision, setMediaRevision] = useState(0);
   const job = useConversionJob();
@@ -75,8 +74,12 @@ function EditorApp({ id, initial, onOpen }: { id: string; initial: Project; onOp
 
   return (
     <div className="editor">
-      <TopBar onProjects={() => setLibrary(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
+      <TopBar onProjects={() => {
+        if (pendingImports || converted.pending || job) { setNavigationError('Finish importing or finish/cancel the conversion before leaving the editor.'); return; }
+        void editor.flush().then(() => onHome(editor.project), e => setNavigationError(String(e)));
+      }} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onShowConversion={(id, name) => setConverting({ id, name })} />
+      {navigationError && <div role="alert" className="editor-navigation-error">{navigationError}<button onClick={() => setNavigationError('')} aria-label="Dismiss error">×</button></div>}
       {converted.error && <p role="alert" className="error">{converted.error}</p>}
       <div className="workspace">
         <MediaPanel onBusy={setPendingImports} onReconnect={() => setMediaRevision(n => n + 1)} onImport={editor.addMedia} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
@@ -84,7 +87,6 @@ function EditorApp({ id, initial, onOpen }: { id: string; initial: Project; onOp
         <PropertiesPanel editor={editor} />
       </div>
       <Timeline key={mediaRevision} editor={editor} />
-      {library && <ProjectLibrary onReconnect={() => { setMediaRevision(n => n + 1); window.dispatchEvent(new Event('media-source-change')); }} id={id} project={project} flush={editor.flush} onOpen={onOpen} onClose={() => setLibrary(false)} blocked={pendingImports || converted.pending || !!job} />}
       {exporting && (
         <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project, editor.layout)}
           onClose={() => setExporting(false)} />
@@ -94,7 +96,7 @@ function EditorApp({ id, initial, onOpen }: { id: string; initial: Project; onOp
   );
 }
 
-let initialProject: Promise<{ id: string; project: Project }> | undefined;
+let initialProject: Promise<{ id: string; project: Project } | null> | undefined;
 async function initialize() {
   const id = await activeProjectId();
   const saved = id ? await loadProject(id) : null;
@@ -104,20 +106,24 @@ async function initialize() {
     const project = await loadProject(entries[0].id);
     if (project) { await selectProject(entries[0].id); return { id: entries[0].id, project }; }
   }
-  const project = seedProject();
-  const key = await createProject(project);
-  await selectProject(key);
-  return { id: key, project };
+  return null;
 }
 export function App() {
   const [active, setActive] = useState<{ id: string; project: Project } | null>(null);
   const [error, setError] = useState('');
+  const [initialized, setInitialized] = useState(false);
+  const [screen, setScreen] = useState<'home' | 'editor'>('home');
+  const width = useWindowWidth();
   useEffect(() => {
     let live = true;
     initialProject ??= initialize();
-    initialProject.then(p => { if (live) setActive(p); }, e => { initialProject = undefined; if (live) setError(String(e)); });
+    initialProject.then(p => { if (live) { setActive(p); setInitialized(true); } }, e => { initialProject = undefined; if (live) setError(String(e)); });
     return () => { live = false; };
   }, []);
   if (error) return <div role="alert" className="startup-error">Could not open project storage: {error}<button className="gb" onClick={() => location.reload()}>Retry</button></div>;
-  return active ? <EditorApp key={active.id} id={active.id} initial={active.project} onOpen={(id, project) => setActive({ id, project })} /> : <p role="status">Opening projects…</p>;
+  if (width < MIN_WIDTH) return <DesktopOnly width={width} />;
+  if (!initialized) return <p role="status">Opening projects…</p>;
+  return screen === 'home' || !active
+    ? <ProjectLibrary lastOpenedId={active?.id ?? ''} onOpen={(id, project) => { setActive({ id, project }); setScreen('editor'); }} />
+    : <EditorApp key={active.id} id={active.id} initial={active.project} onHome={project => { setActive({ id: active.id, project }); setScreen('home'); }} />;
 }

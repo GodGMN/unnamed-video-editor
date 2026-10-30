@@ -59,3 +59,10 @@ export const Reset = (p: IconProps) => <Stroke {...p}><path d="M4 12a8 8 0 102.3
 export const Checker = (p: IconProps) => <Stroke {...p}><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 12h16M12 4v16" /><path d="M4.5 4.5h7.5v7.5H4.5zM12 12h7.5v7.5H12z" fill="currentColor" stroke="none" /></Stroke>;
 export const Dropper = (p: IconProps) => <Stroke {...p}><path d="M14.5 5.5l4 4" /><path d="M17 3a2.1 2.1 0 013 3l-2.5 2.5-3-3z" /><path d="M15.5 7.5L6 17l-1 3 3-1 9.5-9.5" /></Stroke>;
 export const Magnet = (p: IconProps) => <Stroke {...p}><path d="M4 3h5v10a3 3 0 006 0V3h5v10a8 8 0 01-16 0zM4 7h5M15 7h5" /></Stroke>;
+export const Search = (p: IconProps) => <Stroke {...p}><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></Stroke>;
+export const LibraryGrid = (p: IconProps) => <Stroke {...p}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></Stroke>;
+export const Star = (p: IconProps) => <Stroke {...p}><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" /></Stroke>;
+export const More = (p: IconProps) => <Stroke {...p}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></Stroke>;
+export const Settings = (p: IconProps) => <Stroke {...p}><path d="m9 3-1 3-3 1-2 4 2 3v3l4 3 3-1 3 1 4-3v-3l2-3-2-4-3-1-1-3Z" /><circle cx="12" cy="12" r="3" /></Stroke>;
+export const Film = (p: IconProps) => <Stroke {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4" /></Stroke>;
+export const ChevronDown = (p: IconProps) => <Stroke {...p}><path d="m6 9 6 6 6-6" /></Stroke>;

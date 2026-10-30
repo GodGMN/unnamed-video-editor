@@ -1,3 +1,4 @@
+import { openEditor } from './browser-helpers.mjs';
 // Run Vite, then PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs TEST_URL=http://127.0.0.1:5217 node scripts/verify-preview-cache.mjs
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -14,6 +15,7 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(process.env.TEST_URL ?? 'http://127.0.0.1:5217');
+  await openEditor(page);
   await page.getByRole('button', { name: 'Projects', exact: true }).waitFor();
   const result = await page.evaluate(async (bytes) => {
     const { PlaybackEngine } = await import('/src/playback/engine.ts');

@@ -1,7 +1,7 @@
 import { ALL_FORMATS, AudioBufferSink, BlobSource, CanvasSink, Input } from 'mediabunny';
 import { STILL_DURATION, animationDuration, newId } from '../editor/model';
 import type { Media } from '../editor/model';
-import { removeMediaFiles, writePreview } from './files';
+import { removeMediaFiles, writePreview, readPreview } from './files';
 import type { MediaPreview } from './files';
 import { fingerprint, linkFile } from './links';
 import type { ReadHandle } from './links';
@@ -14,12 +14,12 @@ const ANIMATION_THUMBNAILS = 12;
 
 const isImageFile = (file: File) => file.type.startsWith('image/') || IMAGE_EXTENSIONS.test(file.name);
 
-/** Draws `image` into a 160×90 JPEG thumbnail, letterboxed like the video ones. */
-function thumbnail(image: CanvasImageSource, width: number, height: number) {
+/** Draws a letterboxed JPEG at thumbnail or project-cover resolution. */
+function thumbnail(image: CanvasImageSource, width: number, height: number, target = 160) {
   const canvas = document.createElement('canvas');
-  canvas.width = 160; canvas.height = 90;
-  const scale = Math.min(160 / width, 90 / height);
-  canvas.getContext('2d')!.drawImage(image, (160 - width * scale) / 2, (90 - height * scale) / 2, width * scale, height * scale);
+  canvas.width = target; canvas.height = Math.round(target * 9 / 16);
+  const scale = Math.min(canvas.width / width, canvas.height / height);
+  canvas.getContext('2d')!.drawImage(image, (canvas.width - width * scale) / 2, (canvas.height - height * scale) / 2, width * scale, height * scale);
   return canvas.toDataURL('image/jpeg', 0.7);
 }
 
@@ -43,7 +43,7 @@ async function importStill(file: File, handle?: ReadHandle): Promise<Media> {
     };
     if (!animation) thumbnails.push(thumbnail(image, image.width, image.height));
     await linkFile(id, file, handle);
-    try { await writePreview(id, { thumbnails, peaks: [] }); }
+    try { await writePreview(id, { thumbnails, peaks: [], cover: thumbnail(image, image.width, image.height, 960) }); }
     catch (error) { await removeMediaFiles(id).catch(() => undefined); throw error; }
     return media;
   } finally { image.close(); }
@@ -84,6 +84,8 @@ async function generatePreview(media: Media, video: Awaited<ReturnType<Input['ge
   const { duration, id } = media;
   const preview: MediaPreview = { thumbnails: [], peaks: [] };
   if (video && videoOk) {
+    const cover = await new CanvasSink(video, { width: 960, height: 540, fit: 'contain' }).getCanvas(0);
+    if (cover) preview.cover = thumbnail(cover.canvas, 960, 540, 960);
     const sink = new CanvasSink(video, { width: 160, height: 90, fit: 'contain' });
     const count = Math.min(40, Math.max(2, Math.ceil(duration)));
     const times = Array.from({ length: count }, (_, i) => i * duration / count);
@@ -113,7 +115,7 @@ async function generatePreview(media: Media, video: Awaited<ReturnType<Input['ge
 export async function regeneratePreview(media: Media, file: File) {
   if (media.still) {
     const generated = await importStill(file);
-    try { const { readPreview } = await import('./files'); const preview = await readPreview(generated.id); if (preview) await writePreview(media.id, preview); } finally { await removeMediaFiles(generated.id); }
+    try { const preview = await readPreview(generated.id); if (preview) await writePreview(media.id, preview); } finally { await removeMediaFiles(generated.id); }
     window.dispatchEvent(new Event('media-preview-change')); return;
   }
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });

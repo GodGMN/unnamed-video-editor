@@ -1,4 +1,4 @@
-import { newId, VIDEO_CLIP_DEFAULTS, AUDIO_CLIP_DEFAULTS } from '../editor/model';
+import { newId, VIDEO_CLIP_DEFAULTS, AUDIO_CLIP_DEFAULTS, NO_KEY, NO_FADES, gainToDb } from '../editor/model';
 import type { Project } from '../editor/model';
 
 function object(value: unknown): Record<string, unknown> {
@@ -66,6 +66,8 @@ export function validateProject(value: unknown): asserts value is Project {
         if (c.linkId !== null) text(c.linkId); bool(c.linked);
         fields(c, t.kind === 'video' ? VIDEO_CLIP_DEFAULTS : AUDIO_CLIP_DEFAULTS);
         if (t.kind === 'video') {
+          const key = object(c.key); bool(key.enabled); text(key.color);
+          for (const field of ['tolerance', 'softness', 'spill']) number(key[field]);
           if (!['fit', 'fill', 'custom'].includes(String(c.fit))) throw new Error('Invalid fit mode.');
           if (c.transitionOut !== null) {
             const tr = object(c.transitionOut);
@@ -82,8 +84,25 @@ export function projectDocument(project: Project): ProjectDocument { return { fo
 export function parseDocument(value: unknown): Project {
   const doc = object(value);
   if (doc.format !== 'unnamed-video-editor' || doc.version !== 1) throw new Error('Unsupported project format or version.');
-  validateProject(doc.project);
-  return doc.project;
+  // Version-one downloads predate video keys and decibel gain. Upgrade those fields before validation.
+  const original = object(doc.project);
+  if (!Array.isArray(original.tracks)) throw new Error('Missing project tracks.');
+  const project = { ...original, tracks: original.tracks.map(value => {
+    const track = object(value);
+    if (!Array.isArray(track.clips)) return track;
+    return { ...track, clips: track.clips.map(value => {
+      const clip = object(value);
+      if (track.kind === 'video') return { ...NO_FADES, ...clip, key: clip.key ?? NO_KEY };
+      if (track.kind === 'audio' && 'vol' in clip) {
+        number(clip.vol);
+        const { vol, ...rest } = clip;
+        return { ...rest, gainDb: gainToDb(vol / 100) };
+      }
+      return clip;
+    }) };
+  }) };
+  validateProject(project);
+  return project;
 }
 export function remapMedia(project: Project) {
   const mapping = new Map(Object.keys(project.media).map(id => [id, newId()]));
