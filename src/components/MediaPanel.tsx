@@ -9,6 +9,7 @@ import { Convert, Plus, Trash, Warning } from './icons';
 import { importMedia } from '../media/import';
 import { PreviewStrip } from '../media/PreviewStrip';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
+import { Tabs } from './Tabs';
 
 const TRANSITIONS = () => ([
   { type: 'crossfade', name: translate('crossDissolve'), swatch: 'linear-gradient(90deg, #35503F, #4A5B6E)' },
@@ -79,8 +80,10 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
   const queue = useRef(Promise.resolve());
   const [pending, setPending] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
+  const [tab, setTab] = useState<'media' | 'transitions'>('media');
   const ingest = (files: FileList | File[]) => {
     const batch = Array.from(files);
+    setTab('media');
     setPending((n) => n + batch.length);
     for (const file of batch) queue.current = queue.current.then(async () => {
       try { onImport(await importMedia(file)); }
@@ -96,16 +99,17 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
       onDragLeave={(e) => { if (hasFiles(e) && --dragDepth.current === 0) setDragOver(false); }}
       onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragOver(false); ingest(e.dataTransfer.files); }}>
       {dragOver && <div className="media-drop">{translate('dropToImport')}</div>}
-      <div className="media-head">
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span className="panel-title">{translate('media')}</span>
-          <span className="count">{media.length}</span>
-        </div>
+      <Tabs value={tab} onChange={setTab} label={translate('library')} className="media-tab" tabs={[
+        { id: 'media', label: <>{translate('media')}<span className="count">{media.length}</span></> },
+        { id: 'transitions', label: <>{translate('transitions')}<span className="count">{TRANSITIONS().length}</span></> },
+      ]} actions={<>
         <input ref={input} type="file" multiple accept="video/*,audio/*,image/*,.mov,.mkv" aria-label={translate('importMediaFiles')} hidden onChange={(e) => { if (e.target.files) ingest(e.target.files); e.target.value = ''; }} />
-        <button onClick={() => input.current?.click()} className="ib outlined" style={{ ['--h' as string]: '30px', padding: '0 10px', fontSize: 12, fontWeight: 500 }}>
-          <Plus size={13} strokeWidth={2.2} />
-          {translate('import')}</button>
-      </div>
+        <button onClick={() => input.current?.click()} className="ib outlined" aria-label={translate('import')} title={translate('importMediaFiles')}
+          style={{ ['--h' as string]: '30px', width: 30, padding: 0, justifyContent: 'center', flex: 'none' }}>
+          <Plus size={14} strokeWidth={2.2} />
+        </button>
+      </>}>
+      {tab === 'media' && <>
       <div role="status" aria-live="polite">
         {pending > 0 && <p className="media-meta media-status">{translate('importingFiles', { count: pending })}</p>}
         {errors.map((error, i) => <p key={i} className="media-meta error media-status">{error}</p>)}
@@ -138,6 +142,22 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
           </div>
         ))}
       </div>
+      </>}
+      {tab === 'transitions' && <div className="transitions">
+        <div className="transition-grid">
+          {TRANSITIONS().map((t) => (
+            // A div, not a button: Firefox won't start a drag from a button.
+            <div key={t.name} className="transition-card" draggable title={translate('dragOntoAnOverlapBetweenTwoClips')}
+              onDragStart={e => { e.dataTransfer.setData('application/x-timeline-transition', t.type); e.dataTransfer.effectAllowed = 'copy'; document.body.classList.add('dragging-transition'); }}
+              onDragEnd={() => document.body.classList.remove('dragging-transition')}>
+              <span style={{ background: t.swatch }} />
+              {t.name}
+            </div>
+          ))}
+        </div>
+        <span className="hint" style={{ lineHeight: 1.4 }}>{translate('overlapTwoClipsThenDragATransitionOntoTheir')}</span>
+      </div>}
+      </Tabs>
       {menu && project.media[menu.id] && (() => {
         const clips = clipCount(project, menu.id);
         return (
@@ -152,24 +172,6 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
           </div>
         );
       })()}
-      <div className="transitions">
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-          <span className="panel-title">{translate('transitions')}</span>
-          <span className="count">{TRANSITIONS().length}</span>
-        </div>
-        <div className="transition-grid">
-          {TRANSITIONS().map((t) => (
-            // A div, not a button: Firefox won't start a drag from a button.
-            <div key={t.name} className="transition-card" draggable title={translate('dragOntoAnOverlapBetweenTwoClips')}
-              onDragStart={e => { e.dataTransfer.setData('application/x-timeline-transition', t.type); e.dataTransfer.effectAllowed = 'copy'; document.body.classList.add('dragging-transition'); }}
-              onDragEnd={() => document.body.classList.remove('dragging-transition')}>
-              <span style={{ background: t.swatch }} />
-              {t.name}
-            </div>
-          ))}
-        </div>
-        <span className="hint" style={{ lineHeight: 1.4 }}>{translate('overlapTwoClipsThenDragATransitionOntoTheir')}</span>
-      </div>
     </aside>
   );
 }
