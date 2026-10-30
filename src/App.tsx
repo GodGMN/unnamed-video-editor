@@ -42,7 +42,7 @@ export function App() {
     <div className="editor">
       <TopBar projectName={project.name} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)} />
       <div className="workspace">
-        <MediaPanel project={project} onConvert={setConverting} />
+        <MediaPanel onImport={editor.addMedia} project={project} onConvert={setConverting} />
         <PreviewPanel editor={editor} totalTime={totalTime} />
         <PropertiesPanel editor={editor} />
       </div>
