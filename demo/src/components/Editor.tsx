@@ -9,6 +9,7 @@ import {
   Eye,
   Frame,
   Gear,
+  Grid,
   Link,
   Magnet,
   Next,
@@ -235,11 +236,15 @@ const TopBar: React.FC<{ clipCount: string; exportPressed?: boolean }> = ({ clip
         [Unnamed Video Editor]<span style={{ color: C.accent }}>.</span>
       </span>
     </div>
-    <div style={{ width: 1, height: 22, background: C.control, margin: "0 6px" }} />
-    <span style={{ fontWeight: 500, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ width: 1, height: 22, background: C.control, margin: "0 2px" }} />
+    <Btn outlined h={32} style={{ color: C.soft, fontSize: 13, gap: 7 }}>
+      <Grid size={14} /> Projects
+    </Btn>
+    <span style={{ fontWeight: 500, fontSize: 13, display: "flex", alignItems: "center", gap: 8, marginLeft: 8 }}>
       Lisbon weekend <Pencil size={12} color={C.muted} />
     </span>
-    <span style={{ color: C.muted, fontSize: 12, marginLeft: 12 }}>{clipCount}</span>
+    <span style={{ color: C.muted, fontSize: 12, marginLeft: 8 }}>{clipCount}</span>
+    <span style={{ color: C.muted, fontSize: 12 }}>Saved</span>
     <div style={{ flex: 1 }} />
     {[Undo, Redo, Expand, Gear].map((I, i) => (
       <div key={i} style={{ width: 34, height: 34, display: "grid", placeItems: "center", color: C.soft }}>
@@ -268,82 +273,147 @@ const TopBar: React.FC<{ clipCount: string; exportPressed?: boolean }> = ({ clip
 
 // ---------------------------------------------------------------- media
 
-const MediaPanel: React.FC<{ media: MediaItem[]; drop?: number; lift?: "dissolve" | "fade" }> = ({ media, drop = 0, lift }) => (
-  <Panel box={MEDIA_BOX}>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 12px 10px 14px" }}>
-      <Title count={media.filter((m) => (m.pop ?? 1) > 0).length}>Media</Title>
-      <Btn outlined>
-        <Plus size={13} /> Import
-      </Btn>
-    </div>
-    <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "0 6px 8px", flex: 1, overflow: "hidden" }}>
-      {media.length === 0 && (
-        <div style={{ margin: "4px 6px", padding: "20px 10px", border: `1px dashed ${C.control}`, borderRadius: 10, color: C.muted, fontSize: 12, textAlign: "center" }}>
-          Drop video, audio or image files here
+export type MediaTab = "media" | "transitions";
+
+// Page centres of things in the media panel.
+export const MEDIA_TAB: Record<MediaTab, [number, number]> = { media: [MEDIA_BOX.x + 48, MEDIA_BOX.y + 25], transitions: [MEDIA_BOX.x + 134, MEDIA_BOX.y + 25] };
+export const mediaRow = (i: number): [number, number] => [MEDIA_BOX.x + 50, MEDIA_BOX.y + 102 + 31 + i * 64];
+export const transitionCard = (i: number): [number, number] => [MEDIA_BOX.x + 66 + i * 114, MEDIA_BOX.y + 52 + 32];
+
+const PanelTabs: React.FC<{ tabs: React.ReactNode[]; active: number; tall?: boolean; actions?: React.ReactNode }> = ({ tabs, active, tall, actions }) => (
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: tall ? "4px 8px 0 6px" : "0 6px",
+      borderBottom: `1px solid ${C.line}`,
+      flex: "none",
+    }}
+  >
+    <div style={{ display: "flex", gap: 2 }}>
+      {tabs.map((t, i) => (
+        <div
+          key={i}
+          style={{
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            height: tall ? 42 : 36,
+            padding: "0 8px",
+            fontSize: tall ? 13 : 12,
+            fontWeight: tall ? 700 : 500,
+            color: i === active ? C.bright : C.dim,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {t}
+          {i === active && <div style={{ position: "absolute", left: 8, right: 8, bottom: -1, height: 2, borderRadius: 1, background: C.accent }} />}
         </div>
-      )}
-      {media.map((m) => {
-        const p = m.pop ?? 1;
-        if (p <= 0) return null;
-        return (
-          <div
-            key={m.id}
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              padding: 8,
-              borderRadius: 10,
-              opacity: Math.min(1, p * 1.5),
-              transform: `translateX(${(1 - p) * -24}px)`,
-              background: m.active ? "rgba(198,240,191,0.08)" : undefined,
-              boxShadow: m.active ? "inset 0 0 0 1px rgba(198,240,191,0.35)" : undefined,
-            }}
-          >
-            <div style={{ position: "relative", width: 72, height: 42, borderRadius: 10.5, overflow: "hidden", flex: "none", background: "#000" }}>
-              <m.thumb t={40} />
-              <span
-                style={{ position: "absolute", right: 4, bottom: 3, font: `500 10px ${mono}`, background: "rgba(0,0,0,0.6)", color: C.text, padding: "1px 4px", borderRadius: 4 }}
+      ))}
+    </div>
+    {actions}
+  </div>
+);
+
+const Count: React.FC<{ n: number }> = ({ n }) => <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>{n}</span>;
+
+const TRANSITION_CARDS = [
+  ["dissolve", "Cross dissolve", "linear-gradient(90deg, #35503f, #4a6a8a)"],
+  ["fade", "Fade to black", "linear-gradient(90deg, #35503f, #0d0f0e)"],
+] as const;
+
+const MediaPanel: React.FC<{ media: MediaItem[]; tab: MediaTab; drop?: number; lift?: "dissolve" | "fade" }> = ({ media, tab, drop = 0, lift }) => (
+  <Panel box={MEDIA_BOX}>
+    <PanelTabs
+      tall
+      active={tab === "media" ? 0 : 1}
+      tabs={[
+        <>
+          Media <Count n={media.filter((m) => (m.pop ?? 1) > 0).length} />
+        </>,
+        <>
+          Transitions <Count n={2} />
+        </>,
+      ]}
+      actions={
+        <Btn outlined style={{ width: 30, padding: 0 }}>
+          <Plus size={14} />
+        </Btn>
+      }
+    />
+    {tab === "media" ? (
+      <>
+        <div style={{ padding: "10px 16px 10px", fontSize: 12, color: C.muted, lineHeight: 1.4, flex: "none" }}>
+          Import links originals. Dropped files need reconnecting after reload.
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 6px 8px", flex: 1, overflow: "hidden" }}>
+          {media.map((m) => {
+            const p = m.pop ?? 1;
+            if (p <= 0) return null;
+            return (
+              <div
+                key={m.id}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center",
+                  height: 60,
+                  flex: "none",
+                  padding: "0 8px",
+                  borderRadius: 10,
+                  opacity: Math.min(1, p * 1.5),
+                  transform: `translateX(${(1 - p) * -24}px)`,
+                  background: m.active ? "rgba(198,240,191,0.08)" : undefined,
+                  boxShadow: m.active ? "inset 0 0 0 1px rgba(198,240,191,0.35)" : undefined,
+                }}
               >
-                {m.dur}
-              </span>
+                <div style={{ position: "relative", width: 72, height: 42, borderRadius: 10.5, overflow: "hidden", flex: "none", background: "#000" }}>
+                  <m.thumb t={40} />
+                  <span
+                    style={{ position: "absolute", right: 4, bottom: 3, font: `500 10px ${mono}`, background: "rgba(0,0,0,0.6)", color: C.text, padding: "1px 4px", borderRadius: 4 }}
+                  >
+                    {m.dur}
+                  </span>
+                </div>
+                <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</span>
+                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.meta}</span>
+                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.3 }}>Linked original</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </>
+    ) : (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "6px 12px 14px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          {TRANSITION_CARDS.map(([k, name, bg]) => (
+            <div
+              key={k}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                padding: 6,
+                borderRadius: 10,
+                border: `1px solid ${lift === k ? C.accent : C.control}`,
+                background: C.bg,
+                opacity: lift === k ? 0.55 : 1,
+                fontSize: 12,
+                fontWeight: 500,
+              }}
+            >
+              <div style={{ height: 28, borderRadius: 4, background: bg }} />
+              {name}
             </div>
-            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-              <span style={{ fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</span>
-              <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.35 }}>{m.meta}</span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-    <div style={{ borderTop: `1px solid ${C.line}`, padding: "12px 12px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <Title>Transitions</Title>
-        <span style={{ color: C.muted, fontSize: 12 }}>2</span>
+          ))}
+        </div>
+        <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>Overlap two clips, then drag a transition onto their overlap.</span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-        {(
-          [
-            ["dissolve", "Cross dissolve", "linear-gradient(90deg, #35503f, #4a6a8a)"],
-            ["fade", "Fade to black", "linear-gradient(90deg, #35503f, #0d0f0e)"],
-          ] as const
-        ).map(([k, name, bg]) => (
-          <div
-            key={k}
-            style={{
-              padding: 5,
-              borderRadius: 10,
-              border: `1px solid ${lift === k ? C.accent : C.control}`,
-              background: C.inset,
-              opacity: lift === k ? 0.55 : 1,
-            }}
-          >
-            <div style={{ height: 26, borderRadius: 6, background: bg }} />
-            <div style={{ fontSize: 12, padding: "6px 3px 1px" }}>{name}</div>
-          </div>
-        ))}
-      </div>
-    </div>
+    )}
     {drop > 0 && (
       <div
         style={{
@@ -470,9 +540,55 @@ const PropsPanel: React.FC<{ title: string; children: React.ReactNode }> = ({ ti
   </Panel>
 );
 
+export type PropsTab = "transform" | "key";
+const PROPS_TABS = ["Transform", "Crop", "Key", "Timing", "Info"];
+// Page centres of the video clip's tabs and of the key's Pick button.
+export const PROPS_TAB: Record<PropsTab, [number, number]> = { transform: [PROPS_BOX.x + 42, PROPS_BOX.y + 124], key: [PROPS_BOX.x + 135, PROPS_BOX.y + 124] };
+export const PICK_BUTTON: [number, number] = [PROPS_BOX.x + PROPS_BOX.w - 48, PROPS_BOX.y + 207];
+
+const ClipHeader: React.FC<{ thumb: Thumb; name: string; start: string }> = ({ thumb: T, name, start }) => (
+  <div style={{ display: "flex", gap: 10, alignItems: "center", padding: 14, height: 62, boxSizing: "border-box" }}>
+    <div style={{ width: 56, height: 34, borderRadius: 8.5, position: "relative", overflow: "hidden", flex: "none" }}>
+      <T t={60} />
+    </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+      <span style={{ fontSize: 13, fontWeight: 500 }}>{name}</span>
+      <span style={{ fontSize: 11, color: C.muted }}>Starts at {start} on the timeline</span>
+    </div>
+  </div>
+);
+
+export type KeyState = { on: boolean; picking?: boolean; color?: string };
+
+/** The video clip inspector: clip header, tabs, then the open tab. */
+export const VideoProps: React.FC<{ thumb: Thumb; name: string; start: string; tab?: PropsTab; keyState?: KeyState }> = ({
+  thumb,
+  name,
+  start,
+  tab = "transform",
+  keyState = { on: false },
+}) => (
+  <>
+    <ClipHeader thumb={thumb} name={name} start={start} />
+    <PanelTabs
+      active={tab === "transform" ? 0 : 2}
+      tabs={PROPS_TABS.map((t) =>
+        t === "Key" && keyState.on ? (
+          <>
+            Key <span style={{ width: 6, height: 6, borderRadius: 3, background: C.accent }} />
+          </>
+        ) : (
+          t
+        ),
+      )}
+    />
+    {tab === "transform" ? <TransformBody /> : <KeyBody {...keyState} />}
+  </>
+);
+
 const Section: React.FC<{ label: string; right?: React.ReactNode; children: React.ReactNode }> = ({ label, right, children }) => (
-  <div style={{ padding: "12px 14px 16px", display: "flex", flexDirection: "column", gap: 12, borderTop: `1px solid ${C.line}` }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+  <div style={{ padding: "12px 14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: 26 }}>
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: C.dim }}>{label}</span>
       {right}
     </div>
@@ -480,7 +596,7 @@ const Section: React.FC<{ label: string; right?: React.ReactNode; children: Reac
   </div>
 );
 
-const SliderRow: React.FC<{ label: string; value: string; fill: number; active?: boolean }> = ({ label, value, fill, active }) => (
+const SliderRow: React.FC<{ label: string; value: string; fill: number }> = ({ label, value, fill }) => (
   <div
     style={{
       height: 34,
@@ -493,7 +609,6 @@ const SliderRow: React.FC<{ label: string; value: string; fill: number; active?:
       justifyContent: "space-between",
       padding: "0 11px",
       fontSize: 12,
-      boxShadow: active ? `inset 0 0 0 1px ${C.accent}` : undefined,
     }}
   >
     <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${fill * 100}%`, background: "#2a332c", borderRight: `2px solid ${C.accent}` }} />
@@ -502,103 +617,58 @@ const SliderRow: React.FC<{ label: string; value: string; fill: number; active?:
   </div>
 );
 
-export const ClipHeader: React.FC<{ thumb: Thumb; name: string; start: string }> = ({ thumb: T, name, start }) => (
-  <div style={{ display: "flex", gap: 10, alignItems: "center", padding: 14 }}>
-    <div style={{ width: 56, height: 34, borderRadius: 8.5, position: "relative", overflow: "hidden", flex: "none" }}>
-      <T t={60} />
+const TransformBody: React.FC = () => (
+  <Section label="POSITION & SCALE" right={<span style={{ fontSize: 11, color: C.dim }}>Reset</span>}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, padding: 3, background: C.inset, border: `1px solid ${C.control}`, borderRadius: 9 }}>
+      {["Fit", "Fill", "Custom"].map((l, i) => (
+        <div key={l} style={{ height: 28, borderRadius: 6, display: "grid", placeItems: "center", fontSize: 12, background: i === 0 ? C.selected : undefined, color: i === 0 ? C.bright : C.dim }}>
+          {l}
+        </div>
+      ))}
     </div>
-    <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
-      <span style={{ fontSize: 13, fontWeight: 500 }}>{name}</span>
-      <span style={{ fontSize: 11, color: C.muted }}>Starts at {start} on the timeline</span>
-    </div>
-  </div>
+    <SliderRow label="Scale" value="100%" fill={0.27} />
+    <SliderRow label="Rotation" value="0°" fill={0.5} />
+  </Section>
 );
 
-export const TransformProps: React.FC<{ thumb: Thumb; name: string; start: string; scale?: number }> = ({ thumb, name, start, scale = 100 }) => (
-  <>
-    <ClipHeader thumb={thumb} name={name} start={start} />
-    <Section label="POSITION & SCALE" right={<span style={{ fontSize: 12, color: C.muted }}>Reset</span>}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, padding: 3, background: C.inset, border: `1px solid ${C.control}`, borderRadius: 9 }}>
-        {["Fit", "Fill", "Custom"].map((l, i) => (
-          <div key={l} style={{ height: 28, borderRadius: 6, display: "grid", placeItems: "center", fontSize: 12, background: i === 0 ? C.selected : undefined, color: i === 0 ? C.bright : C.dim }}>
-            {l}
-          </div>
-        ))}
+// The app's defaults (NO_KEY in src/editor/model.ts).
+const KeyBody: React.FC<KeyState> = ({ on, picking, color = "#00B140" }) => (
+  <Section
+    label="KEY"
+    right={
+      <Btn outlined h={26} style={{ fontSize: 11, padding: "0 9px", color: on ? C.accent : C.dim }}>
+        {on ? "On" : "Off"}
+      </Btn>
+    }
+  >
+    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <div style={{ width: 30, height: 30, borderRadius: 7.5, background: color, border: `1px solid ${C.control}`, flex: "none", boxSizing: "border-box" }} />
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          height: 30,
+          borderRadius: 7.5,
+          background: C.inset,
+          border: `1px solid ${C.control}`,
+          fontFamily: mono,
+          fontSize: 12,
+          display: "flex",
+          alignItems: "center",
+          padding: "0 10px",
+          boxSizing: "border-box",
+        }}
+      >
+        {color.toUpperCase()}
       </div>
-      <SliderRow label="Scale" value={`${scale}%`} fill={scale / 400} />
-      <SliderRow label="Rotation" value="0°" fill={0.5} />
-    </Section>
-  </>
-);
-
-export const KeyProps: React.FC<{ thumb: Thumb; name: string; start: string; on: boolean; picking?: boolean; color?: string; tolerance?: number }> = ({
-  thumb,
-  name,
-  start,
-  on,
-  picking,
-  color,
-  tolerance = 0,
-}) => (
-  <>
-    <ClipHeader thumb={thumb} name={name} start={start} />
-    <Section
-      label="KEY"
-      right={
-        <span
-          style={{
-            fontSize: 11,
-            padding: "3px 9px",
-            borderRadius: 6,
-            border: `1px solid ${on ? C.accent : C.control}`,
-            color: on ? C.accent : C.muted,
-          }}
-        >
-          {on ? "On" : "Off"}
-        </span>
-      }
-    >
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <div style={{ width: 30, height: 30, borderRadius: 7.5, background: color ?? "transparent", border: `1px solid ${C.control}`, flex: "none" }} />
-        <div
-          style={{
-            flex: 1,
-            height: 30,
-            borderRadius: 7.5,
-            background: C.inset,
-            border: `1px solid ${C.control}`,
-            fontFamily: mono,
-            fontSize: 12,
-            display: "flex",
-            alignItems: "center",
-            padding: "0 10px",
-            color: color ? C.text : C.muted,
-          }}
-        >
-          {color ? color.toUpperCase() : "—"}
-        </div>
-        <div
-          style={{
-            height: 30,
-            padding: "0 10px",
-            borderRadius: 7.5,
-            border: `1px solid ${picking ? C.accent : C.control}`,
-            background: picking ? "rgba(198,240,191,0.12)" : undefined,
-            color: picking ? C.accent : C.text,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-          }}
-        >
-          <Pipette size={13} /> {picking ? "Picking…" : "Pick"}
-        </div>
-      </div>
-      <SliderRow label="Tolerance" value={`${Math.round(tolerance * 34)}%`} fill={tolerance * 0.34} />
-      <SliderRow label="Softness" value={`${Math.round(tolerance * 12)}%`} fill={tolerance * 0.12} />
-      <SliderRow label="Spill" value={`${Math.round(tolerance * 50)}%`} fill={tolerance * 0.5} />
-    </Section>
-  </>
+      <Btn outlined style={{ flex: "none", color: picking ? C.accent : C.soft }}>
+        <Pipette size={13} /> {picking ? "Picking…" : "Pick"}
+      </Btn>
+    </div>
+    <SliderRow label="Tolerance" value="25%" fill={0.25} />
+    <SliderRow label="Softness" value="20%" fill={0.2} />
+    <SliderRow label="Spill" value="50%" fill={0.5} />
+  </Section>
 );
 
 // ---------------------------------------------------------------- timeline
@@ -1104,6 +1174,7 @@ export const ExportDialog: React.FC<{ step: "settings" | "rendering" | "done"; p
 
 export type EditorProps = {
   media: MediaItem[];
+  mediaTab?: MediaTab;
   mediaDrop?: number;
   lift?: "dissolve" | "fade";
   clips: Clip[];
@@ -1125,6 +1196,7 @@ export type EditorProps = {
 
 export const Editor: React.FC<EditorProps> = ({
   media,
+  mediaTab = "media",
   mediaDrop,
   lift,
   clips,
@@ -1143,12 +1215,13 @@ export const Editor: React.FC<EditorProps> = ({
   exportPressed,
   children,
 }) => {
-  const visible = clips.filter((c) => (c.pop ?? 1) > 0 && c.track !== "A1" && c.track !== "A2");
-  const end = Math.max(35, ...clips.map((c) => c.start + c.dur));
+  const placed = clips.filter((c) => (c.pop ?? 1) > 0);
+  const visible = placed.filter((c) => c.track !== "A1" && c.track !== "A2");
+  const end = Math.max(0, ...placed.map((c) => c.start + c.dur));
   return (
     <div style={{ position: "absolute", inset: 0, background: C.bg, color: C.text, fontFamily: sans, fontSize: 13, lineHeight: 1.4 }}>
       <TopBar clipCount={`${visible.length} ${visible.length === 1 ? "clip" : "clips"} · ${fmt(end)}`} exportPressed={exportPressed} />
-      <MediaPanel media={media} drop={mediaDrop} lift={lift} />
+      <MediaPanel media={media} tab={mediaTab} drop={mediaDrop} lift={lift} />
       <PreviewPanel
         stage={stage}
         stageOverlay={stageOverlay}

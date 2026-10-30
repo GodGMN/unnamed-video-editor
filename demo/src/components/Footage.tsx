@@ -92,13 +92,15 @@ export const Dinner: React.FC<{ t?: number }> = ({ t = 0 }) => {
   );
 };
 
+export const SCREEN = "#0fb24a";
+
 // A presenter shot against a green screen. `keyed` removes the green (0..1).
 export const Host: React.FC<{ keyed?: number; t?: number }> = ({ keyed = 0, t = 0 }) => {
   const f = useCurrentFrame() + t;
   const bob = Math.sin(f / 16) * 0.6;
   return (
     <Fill>
-      <rect width="160" height="90" fill="#00b140" opacity={1 - keyed} />
+      <rect width="160" height="90" fill={SCREEN} opacity={1 - keyed} />
       <g transform={`translate(0 ${bob})`}>
         <path d="M54 92 C54 70 64 62 80 62 C96 62 106 70 106 92 Z" fill="#26313f" />
         <path d="M74 60 L86 60 L85 66 L75 66 Z" fill="#c98f6c" />

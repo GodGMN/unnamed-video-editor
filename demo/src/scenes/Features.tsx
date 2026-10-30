@@ -9,21 +9,23 @@ import {
   Clip,
   Editor,
   ExportDialog,
-  KeyProps,
-  MEDIA_BOX,
+  MEDIA_TAB,
+  mediaRow,
   MediaItem,
   PAGE,
   pathAt,
   Pointer,
-  PROPS_BOX,
+  PICK_BUTTON,
+  PROPS_TAB,
   STAGE_CENTER,
   stageSize,
   TL_BOX,
   tlX,
-  TransformProps,
+  transitionCard,
+  VideoProps,
   trackY,
 } from "../components/Editor";
-import { Beach, Coast, Host, Title } from "../components/Footage";
+import { Beach, Coast, Host, SCREEN, Title } from "../components/Footage";
 import { Background, BigWord, Callout, Camera, Rise } from "../components/ui";
 import { baseClips, MEDIA, pair, thumbOf, TONES } from "../project";
 import { C, mono } from "../theme";
@@ -56,10 +58,6 @@ const useSpringAt = (at: number, damping = 14) => {
   const { fps } = useVideoConfig();
   return spring({ frame: frame - at, fps, config: { damping, stiffness: 200 } });
 };
-
-// Page centre of the n-th media row, and of the transition cards.
-const mediaRow = (i: number): [number, number] => [MEDIA_BOX.x + 50, MEDIA_BOX.y + 81 + i * 60];
-const DISSOLVE_CARD: [number, number] = [MEDIA_BOX.x + 62, MEDIA_BOX.y + MEDIA_BOX.h - 42];
 
 const Thumb: React.FC<{ item: MediaItem; at: [number, number]; scale?: number; tilt?: number }> = ({ item, at, scale = 1, tilt = 0 }) => (
   <div
@@ -125,11 +123,7 @@ export const Drop: React.FC = () => {
               stage={frame >= LAND ? <Coast /> : null}
               propsTitle={frame >= LAND ? "Video clip" : "Properties"}
               props={
-                frame >= LAND ? (
-                  <TransformProps thumb={thumbOf("coast")} name="drone_cliffs.mp4" start="00:00.00" />
-                ) : (
-                  <div style={{ padding: 16, color: C.muted, fontSize: 12 }}>Select a clip to edit it.</div>
-                )
+frame >= LAND && <VideoProps thumb={thumbOf("coast")} name="drone_cliffs.mp4" start="00:00.00" />
               }
             >
               {shrink > 0 &&
@@ -186,17 +180,20 @@ export const Cut: React.FC = () => {
   const frame = useCurrentFrame() - IN;
   const SPLIT_ON = 16;
   const CUT = 40;
-  const GRAB = 64;
-  const LAND = 92;
+  const TAB = 56;
+  const GRAB = 72;
+  const LAND = 98;
   const SPLIT_BTN: [number, number] = [TL_BOX.x + 48, TL_BOX.y + 23];
   const path: [number, number, number][] = [
     [0, 700, 330],
     [14, ...SPLIT_BTN],
     [SPLIT_ON + 6, ...SPLIT_BTN],
     [CUT - 2, tlX(15), trackY("V1")],
-    [CUT + 8, tlX(15), trackY("V1")],
-    [GRAB - 2, ...DISSOLVE_CARD],
-    [GRAB, ...DISSOLVE_CARD],
+    [CUT + 4, tlX(15), trackY("V1")],
+    [TAB - 2, ...MEDIA_TAB.transitions],
+    [TAB + 4, ...MEDIA_TAB.transitions],
+    [GRAB - 2, ...transitionCard(0)],
+    [GRAB, ...transitionCard(0)],
     [LAND, tlX(8.4), trackY("V1")],
     [LAND + 30, tlX(11), trackY("V1") + 90],
   ];
@@ -217,6 +214,7 @@ export const Cut: React.FC = () => {
           <Window>
             <Editor
               media={MEDIA}
+              mediaTab={frame >= TAB ? "transitions" : "media"}
               lift={dragging ? "dissolve" : undefined}
               clips={clips}
               transitions={frame >= LAND ? [{ at: 8.4, kind: "dissolve", pop }] : []}
@@ -225,7 +223,7 @@ export const Cut: React.FC = () => {
               split={split}
               stage={<Coast />}
               propsTitle="Properties"
-              props={<div style={{ padding: 16, color: C.muted, fontSize: 12 }}>Select a clip to edit it.</div>}
+              props={null}
             >
               {dragging && (
                 <div
@@ -247,7 +245,7 @@ export const Cut: React.FC = () => {
                   Cross dissolve
                 </div>
               )}
-              <Pointer path={path} clicks={[SPLIT_ON, CUT, GRAB, LAND]} />
+              <Pointer path={path} clicks={[SPLIT_ON, CUT, TAB, GRAB, LAND]} />
             </Editor>
           </Window>
         </Stage>
@@ -267,22 +265,23 @@ export const Cut: React.FC = () => {
 
 export const Key: React.FC = () => {
   const frame = useCurrentFrame() - IN;
-  const PICK = 18;
-  const CLICK = 46;
-  const PICK_BTN: [number, number] = [PROPS_BOX.x + PROPS_BOX.w - 46, PROPS_BOX.y + 161];
+  const TAB = 12;
+  const PICK = 28;
+  const CLICK = 52;
   const s = stageSize(16 / 9);
   const GREEN: [number, number] = [STAGE_CENTER[0] - s.w * 0.3, STAGE_CENTER[1] - s.h * 0.22];
   const path: [number, number, number][] = [
     [0, 700, 640],
-    [16, ...PICK_BTN],
-    [PICK + 6, ...PICK_BTN],
+    [TAB - 2, ...PROPS_TAB.key],
+    [TAB + 4, ...PROPS_TAB.key],
+    [PICK - 2, ...PICK_BUTTON],
+    [PICK + 6, ...PICK_BUTTON],
     [CLICK - 4, ...GREEN],
     [CLICK + 20, ...GREEN],
     [CLICK + 46, GREEN[0] + 60, GREEN[1] + 150],
   ];
   const picking = frame >= PICK && frame < CLICK;
   const keyed = interpolate(frame, [CLICK + 2, CLICK + 16], [0, 1], ease);
-  const tol = interpolate(frame, [CLICK + 2, CLICK + 24], [0, 1], ease);
   const pointer = pathAt(frame, path);
   return (
     <AbsoluteFill>
@@ -319,18 +318,16 @@ export const Key: React.FC = () => {
               }
               propsTitle="Video clip"
               props={
-                <KeyProps
+                <VideoProps
                   thumb={thumbOf("host")}
                   name="host_greenscreen.mp4"
                   start="00:09.00"
-                  on={keyed > 0}
-                  picking={picking}
-                  color={frame >= CLICK ? "#00b140" : undefined}
-                  tolerance={tol}
+                  tab={frame >= TAB ? "key" : "transform"}
+                  keyState={{ on: keyed > 0, picking, color: frame >= CLICK ? SCREEN : undefined }}
                 />
               }
             >
-              {picking && frame > 30 && (
+              {picking && frame >= CLICK - 8 && (
                 <div
                   style={{
                     position: "absolute",
@@ -348,11 +345,11 @@ export const Key: React.FC = () => {
                     zIndex: 45,
                   }}
                 >
-                  <span style={{ width: 22, height: 22, borderRadius: 5, background: "#00b140", border: "1px solid rgba(255,255,255,0.4)" }} />
-                  #00B140
+                  <span style={{ width: 22, height: 22, borderRadius: 5, background: SCREEN, border: "1px solid rgba(255,255,255,0.4)" }} />
+                  {SCREEN.toUpperCase()}
                 </div>
               )}
-              <Pointer path={path} clicks={[PICK, CLICK]} />
+              <Pointer path={path} clicks={[TAB, PICK, CLICK]} />
             </Editor>
           </Window>
         </Stage>
@@ -404,7 +401,7 @@ export const Reframe: React.FC = () => {
               aspect={frame >= PICK ? "9:16 1080×1920" : "16:9 1920×1080"}
               aspectOpen={open > 0}
               propsTitle="Video clip"
-              props={<TransformProps thumb={thumbOf("beach")} name="praia_morning.mp4" start="00:00.00" />}
+              props={<VideoProps thumb={thumbOf("beach")} name="praia_morning.mp4" start="00:00.00" />}
             >
               <AspectMenu hover={hover} selected={frame >= PICK ? 1 : 0} open={open} />
               <Pointer path={path} clicks={[OPEN, PICK]} />
@@ -458,7 +455,7 @@ export const Export: React.FC = () => {
               playing={step === "rendering"}
               stage={stageWith(1, 1)}
               propsTitle="Properties"
-              props={<div style={{ padding: 16, color: C.muted, fontSize: 12 }}>Select a clip to edit it.</div>}
+              props={null}
               exportPressed={frame >= OPEN && frame < OPEN + 5}
             >
               <ExportDialog
