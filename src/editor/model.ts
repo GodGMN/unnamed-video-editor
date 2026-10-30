@@ -171,6 +171,8 @@ export interface EditorUi {
   picked: ClipSelection[];
   /** The clip shown in the trim scrubber: the last selected video or audio clip. */
   focusClip: string | null;
+  /** The clip the playhead is locked to (double-click a clip to set it), or null for the whole sequence. */
+  lockClip: string | null;
   tool: Tool;
   menu: MenuState | null;
   /** Trim scrubber position, in source seconds. */

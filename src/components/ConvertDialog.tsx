@@ -5,7 +5,7 @@ import { Alert, Choice, Dialog, Note, Progress, ResultCard } from './Dialog';
 import type { StageStatus } from './Dialog';
 import { outputSpec } from '../convert/convert';
 import type { ConvertOptions } from '../convert/convert';
-import { cancelConversion, startConversion, useConversionJob } from '../convert/job';
+import { cancelConversion, progressPercent, startConversion, useConversionJob } from '../convert/job';
 import type { Job } from '../convert/job';
 import type { SourceInfo } from '../convert/probe';
 import { readMediaFile } from '../media/files';
@@ -76,12 +76,12 @@ export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
   const activeRes = resOptions.some((o) => o.key === res) ? res : 'keep';
   const options: ConvertOptions = { shortSide: SHORT_SIDE[activeRes], fps: matchFps ? PROJECT_FPS : null };
 
-  const start = (f: File, src: SourceInfo, opts: ConvertOptions) => startConversion(f, src, opts, addToTimeline);
+  const start = (f: File, src: SourceInfo, opts: ConvertOptions) => startConversion(mediaId, f, src, opts, addToTimeline);
   const cancel = () => cancelConversion();
   const finish = () => { cancelConversion(); onClose(); };
 
   if (job) {
-    const retry = () => startConversion(job.file, job.source, { ...job.options, shortSide: 720 }, job.addToTimeline);
+    const retry = () => startConversion(job.mediaId, job.file, job.source, { ...job.options, shortSide: 720 }, job.addToTimeline);
     return <JobView job={job} onClose={onClose} onCancel={cancel} onFinish={finish} onRetry720={retry} />;
   }
 
@@ -183,7 +183,7 @@ function JobView({ job, onClose, onCancel, onFinish, onRetry720 }: {
 
   if (state.status === 'running') {
     const { stage, mediaTime, speed } = state.progress;
-    const pct = stage === 'load' ? 0 : stage === 'save' ? 100 : mediaTime / source.duration * 100;
+    const pct = progressPercent(state.progress, source.duration);
     const conv: StageStatus = stage === 'load' ? 'wait' : stage === 'convert' ? 'active' : 'done';
     const stages: { label: string; status: StageStatus; note: string }[] = [
       { label: 'Load converter', status: stage === 'load' ? 'active' : 'done', note: stage === 'load' ? 'loading' : 'ready' },

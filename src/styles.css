@@ -115,6 +115,11 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .brand-name { font-weight: 800; font-size: 18px; letter-spacing: -0.03em; }
 .vsep { width: 1px; height: 20px; background: var(--control); }
 .spacer { flex: 1 1 24px; }
+.conversion { height: 34px; padding: 0 10px; gap: 10px; font-size: 12px; color: var(--text-dim); }
+.conversion-name { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversion .progress { display: block; width: 120px; height: 6px; }
+.conversion .progress > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.2s; }
+.conversion-pct { min-width: 4ch; text-align: right; color: var(--text); font-weight: 500; }
 .export-btn { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 8px; border: 0; background: var(--accent); color: var(--bg); font-weight: 600; }
 
 /* The workspace takes what the timeline leaves; below its minimum, the timeline gives up height and scrolls its tracks. */
@@ -256,7 +261,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .vol-line:hover::after, .vol-line:active::after { top: 4px; height: 4px; background: var(--text-bright); }
 .curve-handle { position: absolute; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .curve-handle > span { width: 9px; height: 9px; border-radius: 999px; background: var(--accent); border: 2px solid var(--bg); box-sizing: content-box; }
-.focus-dim { position: absolute; top: 0; bottom: 0; background: rgba(12, 14, 13, 0.62); backdrop-filter: grayscale(0.8); pointer-events: none; z-index: 2; transition: left 120ms, width 120ms; }
+.focus-dim { position: absolute; top: 0; bottom: 0; background: rgba(12, 14, 13, 0.62); backdrop-filter: grayscale(0.8); pointer-events: none; z-index: 2; }
 .focus-band { position: absolute; top: 4px; bottom: 4px; border-radius: 5px; background: rgba(198, 240, 191, 0.1); box-shadow: inset 0 1px 0 rgba(198, 240, 191, 0.45), inset 0 -1px 0 rgba(198, 240, 191, 0.45); pointer-events: none; }
 .focus-handle { position: absolute; top: 0; bottom: 0; width: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; }
 .focus-handle.start { left: 0; border-radius: 5px 0 0 5px; }
