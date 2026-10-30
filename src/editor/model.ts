@@ -100,6 +100,9 @@ export interface TextItem {
   size: number;
   color: string;
   pos: TextAnchor;
+  /** Output-pixel offset from the anchor point. */
+  x: number;
+  y: number;
   start: number;
   duration: number;
 }
@@ -415,6 +418,18 @@ export function patchTextItem(p: Project, id: string, patch: Partial<TextItem>):
       ? { ...t, items: t.items.map((x) => (x.id === id ? { ...x, ...patch } : x)) }
       : t)),
   };
+}
+
+export const MIN_TEXT_DURATION = 0.5;
+
+/** Moves one edge of a text item to `time`, keeping the other edge where it is. */
+export function trimTextItem(p: Project, id: string, edge: 'in' | 'out', time: number): Project {
+  const item = findTextItem(p, id);
+  if (!item) return p;
+  const end = item.start + item.duration;
+  if (edge === 'out') return patchTextItem(p, id, { duration: round6(Math.max(MIN_TEXT_DURATION, time - item.start)) });
+  const start = round6(Math.max(0, Math.min(end - MIN_TEXT_DURATION, time)));
+  return patchTextItem(p, id, { start, duration: round6(end - start) });
 }
 
 export function patchTrack(p: Project, id: string, patch: Partial<{ hidden: boolean; muted: boolean }>): Project {

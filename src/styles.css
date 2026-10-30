@@ -192,6 +192,10 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .info-list dd { margin: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .swatch { width: 30px; height: 30px; border-radius: 8px; border: 2px solid var(--control); }
 .swatch[aria-pressed='true'] { border-color: var(--text-bright); }
+.swatch.custom { position: relative; cursor: pointer; overflow: hidden; background: conic-gradient(#f0907a, #f2d7a6, #c6f0bf, #8fd3f0, #b9a6f2, #f0907a); }
+.swatch.custom.on { border-color: var(--text-bright); }
+.swatch.custom:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.swatch.custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .anchor-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; width: 132px; padding: 4px; background: var(--inset); border: 1px solid var(--control); border-radius: 8px; }
 .anchor-grid button { height: 28px; border: 0; border-radius: 5px; background: transparent; display: flex; align-items: center; justify-content: center; }
 .anchor-grid button > span { width: 6px; height: 6px; border-radius: 2px; background: #56605a; }
@@ -216,9 +220,12 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .tick { position: absolute; bottom: 0; width: 1px; background: var(--control-hover); }
 .tick-label { position: absolute; top: 5px; font: 500 10px var(--mono); color: var(--text-muted); }
 .track { position: relative; border-bottom: 1px solid var(--line); }
-.text-clip { position: absolute; top: 7px; height: 30px; padding: 0 10px; border-radius: 7px; background: rgba(198, 240, 191, 0.16); border: 1px solid rgba(198, 240, 191, 0.4); color: #e4f7e0; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; }
-.text-clip[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.text-clip > span { overflow: hidden; text-overflow: ellipsis; }
+.text-clip { position: absolute; top: 6px; bottom: 6px; padding: 0 12px; border-radius: 8px; background: rgba(198, 240, 191, 0.16); border: 0; box-shadow: inset 0 0 0 1px rgba(198, 240, 191, 0.4); color: #e4f7e0; font-size: 11px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; gap: 6px; overflow: hidden; white-space: nowrap; touch-action: none; }
+.text-clip:hover { filter: brightness(1.08); }
+.text-clip[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--accent); }
+.text-clip-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.text-clip-name > span { overflow: hidden; text-overflow: ellipsis; }
+.text-clip .mono { color: #d8ded9; flex: none; }
 .clip { position: absolute; top: 6px; bottom: 6px; padding: 0; border-radius: 8px; overflow: hidden; border: 0; text-align: left; display: flex; flex-direction: column; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
 .clip:hover { filter: brightness(1.08); }
 .clip.partner { box-shadow: 0 0 0 1px var(--accent); }

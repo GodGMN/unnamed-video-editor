@@ -225,8 +225,27 @@ function TimeField({ value, onChange }: { value: number; onChange: (v: number) =
   );
 }
 
+/** A `#RRGGBB` text field that commits when the typed text is a valid hex color. */
+function HexField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    const m = draft?.trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (m) onChange('#' + (m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1]).toUpperCase());
+    setDraft(null);
+  };
+  return (
+    <input className="fld mono" type="text" aria-label="Hex color" spellCheck={false} style={{ width: 112 }}
+      value={draft ?? value.toUpperCase()} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') setDraft(null);
+      }} />
+  );
+}
+
 function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
   const updateText = (patch: Partial<TextItem>) => editor.updateText(tx.id, patch);
+  const custom = !SWATCHES.some(([, hex]) => hex === tx.color.toUpperCase());
   return (
     <div className="props-body" style={{ padding: 14, gap: 14 }}>
       <label className="field-label" style={{ gap: 6 }}>Text
@@ -240,12 +259,22 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
         <div style={{ display: 'flex', gap: 8 }}>
           {SWATCHES.map(([name, hex]) => (
             <button key={name} className="swatch" style={{ background: hex }} aria-label={name}
-              aria-pressed={tx.color === hex} onClick={() => updateText({ color: hex })} />
+              aria-pressed={tx.color.toUpperCase() === hex} onClick={() => updateText({ color: hex })} />
           ))}
+          <label className={'swatch custom' + (custom ? ' on' : '')} style={custom ? { background: tx.color } : undefined} title="Custom color">
+            <input type="color" aria-label="Custom color" value={tx.color.toLowerCase()} onChange={(e) => updateText({ color: e.target.value.toUpperCase() })} />
+          </label>
         </div>
+        <HexField value={tx.color} onChange={(color) => updateText({ color })} />
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Position</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Position</span>
+          <button className="ib" style={{ height: 24, padding: '0 8px', fontSize: 11, color: 'var(--text-dim)' }}
+            onClick={() => updateText({ x: 0, y: 0 })} disabled={!tx.x && !tx.y}>
+            Reset offset
+          </button>
+        </div>
         <div className="anchor-grid" role="group" aria-label="Text position">
           {(['t', 'c', 'b'] as const).flatMap((v) => (['l', 'c', 'r'] as const).map((h) => {
             const k: TextAnchor = `${v}${h}`;
@@ -256,6 +285,11 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
             );
           }))}
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+          <NumberField lead="X" unit="px" aria-label="X offset" value={tx.x} defaultValue={0} onChange={(x) => updateText({ x })} />
+          <NumberField lead="Y" unit="px" aria-label="Y offset" value={tx.y} defaultValue={0} onChange={(y) => updateText({ y })} />
+        </div>
+        <span className="hint">Offset in pixels from the chosen anchor.</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
         <label className="field-label">Starts at<TimeField value={tx.start} onChange={(start) => updateText({ start })} /></label>

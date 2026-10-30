@@ -81,8 +81,8 @@ export function renderFrame(p: Project, time: number, ctx: RenderContext, frameS
         ctx.font = `700 ${text.size}px Figtree, sans-serif`;
         ctx.textAlign = horizontal === 'l' ? 'left' : horizontal === 'r' ? 'right' : 'center';
         ctx.textBaseline = vertical === 't' ? 'top' : vertical === 'b' ? 'bottom' : 'middle';
-        const x = horizontal === 'l' ? 64 : horizontal === 'r' ? width - 64 : width / 2;
-        const y = vertical === 't' ? 64 : vertical === 'b' ? height - 64 : height / 2;
+        const x = (horizontal === 'l' ? 64 : horizontal === 'r' ? width - 64 : width / 2) + text.x;
+        const y = (vertical === 't' ? 64 : vertical === 'b' ? height - 64 : height / 2) + text.y;
         const lines = text.content.split('\n');
         lines.forEach((line, i) => ctx.fillText(line, x, y + (i - (vertical === 'b' ? lines.length - 1 : vertical === 'c' ? (lines.length - 1) / 2 : 0)) * text.size * 1.2));
         ctx.restore();
