@@ -11,6 +11,7 @@ import { pickFiles } from '../media/links';
 import type { PickedFile } from '../media/links';
 import { renderPoster } from '../projects/poster';
 import { downloadProject, openProjectFile, packageProject, reconnectPackage } from '../projects/portable';
+import { shortcut } from '../platform';
 import { ActionMenu } from './ActionMenu';
 import { Brand } from './Brand';
 import { Dialog } from './Dialog';
@@ -141,7 +142,7 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
         </section>}
         {!loading && !entries.length && <section className="home-first-project"><Film size={44} strokeWidth={1} /><h2>{translate('projectHomeAFreshStart')}</h2><p>{translate('projectHomeCreateAProjectToStartEditingOrImportAProjectFileFromTheNewProjectMenu')}</p></section>}
         <section className="home-projects" aria-labelledby="project-list-title">
-          <div className="home-list-heading"><h2 id="project-list-title">{filterName}<span>{filtered.length}</span></h2><div className="home-search"><Search size={17} /><input ref={search} aria-label={translate('projectHomeSearchProjects')} placeholder={translate('projectHomeSearchCount', { count: entries.length })} value={query} onChange={e => setQuery(e.target.value)} /><kbd>⌘ K</kbd></div><select aria-label={translate('projectHomeSortProjects')} value={sort} onChange={e => setSort(e.target.value)}><option value="updated">{translate('projectHomeLastEdited')}</option><option value="name">{translate('projectHomeNameAZ')}</option><option value="created">{translate('projectHomeDateCreated')}</option></select></div>
+          <div className="home-list-heading"><h2 id="project-list-title">{filterName}<span>{filtered.length}</span></h2><div className="home-search"><Search size={17} /><input ref={search} aria-label={translate('projectHomeSearchProjects')} placeholder={translate('projectHomeSearchCount', { count: entries.length })} value={query} onChange={e => setQuery(e.target.value)} /><kbd>{shortcut('K')}</kbd></div><select aria-label={translate('projectHomeSortProjects')} value={sort} onChange={e => setSort(e.target.value)}><option value="updated">{translate('projectHomeLastEdited')}</option><option value="name">{translate('projectHomeNameAZ')}</option><option value="created">{translate('projectHomeDateCreated')}</option></select></div>
           <div className="home-project-list" role="list" aria-label={translate('projectHomeProjects')}>
             {filtered.map(entry => <article key={entry.id} className="home-project-row" role="listitem">
               <button className="project-open" disabled={!!busy} aria-label={translate('projectHomeOpen', { name: entry.project.name })} onClick={() => void run(translate('projectHomeOpeningProject'), () => open(entry.id))}>
