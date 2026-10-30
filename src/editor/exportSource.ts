@@ -1,3 +1,4 @@
+import { t as translate, getLocale } from '../i18n/core';
 import { ALL_FORMATS, AudioBufferSink, BlobSource, Input } from 'mediabunny';
 import type { ExportSource } from '../components/ExportDialog';
 import { GAIN_MIN_DB, audioTracks, clipEnd, videoTracks } from './model';
@@ -11,6 +12,7 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
   return {
     duration: layout.end,
     fps: project.output.fps,
+    output: project.output,
     async prepare(width, height, sampleRate, signal) {
       const p = structuredClone(project);
       const ids = new Set([
@@ -18,12 +20,12 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
         ...audioTracks(p).filter((t) => !t.muted).flatMap((t) => t.clips.filter((c) => !c.muted && c.gainDb > GAIN_MIN_DB).map((c) => c.mediaId)),
       ]);
       const importing = [...ids].find((id) => p.media[id]?.importing);
-      if (importing) throw new Error(`"${p.media[importing].name}" is still importing. Export once it finishes.`);
+      if (importing) throw new Error(translate('stillImportingExportOnceItFinishes', { value1: p.media[importing].name }));
       const files: Record<string, File> = {};
       for (const id of ids) {
         signal.throwIfAborted();
         const file = await readMediaFile(id);
-        if (!file) throw new Error(`Source file "${p.media[id]?.name ?? id}" is missing. Import it before exporting.`);
+        if (!file) throw new Error(translate('sourceFileIsMissingImportItBeforeExporting', { value1: p.media[id]?.name ?? id }));
         files[id] = file;
       }
       // Composite on the main thread so text uses the same loaded fonts as preview.
@@ -40,7 +42,7 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
         stills.clear();
         animations.forEach((reader) => reader.dispose());
         animations.clear();
-        pending?.reject(new DOMException('Export stopped.', 'AbortError'));
+        pending?.reject(new DOMException(translate('exportStopped2'), 'AbortError'));
         pending = null;
         signal.removeEventListener('abort', dispose);
       };
@@ -50,11 +52,11 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
         else pending?.resolve(data);
         pending = null;
       };
-      worker.onerror = (e) => { pending?.reject(new Error(e.message || 'Video decoder failed.')); pending = null; };
+      worker.onerror = (e) => { pending?.reject(new Error(e.message || translate('videoDecoderFailed'))); pending = null; };
       const request = (message: RenderRequest) => new Promise<RenderReply>((resolve, reject) => {
         signal.throwIfAborted();
         pending = { resolve, reject };
-        worker.postMessage(message);
+        worker.postMessage({ ...message, locale: getLocale() });
       });
       try {
         await request({ type: 'init', project: p, files });
@@ -62,13 +64,13 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
           const media = p.media[clip.mediaId];
           if (track.hidden || !media?.animation) continue;
           const animation = await openAnimation(files[clip.mediaId], imageType(media.container));
-          if (!animation) throw new Error(`Cannot decode the animation "${media.name}" in this browser.`);
+          if (!animation) throw new Error(translate('cannotDecodeTheAnimationInThisBrowser', { value1: media.name }));
           if (signal.aborted) { animation.decoder.close(); signal.throwIfAborted(); }
           animations.set(clip.id, new AnimationReader(animation));
         }
         for (const id of ids) {
           if (!p.media[id]?.still || p.media[id].animation) continue;
-          const image = await createImageBitmap(files[id]).catch(() => { throw new Error(`Cannot decode the image "${p.media[id].name}".`); });
+          const image = await createImageBitmap(files[id]).catch(() => { throw new Error(translate('cannotDecodeTheImage', { value1: p.media[id].name })); });
           if (signal.aborted) { image.close(); signal.throwIfAborted(); }
           stills.set(id, image);
         }
@@ -80,7 +82,7 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
           audio,
           async renderFrame({ time }) {
             const reply = await request({ type: 'frame', time });
-            if (reply.type !== 'frame') throw new Error('Unexpected decoder reply.');
+            if (reply.type !== 'frame') throw new Error(translate('unexpectedDecoderReply'));
             try {
               signal.throwIfAborted();
               const images = new Map<string, CanvasImageSource>(reply.frames.map((f) => [f.clipId, f.image]));
@@ -109,7 +111,7 @@ async function mixdown(p: Project, duration: number, files: Record<string, File>
     const input = new Input({ source: new BlobSource(files[clip.mediaId]), formats: ALL_FORMATS });
     try {
       const track = await input.getPrimaryAudioTrack();
-      if (!track || !await track.canDecode()) throw new Error(`Cannot decode audio from "${p.media[clip.mediaId]?.name}". Convert it to MP4 first.`);
+      if (!track || !await track.canDecode()) throw new Error(translate('cannotDecodeAudioFromConvertItToMP4First', { value1: p.media[clip.mediaId]?.name }));
       const start = Math.max(0, clip.start), end = Math.min(duration, clipEnd(clip));
       const gain = ctx.createGain();
       // Web Audio interpolates gain values between these 1 ms control points.

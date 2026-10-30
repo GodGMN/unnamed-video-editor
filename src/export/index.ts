@@ -1,3 +1,4 @@
+import { t as translate, getLocale } from '../i18n/core';
 // Browser-only MP4 export: frames come from a callback on the calling thread, encoding (WebCodecs) and
 // muxing (Mediabunny) run in a worker, and the result is an H.264 + AAC MP4 Blob.
 
@@ -98,7 +99,7 @@ export async function probeExportSupport(query: {
         if (e.data.type === 'probe') resolve(e.data.report);
         else if (e.data.type === 'error') reject(new ExportError(e.data.code, e.data.message));
       };
-      worker.onerror = (e) => reject(new ExportError('encode-failed', e.message || 'Export worker failed to load.'));
+      worker.onerror = (e) => reject(new ExportError('encode-failed', e.message || translate('exportWorkerFailedToLoad')));
       send(worker, { type: 'probe', query: { ...query, audio: query.audio ?? null } });
     });
   } finally {
@@ -147,7 +148,7 @@ export async function exportMp4(options: ExportOptions): Promise<ExportResult> {
     wake?.();
   };
   worker.onerror = (e) => {
-    failure ??= new ExportError('encode-failed', e.message || 'Export worker crashed.');
+    failure ??= new ExportError('encode-failed', e.message || translate('exportWorkerCrashed'));
     wake?.();
   };
   const onAbort = () => wake?.();
@@ -174,7 +175,7 @@ export async function exportMp4(options: ExportOptions): Promise<ExportResult> {
       if (frame.displayWidth !== width || frame.displayHeight !== height) {
         const got = `${frame.displayWidth}×${frame.displayHeight}`;
         frame.close();
-        throw new ExportError('invalid-frame', `Frame ${index} is ${got}, expected ${width}×${height}.`);
+        throw new ExportError('invalid-frame', translate('frameIsExpected', { value1: index, value2: got, value3: width, value4: height }));
       }
       send(worker, { type: 'frame', index, frame }, [frame]);
     }
@@ -196,20 +197,20 @@ export async function exportMp4(options: ExportOptions): Promise<ExportResult> {
 }
 
 function send(worker: Worker, msg: ToWorker, transfer: Transferable[] = []) {
-  worker.postMessage(msg, transfer);
+  worker.postMessage({ ...msg, locale: getLocale() }, transfer);
 }
 
 function validate({ width, height, fps, duration, audio }: ExportOptions) {
   const fail = (message: string) => { throw new ExportError('invalid-options', message); };
   if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
-    fail(`Size must be positive whole pixels, got ${width}×${height}.`);
+    fail(translate('sizeMustBePositiveWholePixelsGot', { value1: width, value2: height }));
   }
-  if (width % 2 || height % 2) fail(`H.264 needs an even width and height, got ${width}×${height}.`);
-  if (!(fps > 0)) fail(`Frame rate must be positive, got ${fps}.`);
-  if (!(duration > 0) || !Number.isFinite(duration)) fail(`Duration must be positive, got ${duration}.`);
+  if (width % 2 || height % 2) fail(translate('h264NeedsAnEvenWidthAndHeightGot', { value1: width, value2: height }));
+  if (!(fps > 0)) fail(translate('frameRateMustBePositiveGot', { value1: fps }));
+  if (!(duration > 0) || !Number.isFinite(duration)) fail(translate('durationMustBePositiveGot', { value1: duration }));
   if (audio && !isAudioBuffer(audio)) {
     const lengths = new Set(audio.channels.map((c) => c.length));
-    if (!audio.channels.length || lengths.size !== 1) fail('Audio channels must be non-empty and equally long.');
+    if (!audio.channels.length || lengths.size !== 1) fail(translate('audioChannelsMustBeNonEmptyAndEquallyLong'));
   }
 }
 

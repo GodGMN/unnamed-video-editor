@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import { clipEnd, findVideoClip } from '../editor/model';
 import type { AudioClip, MediaClip, Project } from '../editor/model';
 import { readMediaFile } from '../media/files';
@@ -18,24 +19,24 @@ function quoted(names: string[]) { return names.map((n) => `"${n}"`).join(', ');
 
 /** One status line naming every source that can't play right now. */
 function unavailableMessage(problems: Map<string, Unavailable>, project: Project) {
-  const name = (mediaId: string) => project.media[mediaId]?.name ?? 'Missing media';
+  const name = (mediaId: string) => project.media[mediaId]?.name ?? translate('missingMedia');
   const missing: string[] = [];
   const errors: string[] = [];
   for (const [mediaId, problem] of problems) {
     if (problem.missing) missing.push(name(mediaId));
-    else errors.push(`"${name(mediaId)}" could not be loaded: ${problem.error}`);
+    else errors.push(translate('couldNotBeLoaded', { value1: name(mediaId), value2: problem.error }));
   }
-  if (missing.length === 1) errors.unshift(`Source file ${quoted(missing)} is missing. Import your own media to preview it.`);
-  if (missing.length > 1) errors.unshift(`Source files ${quoted(missing)} are missing. Import your own media to preview them.`);
+  if (missing.length === 1) errors.unshift(translate('sourceFileIsMissingImportYourOwnMediaTo', { value1: quoted(missing) }));
+  if (missing.length > 1) errors.unshift(translate('sourceFilesAreMissingImportYourOwnMediaTo', { value1: quoted(missing) }));
   return errors.join(' ');
 }
 
 function waitFor(element: HTMLMediaElement, event: string, action: () => void, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => finish(new Error('Media decoding timed out.')), 8000);
+    const timer = setTimeout(() => finish(new Error(translate('mediaDecodingTimedOut'))), 8000);
     const loaded = () => finish();
-    const aborted = () => finish(new DOMException('Media preparation cancelled.', 'AbortError'));
-    const failed = () => finish(new Error(element.error?.message || 'This file could not be decoded.'));
+    const aborted = () => finish(new DOMException(translate('mediaPreparationCancelled'), 'AbortError'));
+    const failed = () => finish(new Error(element.error?.message || translate('thisFileCouldNotBeDecoded')));
     function finish(error?: Error) {
       clearTimeout(timer);
       element.removeEventListener(event, loaded);
@@ -143,7 +144,7 @@ export class PlaybackEngine {
 
   private fail(entry: Entry, error: unknown) {
     if (entry.audio) { entry.audio.wantedPlaying = false; entry.audio.element.pause(); }
-    this.unavailable.set(entry.mediaId, { missing: false, error: error instanceof Error ? error.message : 'Unknown error.' });
+    this.unavailable.set(entry.mediaId, { missing: false, error: error instanceof Error ? error.message : translate('unknownError') });
     this.scheduleDraw();
   }
 

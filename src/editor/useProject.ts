@@ -1,7 +1,8 @@
+import { t as translate } from '../i18n/core';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, dropMedia, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, settle, trimClipEdge, videoTracks } from './model';
-import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
+import { newId, dropMedia, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, setAspect, settle, trimClipEdge, videoTracks } from './model';
+import type { Aspect, AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
 import { removeMediaFiles } from '../media/files';
@@ -62,7 +63,7 @@ function usePersistentProject(onLoad: (p: Project) => void) {
       history.replaceState(null, '', url);
     }
     (reset ? clearProject().then(() => null) : loadProject())
-      .catch((err) => { console.warn('Could not load the saved project', err); return null; })
+      .catch((err) => { console.warn(translate('couldNotLoadTheSavedProject'), err); return null; })
       .then((saved) => {
         if (cancelled) return;
         const p = dropUnfinished(saved ?? seedProject());
@@ -74,7 +75,7 @@ function usePersistentProject(onLoad: (p: Project) => void) {
 
   useEffect(() => {
     if (!project) return;
-    const t = setTimeout(() => saveProject(project).catch((err) => console.warn('Could not save the project', err)), SAVE_DELAY_MS);
+    const t = setTimeout(() => saveProject(project).catch((err) => console.warn(translate('couldNotSaveTheProject'), err)), SAVE_DELAY_MS);
     return () => clearTimeout(t);
   }, [project]);
 
@@ -120,6 +121,7 @@ export function useProject() {
     const edit = (fn: (p: Project) => Project) => setProject((p) => (p ? settle(fn(p)) : p));
     return {
       renameProject: (name: string) => edit((p) => ({ ...p, name })),
+      setAspect: (aspect: Aspect) => edit((p) => setAspect(p, aspect)),
       addMedia: (media: Media) => edit((p) => ({ ...p, media: { ...p.media, [media.id]: media } })),
       /** Deletes a source, its clips on the timeline, and its stored files. */
       removeMedia: (mediaId: string) => {

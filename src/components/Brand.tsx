@@ -1,12 +1,12 @@
-import { LogoPlay } from './icons';
+import { LogoFilm } from './icons';
 
-export const APP_NAME = 'Unnamed Video Editor';
+export const APP_NAME = '[Unnamed Video Editor]';
 
 export function Brand({ large = false }: { large?: boolean }) {
   return (
     <div className="brand">
       <div className="brand-mark">
-        <LogoPlay size={large ? 14 : 12} fill="var(--bg)" />
+        <LogoFilm size={large ? 32 : 26} fill="var(--accent)" />
       </div>
       <span className="brand-name">{APP_NAME}<span className="dot">.</span></span>
     </div>

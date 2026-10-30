@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+import { t as translate, formatNumber } from '../i18n/core';
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -73,6 +75,7 @@ function transitionTargetAt(project: Project, track: Track, time: number, slop: 
 
 /** `onDropFiles` imports files dropped on a track and places them there. */
 export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles: (files: File[], place: Placement) => void }) {
+  useT();
   const { project, ui, layout, select, setTool, setPlayhead, unlock, toggleTrack, openMenu, closeMenu, deleteSelection } = editor;
   const focus = ui.lockClip ? layout.clips[ui.lockClip] : undefined;
   const focused = !!focus;
@@ -317,7 +320,7 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
       const count = e.dataTransfer.items.length;
-      const name = count > 1 ? `Import ${count} files` : 'Import file';
+      const name = translate('importDroppedFiles', { count: Math.max(1, count) });
       const start = mediaDropStart(t, mediaTime(e, t, STILL_DURATION));
       if (ghost?.trackId !== t.id || ghost.start !== start || ghost.name !== name)
         setGhost({ trackId: t.id, start, duration: STILL_DURATION, name, insert: t.kind === 'video' && t.magnetic });
@@ -368,21 +371,21 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
   return (
     <section ref={rootRef} className={'panel timeline' + (splitting ? ' splitting' : '')} onClick={() => { closeMenu(); setTrackMenu(null); }} onPointerDownCapture={blurField}>
       <div className="tl-tools">
-        <div className="toolbar" role="toolbar" aria-label="Timeline tools">
-          <button aria-pressed={splitting} title="Split · S · click clips to cut them" onClick={() => setTool(splitting ? 'select' : 'split')}>
-            <Scissors size={14} />Split<span className="kbd">S</span>
+        <div className="toolbar" role="toolbar" aria-label={translate('timelineTools')}>
+          <button aria-pressed={splitting} title={translate('splitSClickClipsToCutThem')} onClick={() => setTool(splitting ? 'select' : 'split')}>
+            <Scissors size={14} />{translate('split')}<span className="kbd">{"S"}</span>
           </button>
-          <button title="Add text at the playhead · T" onClick={() => editor.addText(ui.playhead)}>
-            <TextT size={14} />Text<span className="kbd">T</span>
+          <button title={translate('addTextAtThePlayheadT')} onClick={() => editor.addText(ui.playhead)}>
+            <TextT size={14} />{translate('text')}<span className="kbd">{"T"}</span>
           </button>
           <span className="tool-separator" role="separator" aria-orientation="vertical" />
-          <button aria-label="Snap clips" aria-pressed={snapping} title="Snap clips" onClick={() => setSnapping(v => !v)}><Magnet size={16} /></button>
+          <button aria-label={translate('snapClips')} aria-pressed={snapping} title={translate('snapClips')} onClick={() => setSnapping(v => !v)}><Magnet size={16} /></button>
         </div>
-        {(splitting || focused) && <span className="hint">{splitting ? 'Click a clip to cut it · Cuts snap to the playhead · Esc to stop splitting' : 'Playhead locked to a clip · Double-click the time bar to release'}</span>}
+        {(splitting || focused) && <span className="hint">{splitting ? translate('clickAClipToCutItCutsSnapTo') : translate('playheadLockedToAClipDoubleClickTheTime')}</span>}
         <div className="spacer" />
-        <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Video track</button>
-        <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Audio track</button>
-        <button className="ib outlined chip">Fit</button>
+        <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />{translate('videoTrack')}</button>
+        <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />{translate('audioTrack')}</button>
+        <button className="ib outlined chip">{translate('fit')}</button>
       </div>
 
       <div className="tl-body">
@@ -393,8 +396,8 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
             return (
               <div key={t.id} className="track-head" style={{ height: TRACK_H[t.kind] }} onContextMenu={onTrackMenu(t.id)}>
                 <span className="track-head-label"><span>{t.name}</span><span>{t.label}</span></span>
-                <button className="ib" style={{ width: 28, height: 28, color: off ? 'var(--warn)' : 'var(--text-muted)' }}
-                  aria-label={`${t.kind === 'audio' ? (off ? 'Unmute' : 'Mute') : (off ? 'Show' : 'Hide')} track ${t.name}`}
+                <button className="ib" style={{ width: 28, ['--h' as string]: '28px', color: off ? 'var(--warn)' : 'var(--text-muted)' }}
+                  aria-label={translate('track', { value1: t.kind === 'audio' ? (off ? translate('uiUnmute') : translate('uiMute')) : (off ? translate('uiShow') : translate('uiHide')), value2: t.name })}
                   aria-pressed={off} onClick={() => toggleTrack(t.id)}>
                   {t.kind === 'audio' ? <Volume size={14} /> : <Eye size={14} />}
                 </button>
@@ -406,7 +409,7 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
         <div ref={scrollRef} className="tl-scroll" onPointerDown={onMarqueeDown}>
           <div ref={contentRef} style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
             <div className="ruler" onPointerDown={onRulerDown} onDoubleClick={unlock}
-              title={focused ? 'Double-click to release the locked clip' : undefined}>
+              title={focused ? translate('doubleClickToReleaseTheLockedClip') : undefined}>
               {ticks}
               {focus && (
                 <div className="focus-band" style={{ left: focus.start * pps, width: (focus.end - focus.start) * pps }} aria-hidden="true">
@@ -419,14 +422,14 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
             {project.tracks.map((t) => {
               const insets = t.kind === 'text' ? null : overlapInsets(t.clips);
               return (
-              <div key={t.id} className="track" onDragOver={(e) => onTrackDragOver(e, t)} onDrop={(e) => onTrackDrop(e, t)}
+              <div key={t.id} className='track' onDragOver={(e) => onTrackDragOver(e, t)} onDrop={(e) => onTrackDrop(e, t)}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { setDropTarget(null); setGhost(null); } }}
                 onPointerDownCapture={splitting ? (e) => onSplitDown(e, t) : undefined}
                 onClickCapture={splitting ? (e) => e.stopPropagation() : undefined}
                 onDoubleClickCapture={splitting ? (e) => e.stopPropagation() : undefined}
                 onPointerMove={splitting ? (e) => onSplitMove(e, t) : undefined}
                 onPointerLeave={splitting ? () => setCut(null) : undefined}
-                data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: isOff(t) ? 0.35 : 1 }}>
+                data-track-id={t.id} style={{ height: TRACK_H[t.kind], ['--track-h' as string]: `${TRACK_H[t.kind]}px`, opacity: isOff(t) ? 0.35 : 1 }}>
                 {t.kind === 'text' && (
                   <>
                     {t.clips.map((c) => <TextClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} onMenu={onContextMenu('text', c.id)} />)}
@@ -560,6 +563,7 @@ function partnerSelected({ project, ui }: Editor, clip: MediaClip, kind: 'clip' 
 }
 
 function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<VideoClip>) {
+  useT();
   const { project } = editor;
   const move = useClipMove(editor, cs, 'clip', snapping);
   const id = cs.id;
@@ -572,7 +576,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   return (
     <button className={'clip' + (partner ? ' partner' : '') + (src.importing ? ' importing' : '')}
       style={{ left: cs.start * pps + 1, width, background: src.tone }}
-      aria-label={`${src.still ? 'Image' : 'Video'}: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}${src.importing ? ', importing' : ''}`}
+      aria-label={translate('seconds', { value1: src.still ? translate('uiImage') : translate('uiVideo'), value2: src.name, value3: formatNumber(dur, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), value4: (cs.linked ? translate('uiLinkedToAudio') : '') + (src.importing ? translate('uiImporting') : '') })}
       aria-pressed={selected}
       onPointerDown={move.onPointerDown}
       onClick={move.onClick}
@@ -584,7 +588,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
           {cs.linked && <Link size={11} stroke="#D8DED9" strokeWidth={2.4} style={{ flex: 'none' }} />}
           <span className="name">{src.name}</span>
         </span>
-        <span className="mono">{src.importing ? 'Importing…' : `${dur.toFixed(1)}s`}</span>
+        <span className="mono">{src.importing ? translate('importing') : translate('s', { value1: formatNumber(dur, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}</span>
       </span>
       <FadeRamps clip={cs} width={width} height={VIDEO_CLIP_H} />
     </button>
@@ -592,17 +596,18 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
 }
 
 function TextClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<TextClip>) {
+  useT();
   const move = useClipMove(editor, cs, 'text', snapping);
   return (
     <button className="text-clip" style={{ left: cs.start * pps + 1, width: cs.duration * pps - 3 }}
-      aria-label={`Text overlay: ${cs.content}, ${cs.duration.toFixed(1)} seconds`}
+      aria-label={translate('textOverlaySeconds', { value1: cs.content, value2: formatNumber(cs.duration, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}
       aria-pressed={isPicked(editor, cs.id)}
       onPointerDown={move.onPointerDown}
       onClick={move.onClick}
       onDoubleClick={lockClip(editor, cs.id)}
       onContextMenu={onMenu}>
       <span className="text-clip-name"><TextT size={12} strokeWidth={2.2} /><span>{cs.content}</span></span>
-      <span className="mono">{cs.duration.toFixed(1)}s</span>
+      <span className="mono">{translate('s3', { value1: formatNumber(cs.duration, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}</span>
     </button>
   );
 }
@@ -627,6 +632,7 @@ function trimTargets(project: Project, clip: Clip) {
  * transition chip, so where clips touch or overlap the active clip's handles win.
  */
 function TrimHandles({ editor, clips, pps, snapping, onGuide }: TrimProps & { clips: Clip[] }) {
+  useT();
   const { project, ui, trimEdge, updateVideoClip, updateAudioClip } = editor;
   const startDrag = useDrag();
   const sel = ui.sel;
@@ -652,8 +658,8 @@ function TrimHandles({ editor, clips, pps, snapping, onGuide }: TrimProps & { cl
 
   return (
     <>
-      <span className="clip-edge in" style={{ left }} title="Drag to trim the start" onPointerDown={edgeDown('in')}><span /></span>
-      <span className="clip-edge out" style={{ left: right - 8 }} title="Drag to trim the end" onPointerDown={edgeDown('out')}><span /></span>
+      <span className="clip-edge in" style={{ left }} title={translate('dragToTrimTheStart')} onPointerDown={edgeDown('in')}><span /></span>
+      <span className="clip-edge out" style={{ left: right - 8 }} title={translate('dragToTrimTheEnd')} onPointerDown={edgeDown('out')}><span /></span>
       {sel?.kind === 'clip' && (
         <div className="fade-layer" style={{ left, width: right - left, height: VIDEO_CLIP_H }}>
           <FadeHandles clip={cs as VideoClip} width={right - left} height={VIDEO_CLIP_H} update={(patch) => updateVideoClip(cs.id, patch)} />
@@ -670,6 +676,7 @@ function TrimHandles({ editor, clips, pps, snapping, onGuide }: TrimProps & { cl
 
 /** A chip on every boundary between adjacent clips; a full-height band where they overlap. */
 function Transitions({ editor, clips, pps, dropTarget }: { editor: Editor; clips: VideoClip[]; pps: number; dropTarget: string | null }) {
+  useT();
   const { ui, layout, select } = editor;
   return (
     <>
@@ -683,10 +690,10 @@ function Transitions({ editor, clips, pps, dropTarget }: { editor: Editor; clips
         const tt = c.transitionOut ?? DEFAULT_TRANSITION;
         const w = overlap > 0 ? overlap * pps - 2 : 26;
         return (
-          <button key={c.id} className={overlap > 0 ? 'overlap-band' + (dropTarget === c.id ? ' drop-target' : '') : 'trans-chip'}
+          <button key={c.id} className={overlap > 0 ? 'overlap-band' + (dropTarget === c.id ? translate('dropTarget') : '') : 'trans-chip'}
             style={{ left: overlap > 0 ? overlapStart * pps + 1 : overlapStart * pps - w / 2, width: w }}
-            aria-label={`${TRANSITION_NAMES[tt.type]} transition between ${layout.clips[c.id].name} and ${layout.clips[next.id].name}`}
-            title={overlap > 0 ? `${overlap.toFixed(2)}s overlap · drop a transition here` : 'Overlap clips to add a transition'}
+            aria-label={translate('transitionBetweenAnd', { value1: TRANSITION_NAMES[tt.type], value2: layout.clips[c.id].name, value3: layout.clips[next.id].name })}
+            title={overlap > 0 ? translate('sOverlapDropATransitionHere', { value1: formatNumber(overlap, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }) : translate('overlapClipsToAddATransition')}
             aria-pressed={ui.sel?.kind === 'trans' && ui.sel.id === c.id}
             onClick={() => select({ kind: 'trans', id: c.id })}>
             {(overlap <= 0 || w >= 22) && (
@@ -703,9 +710,10 @@ function Transitions({ editor, clips, pps, dropTarget }: { editor: Editor; clips
   );
 }
 
-const f1 = (x: number) => x.toFixed(1);
+const f1 = (x: number) => formatNumber(x, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<AudioClip>) {
+  useT();
   const { project, select, togglePick, updateAudioClip: updateClip } = editor;
   const startDrag = useDrag();
   const move = useClipMove(editor, cs, 'audio', snapping);
@@ -728,7 +736,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
 
   // Gain line: the clip's height is a fader from −∞ to +12 dB, the line sits at the level and follows the pointer.
   const volY = Math.round(H * (1 - dbToFader(cs.gainDb)));
-  const level = `${fmtDb(cs.gainDb)} dB`;
+  const level = translate('db2', { value1: fmtDb(cs.gainDb) });
   const volDown = (e: PointerEvent<HTMLButtonElement>) => {
     // The gain line spans the clip, so Ctrl-clicks on it pick the clip too.
     if (additive(e)) { e.preventDefault(); togglePick({ kind: 'audio', id }); return; }
@@ -748,7 +756,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
     <div className={'audio-clip' + (picked ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked') + (src.importing ? ' importing' : '')}
       style={{ left: cs.start * pps + 1, width }}>
       <button className="audio-wave"
-        aria-label={`Audio: ${src.name}, volume ${level}${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}${src.importing ? ', importing' : ''}`}
+        aria-label={translate('audioVolume', { value1: src.name, value2: level, value3: cs.muted ? translate('uiMuted') : '', value4: (cs.linked ? '' : translate('uiUnlinked')) + (src.importing ? translate('uiImporting') : '') })}
         aria-pressed={picked}
         onPointerDown={move.onPointerDown}
         onClick={move.onClick}
@@ -759,7 +767,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         ))}
       </button>
       <button className={'vol-line' + (cs.muted ? ' muted' : '')} style={{ top: volY - 6 }}
-        aria-label={`Volume ${level}, drag up or down to adjust`} title={`Volume ${level} · drag to adjust`}
+        aria-label={translate('volumeDragUpOrDownToAdjust', { value1: level })} title={translate('volumeDragToAdjust', { value1: level })}
         onPointerDown={volDown} onKeyDown={volKey} />
       {/* Drawn apart from the line's hit area so the clip's rounded corners can clip it at −∞ and +12 dB. */}
       <div className="vol-clip" aria-hidden="true">
@@ -768,7 +776,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         <span className="vol-mark" style={{ top: Math.max(0, Math.min(H - 2, volY - 1)) }} />
       </div>
       <span className="audio-badge" style={inset && { right: 8 + inset.tail * pps }}>
-        {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
+        {cs.muted && <Mute size={11} stroke='var(--warn)' strokeWidth={2.4} />}
         {level}
       </span>
     </div>
@@ -794,16 +802,17 @@ function fadeGeometry(clip: MediaClip, width: number, H: number) {
 
 /** The darkened fade-in and fade-out ramps drawn over a clip. */
 function FadeRamps({ clip, width, height: H }: { clip: MediaClip; width: number; height: number }) {
+  useT();
   const { fiW, foW, ci, co } = fadeGeometry(clip, width, H);
   return (
     <>
       <svg width={f1(fiW)} height={H} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} aria-hidden="true">
         <path d={`M0,0 L${f1(fiW)},0 Q${f1(ci.cx)},${f1(ci.cy)} 0,${H} Z`} fill="rgba(12,14,13,0.62)" />
-        <path d={`M0,${H} Q${f1(ci.cx)},${f1(ci.cy)} ${f1(fiW)},0`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
+        <path d={`M0,${H} Q${f1(ci.cx)},${f1(ci.cy)} ${f1(fiW)},0`} fill='none' stroke="var(--accent)" strokeWidth={1.5} />
       </svg>
       <svg width={f1(foW)} height={H} style={{ position: 'absolute', right: 0, top: 0, pointerEvents: 'none' }} aria-hidden="true">
         <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H} L${f1(foW)},0 Z`} fill="rgba(12,14,13,0.62)" />
-        <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H}`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
+        <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H}`} fill='none' stroke="var(--accent)" strokeWidth={1.5} />
       </svg>
     </>
   );
@@ -811,6 +820,7 @@ function FadeRamps({ clip, width, height: H }: { clip: MediaClip; width: number;
 
 /** Corner handles that set a clip's fade lengths, and round handles that shape each ramp. Placed in a box the clip's size. */
 function FadeHandles({ clip: cs, width, height: H, update }: { clip: MediaClip; width: number; height: number; update: (patch: Partial<Fades>) => void }) {
+  useT();
   const startDrag = useDrag();
   const span = clipDuration(cs) || 1;
   const half = (cs.outS - cs.inS) / 2;
@@ -837,25 +847,25 @@ function FadeHandles({ clip: cs, width, height: H, update }: { clip: MediaClip; 
     <>
       {fiW >= 14 && (
         <button className="curve-handle" style={{ left: ciM.x - 9, top: ciM.y - 9 }}
-          aria-label={`Fade-in curve ${curveName(cs.curveIn)}, drag up or down to adjust`}
-          title="Drag up or down to shape the fade-in curve" onPointerDown={curveDown('curveIn')}>
+          aria-label={translate('fadeInCurveDragUpOrDownToAdjust', { value1: curveName(cs.curveIn) })}
+          title={translate('dragUpOrDownToShapeTheFadeIn')} onPointerDown={curveDown('curveIn')}>
           <span />
         </button>
       )}
       {foW >= 14 && (
         <button className="curve-handle" style={{ left: width - foW + coM.x - 9, top: coM.y - 9 }}
-          aria-label={`Fade-out curve ${curveName(cs.curveOut)}, drag up or down to adjust`}
-          title="Drag up or down to shape the fade-out curve" onPointerDown={curveDown('curveOut')}>
+          aria-label={translate('fadeOutCurveDragUpOrDownToAdjust', { value1: curveName(cs.curveOut) })}
+          title={translate('dragUpOrDownToShapeTheFadeOut')} onPointerDown={curveDown('curveOut')}>
           <span />
         </button>
       )}
       <button className="fade-handle" style={{ left: fiW - 10 }}
-        aria-label={`Fade in ${cs.fadeIn.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade in"
+        aria-label={translate('fadeInSecondsDragToAdjust', { value1: formatNumber(cs.fadeIn, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })} title={translate('dragToSetTheFadeIn')}
         onPointerDown={fadeDown('fadeIn', 1)}>
         <span />
       </button>
       <button className="fade-handle" style={{ right: foW - 10 }}
-        aria-label={`Fade out ${cs.fadeOut.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade out"
+        aria-label={translate('fadeOutSecondsDragToAdjust', { value1: formatNumber(cs.fadeOut, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })} title={translate('dragToSetTheFadeOut')}
         onPointerDown={fadeDown('fadeOut', -1)}>
         <span />
       </button>
@@ -867,6 +877,7 @@ function FadeHandles({ clip: cs, width, height: H, update }: { clip: MediaClip; 
 function TrackMenu({ editor, id, left, top, onClose, onConfirm }: {
   editor: Editor; id: string; left: number; top: number; onClose: () => void; onConfirm: (id: string) => void;
 }) {
+  useT();
   const { project, removeTrack } = editor;
   const track = project.tracks.find((t) => t.id === id);
   if (!track) return null;
@@ -878,17 +889,18 @@ function TrackMenu({ editor, id, left, top, onClose, onConfirm }: {
     if (empty) removeTrack(id); else onConfirm(id);
   };
   return (
-    <div role="menu" aria-label={`Track ${track.name}`} className="menu" style={{ left, top }} onClick={(e) => e.stopPropagation()}>
-      <span className="menu-label">Track · {track.name}</span>
+    <div role="menu" aria-label={translate('track2', { value1: track.name })} className="menu" style={{ left, top }} onClick={(e) => e.stopPropagation()}>
+      <span className="menu-label">{translate('track5', { value1: track.name })}</span>
       <button role="menuitem" className="ib danger" disabled={!removable} onClick={remove}>
-        <Trash size={14} /><span>Delete track</span>
+        <Trash size={14} /><span>{translate('deleteTrack')}</span>
       </button>
-      {!removable && <span className="menu-label menu-note">The timeline keeps at least one {track.kind} track.</span>}
+      {!removable && <span className="menu-label menu-note">{translate('theTimelineKeepsAtLeastOneTrack', { value1: translate(track.kind === 'text' ? 'textKind' : track.kind === 'audio' ? 'audioKind' : 'videoKind') })}</span>}
     </div>
   );
 }
 
 function DeleteTrackDialog({ editor, id, onClose }: { editor: Editor; id: string; onClose: () => void }) {
+  useT();
   const { project, removeTrack } = editor;
   const track = project.tracks.find((t) => t.id === id);
   if (!track) return null;
@@ -896,16 +908,14 @@ function DeleteTrackDialog({ editor, id, onClose }: { editor: Editor; id: string
   const clipCount = (p: Project) => p.tracks.reduce((n, t) => n + t.clips.length, 0);
   // Linked partners on other tracks go too.
   const linked = clipCount(project) - clipCount(removeTrackModel(project, id)) - own;
-  const noun = track.kind === 'text' ? 'text clip' : 'clip';
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-  const subtitle = `Its ${plural(own, noun)} will be removed`
-    + (linked ? `, along with ${plural(linked, 'linked clip')} on other tracks.` : '.');
+  const subtitle = translate(track.kind === 'text' ? 'removeTextClips' : 'removeClips', { count: own })
+    + (linked ? translate('linkedClips', { count: linked }) : '.');
   return (
-    <Dialog id="del-track-title" title={`Delete ${track.name}`} subtitle={subtitle} warn width={440} onClose={onClose}>
+    <Dialog id="del-track-title" title={translate('delete2', { value1: track.name })} subtitle={subtitle} warn width={440} onClose={onClose}>
       <div className="dialog-body">
         <div className="dialog-actions">
-          <button className="gb" onClick={onClose}>Cancel</button>
-          <button className="primary danger" autoFocus onClick={() => { removeTrack(id); onClose(); }}>Delete track</button>
+          <button className="gb" onClick={onClose}>{translate('cancel')}</button>
+          <button className="primary danger" autoFocus onClick={() => { removeTrack(id); onClose(); }}>{translate('deleteTrack')}</button>
         </div>
       </div>
     </Dialog>
@@ -913,15 +923,16 @@ function DeleteTrackDialog({ editor, id, onClose }: { editor: Editor; id: string
 }
 
 function ClipMenu({ editor }: { editor: Editor }) {
+  useT();
   const { project, ui, updateVideoClip, updateAudioClip, linkClips, closeMenu, deleteSelection } = editor;
   const m = ui.menu!;
   const found = findClip(project, m.id);
   if (!found) return null;
   const cs = found.clip;
   const audio = audioFor(project, m.id);
-  const label = ui.picked.length > 1 ? `${ui.picked.length} clips selected`
-    : isMediaClip(cs) ? `${m.kind === 'audio' ? 'Audio' : 'Video'} · ${(project.media[cs.mediaId] ?? MISSING_MEDIA).name}`
-    : `Text · ${cs.content}`;
+  const label = ui.picked.length > 1 ? translate('clipsSelected', { value1: ui.picked.length })
+    : isMediaClip(cs) ? `${m.kind === 'audio' ? translate('audio2') : translate('video2')} · ${(project.media[cs.mediaId] ?? MISSING_MEDIA).name}`
+    : translate('text2', { value1: cs.content });
   // Linking needs exactly one video and one audio clip selected; unlinking works from either side of a linked pair.
   const pair = pickedPair(project, ui.picked);
   const pairLinked = !!pair && pair.video.linked && pair.video.linkId !== null && pair.video.linkId === pair.audio.linkId;
@@ -937,29 +948,29 @@ function ClipMenu({ editor }: { editor: Editor }) {
     <div role="menu" aria-label={label} className="menu" style={{ left: m.left, top: m.top }} onClick={(e) => e.stopPropagation()}>
       <span className="menu-label">{label}</span>
       <button role="menuitem" className="ib" disabled={!splittable.length} onClick={act(() => splittable.forEach((id) => editor.splitClip(id, ui.playhead)))}>
-        <Scissors size={14} stroke="#C8CEC9" /><span>Split at playhead</span>
+        <Scissors size={14} stroke="#C8CEC9" /><span>{translate('splitAtPlayhead')}</span>
       </button>
       <button role="menuitem" className="ib" onClick={act(() => ui.picked.forEach((x) => editor.duplicateClip(x.id)))}>
-        <Duplicate size={14} stroke="#C8CEC9" /><span>Duplicate</span><span className="kbd">Ctrl D</span>
+        <Duplicate size={14} stroke="#C8CEC9" /><span>{translate('duplicate')}</span><span className="kbd">{"Ctrl D"}</span>
       </button>
       <div className="menu-sep" />
       {unlinkId ? (
         <button role="menuitem" className="ib" onClick={act(() => updateClip(unlinkId, { linked: false }))}>
-          <Unlink size={14} stroke="var(--warn)" /><span>Unlink audio and video</span><span className="kbd">Ctrl L</span>
+          <Unlink size={14} stroke='var(--warn)' /><span>{translate('unlinkAudioAndVideo')}</span><span className="kbd">{"Ctrl L"}</span>
         </button>
       ) : pair && (
         <button role="menuitem" className="ib" onClick={act(() => linkClips(pair.video.id, pair.audio.id))}>
-          <Link size={14} stroke="var(--accent)" /><span>Link audio and video</span><span className="kbd">Ctrl L</span>
+          <Link size={14} stroke="var(--accent)" /><span>{translate('linkAudioAndVideo')}</span><span className="kbd">{"Ctrl L"}</span>
         </button>
       )}
       {audio && (
         <button role="menuitem" className="ib" onClick={act(() => updateAudioClip(audio.id, { muted: !audio.muted }))}>
-          <Mute size={14} stroke="#C8CEC9" /><span>{audio.muted ? 'Unmute audio' : 'Mute audio'}</span><span className="kbd">M</span>
+          <Mute size={14} stroke="#C8CEC9" /><span>{audio.muted ? translate('unmuteAudio') : translate('muteAudio')}</span><span className="kbd">{"M"}</span>
         </button>
       )}
       <div className="menu-sep" />
       <button role="menuitem" className="ib danger" onClick={act(deleteSelection)}>
-        <Trash size={14} /><span>Delete</span><span className="kbd">Del</span>
+        <Trash size={14} /><span>{'Delete'}</span><span className="kbd">{"Del"}</span>
       </button>
     </div>
   );

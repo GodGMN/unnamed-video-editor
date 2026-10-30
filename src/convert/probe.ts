@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import { ALL_FORMATS, BlobSource, Input } from 'mediabunny';
 
 export interface SourceInfo {
@@ -26,7 +27,7 @@ export async function probeSource(file: File): Promise<SourceInfo> {
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   try {
     const video = await input.getPrimaryVideoTrack();
-    if (!video) throw new Error('This file has no video track.');
+    if (!video) throw new Error(translate('thisFileHasNoVideoTrack'));
     const [format, codec, codecString, width, height, stats, duration, audio, decodable] = await Promise.all([
       input.getFormat(),
       video.getCodec(),
@@ -38,7 +39,7 @@ export async function probeSource(file: File): Promise<SourceInfo> {
       input.getPrimaryAudioTrack(),
       video.canDecode().catch(() => false),
     ]);
-    let videoCodec = codec ? CODEC_LABELS[codec] ?? codec.toUpperCase() : 'Unknown codec';
+    let videoCodec = codec ? CODEC_LABELS[codec] ?? codec.toUpperCase() : translate('unknownCodec');
     // hvc1.2.* / hev1.2.* is general_profile_idc 2, i.e. Main 10.
     if (codec === 'hevc' && /^(hvc1|hev1)\.2\./.test(codecString ?? '')) videoCodec += ' Main 10';
     return {

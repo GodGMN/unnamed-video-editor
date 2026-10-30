@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import { ALL_FORMATS, AudioBufferSink, BlobSource, CanvasSink, Input } from 'mediabunny';
 import { STILL_DURATION, animationDuration, newId } from '../editor/model';
 import type { Media } from '../editor/model';
@@ -37,7 +38,7 @@ async function store(id: string, file: File, preview: () => Promise<MediaPreview
 }
 
 async function probeStill(file: File): Promise<Probe> {
-  const image = await createImageBitmap(file).catch(() => { throw new Error('This image could not be decoded.'); });
+  const image = await createImageBitmap(file).catch(() => { throw new Error(translate('thisImageCouldNotBeDecoded')); });
   try {
     const format = (file.type.startsWith('image/') ? file.type.slice(6) : file.name.split('.').pop() ?? '').toLowerCase();
     const container = FORMAT_LABELS[format] ?? format.toUpperCase();
@@ -66,7 +67,7 @@ export async function probeMedia(file: File): Promise<Probe> {
     const [video, audio, duration, format] = await Promise.all([
       input.getPrimaryVideoTrack(), input.getPrimaryAudioTrack(), input.computeDuration(), input.getFormat(),
     ]);
-    if ((!video && !audio) || !Number.isFinite(duration) || duration <= 0) throw new Error('No playable media streams were found.');
+    if ((!video && !audio) || !Number.isFinite(duration) || duration <= 0) throw new Error(translate('noPlayableMediaStreamsWereFound'));
     const [videoOk, audioOk, stats] = await Promise.all([
       video ? video.canDecode() : true, audio ? audio.canDecode() : true, video?.computePacketStats(120),
     ]);

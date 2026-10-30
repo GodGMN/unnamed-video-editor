@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-/** Preview height in pixels, or the project's output height. */
+/** The preview's short side in pixels, or the project's full output size. */
 export type PreviewResolution = 360 | 540 | 720 | 'full';
 
 export interface Settings {
@@ -31,8 +31,10 @@ export function useSettings() {
   return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => current);
 }
 
-/** The preview canvas size: never larger than the output. */
+/** The preview canvas size: never larger than the output, with `resolution` as its short side. */
 export function previewSize(output: { width: number; height: number }, resolution: PreviewResolution) {
-  const height = resolution === 'full' ? output.height : Math.min(resolution, output.height);
-  return { width: Math.round(height * output.width / output.height), height };
+  const long = Math.max(output.width, output.height), short = Math.min(output.width, output.height);
+  const side = resolution === 'full' ? short : Math.min(resolution, short);
+  const scale = side / short;
+  return output.width < output.height ? { width: side, height: Math.round(long * scale) } : { width: Math.round(long * scale), height: side };
 }

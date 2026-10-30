@@ -1,6 +1,9 @@
+import { useT } from '../i18n';
+import { t as translate } from '../i18n/core';
 import { Brand } from './Brand';
 
 export function DesktopOnly({ width }: { width: number }) {
+  useT();
   return (
     <div className="gate">
       <Brand large />
@@ -11,9 +14,9 @@ export function DesktopOnly({ width }: { width: number }) {
             <rect x="5" y="5" width="46" height="24" rx="2" fill="var(--bg)" opacity="0.2" />
             <rect x="20" y="38" width="16" height="4" rx="2" fill="var(--accent)" />
           </svg>
-          <h1>Open this on a bigger screen<span className="dot">.</span></h1>
-          <p>The editor needs a window at least 1280 px wide. Widen your browser or switch to a desktop computer — your project stays where you left it.</p>
-          <span className="pill">Current width: {width} px</span>
+          <h1>{translate('openThisOnABiggerScreen')}<span className="dot">.</span></h1>
+          <p>{translate('theEditorNeedsAWindowAtLeast1280Px')}</p>
+          <span className="pill">{translate('currentWidthPx', { value1: width })}</span>
         </div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import { useCallback, useRef, useState } from 'react';
 import type { Editor } from '../editor/useProject';
 import { removeMediaFiles } from './files';
@@ -7,7 +8,7 @@ import type { Probe } from './import';
 /** Where dropped files go on the timeline: a track, and where a first clip of `duration` seconds starts. */
 export interface Placement { trackId: string; timeFor: (duration: number) => number }
 
-const message = (file: File, error: unknown) => `${file.name}: ${error instanceof Error ? error.message : 'Import failed'}`;
+const message = (file: File, error: unknown) => `${file.name}: ${error instanceof Error ? error.message : translate('importFailed')}`;
 
 /**
  * Imports files in two steps. Every file is probed straight away, which only reads its header, and
