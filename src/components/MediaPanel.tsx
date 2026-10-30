@@ -100,7 +100,7 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
           <span className="count">{media.length}</span>
         </div>
         <input ref={input} type="file" multiple accept="video/*,audio/*,.mov,.mkv" aria-label="Import media files" hidden onChange={(e) => { if (e.target.files) ingest(e.target.files); e.target.value = ''; }} />
-        <button onClick={() => input.current?.click()} className="ib outlined" style={{ height: 30, padding: '0 10px', fontSize: 12, fontWeight: 500 }}>
+        <button onClick={() => input.current?.click()} className="ib outlined" style={{ ['--h' as string]: '30px', padding: '0 10px', fontSize: 12, fontWeight: 500 }}>
           <Plus size={13} strokeWidth={2.2} />
           Import
         </button>

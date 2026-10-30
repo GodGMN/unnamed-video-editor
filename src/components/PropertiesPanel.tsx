@@ -86,7 +86,7 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
       <div className="props-section">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span className="eyebrow">Position &amp; scale</span>
-          <button className="ib" style={{ height: 26, padding: '0 8px', fontSize: 11, color: 'var(--text-dim)' }}
+          <button className="ib" style={{ ['--h' as string]: '26px', padding: '0 8px', fontSize: 11, color: 'var(--text-dim)' }}
             onClick={() => upd({ fit: 'fit', x: 0, y: 0, scale: 100, rot: 0, cropT: 0, cropR: 0, cropB: 0, cropL: 0 })}>
             Reset
           </button>
@@ -117,7 +117,8 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
           <label>Top<NumberField min={0} step={2} value={cs.cropT} defaultValue={VIDEO_CLIP_DEFAULTS.cropT} onChange={crop('cropT')} /></label>
           <span />
           <label>Left<NumberField min={0} step={2} value={cs.cropL} defaultValue={VIDEO_CLIP_DEFAULTS.cropL} onChange={crop('cropL')} /></label>
-          <div style={{ position: 'relative', width: '100%', maxWidth: 112, aspectRatio: '16 / 9', background: src.tone, borderRadius: 4, overflow: 'hidden' }} aria-hidden="true">
+          {/* A 16:9 box, so 25% of its height is 9/16 of that share of its width. */}
+          <div style={{ position: 'relative', width: '100%', maxWidth: 112, aspectRatio: '16 / 9', background: src.tone, borderRadius: 'calc(var(--corner) * 900% / 16) / calc(var(--corner) * 100%)', overflow: 'hidden' }} aria-hidden="true">
             <div style={{ position: 'absolute', inset: 0, background: 'rgba(12,14,13,0.7)' }} />
             <div style={{
               position: 'absolute', background: src.tone, outline: '1.5px solid var(--accent)',
@@ -177,7 +178,7 @@ function AudioClipProps({ editor, clip: cs }: { editor: Editor; clip: AudioClip 
       <div className="props-section" style={{ paddingTop: 4, borderTop: 0, borderBottom: '1px solid var(--line)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span className="eyebrow">Level</span>
-          <button className="ib outlined" style={{ height: 28, padding: '0 9px', fontSize: 12, color: cs.muted ? 'var(--warn)' : 'var(--text-soft)' }}
+          <button className="ib outlined" style={{ ['--h' as string]: '28px', padding: '0 9px', fontSize: 12, color: cs.muted ? 'var(--warn)' : 'var(--text-soft)' }}
             aria-pressed={cs.muted} onClick={() => updateClip(id, { muted: !cs.muted })}>
             <Mute size={13} />
             {cs.muted ? 'Muted' : 'Mute'}
@@ -246,7 +247,7 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextClip }) {
     <div className="props-body" style={{ padding: 14, gap: 14 }}>
       <label className="field-label" style={{ gap: 6 }}>Text
         <textarea
-          style={{ background: 'var(--inset)', border: '1px solid var(--control)', borderRadius: 8, color: 'var(--text)', font: '500 13px var(--sans)', padding: '8px 10px', minHeight: 64, resize: 'vertical' }}
+          style={{ background: 'var(--inset)', border: '1px solid var(--control)', borderRadius: 'var(--radius-sm)', color: 'var(--text)', font: '500 13px var(--sans)', padding: '8px 10px', minHeight: 64, resize: 'vertical' }}
           value={tx.content} onChange={(e) => updateText({ content: e.target.value })} />
       </label>
       <Slider label="Font size" value={tx.size} unit=" px" min={24} max={160} step={2} onChange={(v) => updateText({ size: v })} />
@@ -267,7 +268,7 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextClip }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Position</span>
-          <button className="ib" style={{ height: 24, padding: '0 8px', fontSize: 11, color: 'var(--text-dim)' }}
+          <button className="ib" style={{ ['--h' as string]: '24px', padding: '0 8px', fontSize: 11, color: 'var(--text-dim)' }}
             onClick={() => updateText({ x: 0, y: 0 })} disabled={!tx.x && !tx.y}>
             Reset offset
           </button>
