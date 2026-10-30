@@ -9,6 +9,8 @@ export type JobState =
   | { status: 'error'; message: string; outOfMemoryAt?: number };
 
 export interface Job {
+  /** The Media library item being converted, so the dialog can be reopened from elsewhere. */
+  mediaId: string;
   file: File;
   sourceName: string;
   source: SourceInfo;
@@ -32,10 +34,10 @@ function set(next: Job | null) {
   listeners.forEach((l) => l());
 }
 
-export function startConversion(file: File, source: SourceInfo, options: ConvertOptions, addToTimeline: boolean) {
+export function startConversion(mediaId: string, file: File, source: SourceInfo, options: ConvertOptions, addToTimeline: boolean) {
   controller?.abort();
   const ctrl = controller = new AbortController();
-  const base = { file, sourceName: file.name, source, options, addToTimeline, out: outputSpec(source, options) };
+  const base = { mediaId, file, sourceName: file.name, source, options, addToTimeline, out: outputSpec(source, options) };
   const update = (state: JobState) => { if (controller === ctrl) set({ ...base, state }); };
   const t0 = performance.now();
   update({ status: 'running', progress: { stage: 'load', mediaTime: 0, speed: 0 } });
@@ -53,6 +55,10 @@ export function startConversion(file: File, source: SourceInfo, options: Convert
         : { status: 'error', message: e instanceof Error ? e.message : String(e) });
     },
   );
+}
+
+export function progressPercent({ stage, mediaTime }: ConvertProgress, duration: number) {
+  return stage === 'load' ? 0 : stage === 'save' ? 100 : mediaTime / duration * 100;
 }
 
 /** Stops a running conversion and forgets the job. */

@@ -52,7 +52,7 @@ export function App() {
   const width = useWindowWidth();
   const editor = useProject();
   const [exporting, setExporting] = useState(false);
-  const [converting, setConverting] = useState<Media | null>(null);
+  const [converting, setConverting] = useState<Pick<Media, 'id' | 'name'> | null>(null);
   useConvertedMedia(editor);
 
   if (width < MIN_WIDTH) return <DesktopOnly width={width} />;
@@ -65,7 +65,8 @@ export function App() {
 
   return (
     <div className="editor">
-      <TopBar projectName={project.name} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)} />
+      <TopBar projectName={project.name} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
+        onShowConversion={(id, name) => setConverting({ id, name })} />
       <div className="workspace">
         <MediaPanel onImport={editor.addMedia} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
         <PreviewPanel editor={editor} totalTime={totalTime} />
