@@ -556,8 +556,8 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .home-search input::placeholder { color: var(--text-muted); }
 .home-search kbd { font: 9px var(--sans); border: 1px solid var(--control); padding: 2px 4px; border-radius: 3px; white-space: nowrap; }
 .home-list-heading select { border: 0; background: var(--bg); color: var(--text-dim); font: 11px var(--sans); padding: 7px 4px; cursor: pointer; }
-.home-project-list { overflow-y: auto; min-height: 0; flex: 1; padding-right: 7px; }
-.home-project-row { display: flex; align-items: center; gap: 8px; padding: 3px 10px 3px 6px; border-bottom: 1px solid var(--line); border-radius: 6px; }
+.home-project-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; flex: 1; padding-right: 7px; }
+.home-project-row { display: flex; align-items: center; gap: 8px; padding: 3px 10px 3px 6px; flex-shrink: 0; border-radius: 6px; }
 .home-project-row:hover, .home-project-row:focus-within { background: rgb(198 240 191 / .025); }
 .project-open { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; background: none; border: 0; padding: 6px 0; text-align: left; }
 .project-row-name { display: block; flex: 1; min-width: 0; }
