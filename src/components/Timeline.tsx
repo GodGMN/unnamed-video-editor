@@ -1,4 +1,4 @@
-import type { MouseEvent, PointerEvent, ReactNode } from 'react';
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useRef } from 'react';
 import { MAIN_IDS, PPS, SOURCES, TRANSITION_BETWEEN, TRANSITION_NAMES, curveName, filmstrip } from '../editor/model';
 import type { ClipId, Tool, TrackKey } from '../editor/model';
@@ -260,6 +260,20 @@ function AudioClip({ project, id, onMenu }: ClipProps) {
     });
   };
 
+  // The top edge is a gain line: drag up for louder, down for quieter, 1% per pixel.
+  const volDown = (e: PointerEvent<HTMLButtonElement>) => {
+    select({ kind: 'audio', id });
+    const v0 = cs.vol;
+    startDrag(e, (_dx, dy) => updateClip(id, { vol: Math.round(Math.max(0, Math.min(200, v0 - dy))) }));
+  };
+  const volKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const step = e.shiftKey ? 10 : 1;
+    const d = e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0;
+    if (!d) return;
+    e.preventDefault();
+    updateClip(id, { vol: Math.max(0, Math.min(200, cs.vol + d)) });
+  };
+
   return (
     <div className={'audio-clip' + (selected ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked')}
       style={{ left: l.vs * PPS + 1, width }}>
@@ -294,6 +308,9 @@ function AudioClip({ project, id, onMenu }: ClipProps) {
           <span />
         </button>
       )}
+      <button className="vol-edge" style={{ left: fiW + 10, right: foW + 10 }}
+        aria-label={`Volume ${cs.vol}%, drag up or down to adjust`} title="Drag up or down to set the volume"
+        onPointerDown={volDown} onKeyDown={volKey} />
       <span className="audio-badge">
         {!cs.linked && <span className="unlinked">unlinked</span>}
         {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
