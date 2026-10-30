@@ -124,7 +124,7 @@ export function PreviewPanel({ project, clipId, totalTime }: Props) {
           <span className="trim-time" style={{ textAlign: 'right' }}>{fmtTime(cs.outS)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
-          Playhead <span className="mono" style={{ color: 'var(--text)' }}>{fmtTime(scrub)}</span> · drag the handles to trim, the line to scrub
+          Playhead <span className="mono" style={{ color: 'var(--text)' }}>{fmtTime(scrub)}</span>
         </div>
       </div>
 
