@@ -346,6 +346,11 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .fade-layer > * { pointer-events: auto; }
 .fade-handle { position: absolute; top: -6px; width: 20px; height: 20px; padding: 0; border: 0; background: transparent; cursor: ew-resize; touch-action: none; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .fade-handle > span { --h: 10px; width: var(--h); height: var(--h); border-radius: calc(var(--h) * var(--corner)); background: var(--text-bright); border: 2px solid var(--accent); }
+/* An unused fade is a tab on top of the trim edge, marked with a little ramp, so the corner reads as one handle. */
+.fade-handle.flush > span { --ramp: rgba(12, 14, 13, 0.85); position: absolute; top: 6px; width: 12px; height: 14px; border: 0; background-color: var(--accent); }
+.fade-handle.flush.in > span { left: 10px; border-radius: var(--r) 0 4px 0; background-image: radial-gradient(circle at 35% 32%, var(--accent) 1.5px, transparent 2px), linear-gradient(to bottom right, var(--ramp) 50%, transparent 52%); }
+.fade-handle.flush.out > span { right: 10px; border-radius: 0 var(--r) 0 4px; background-image: radial-gradient(circle at 65% 32%, var(--accent) 1.5px, transparent 2px), linear-gradient(to bottom left, var(--ramp) 50%, transparent 52%); }
+.fade-handle.flush:hover > span { background-color: var(--text-bright); }
 .vol-clip { position: absolute; inset: 0; border-radius: var(--r); overflow: hidden; pointer-events: none; }
 .vol-headroom { position: absolute; left: 0; right: 0; top: 0; background: rgba(12, 14, 13, 0.45); backdrop-filter: grayscale(1) brightness(0.55); }
 .vol-line { position: absolute; left: 0; right: 0; height: 12px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 1; }
