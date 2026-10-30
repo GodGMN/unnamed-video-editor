@@ -452,12 +452,16 @@ function TrimHandles({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
   // Trims the clip's source in/out points, clamped to the media like the trim scrubber.
   const edgeDown = (which: 'in' | 'out') => (e: PointerEvent<HTMLSpanElement>) => {
     if (e.button !== 0) return;
-    const { id, inS, outS } = cs;
+    const { id, start, inS, outS } = cs;
     const minDuration = Math.min(0.5, src.duration);
     const round = (x: number) => Math.round(x * 100) / 100;
+    const round6 = (x: number) => Math.round(x * 1e6) / 1e6;
     startDrag(e, (dx) => {
-      if (which === 'in') trimClip(id, { inS: round(Math.max(0, Math.min(outS - minDuration, inS + dx / pps))) });
-      else trimClip(id, { outS: round(Math.min(src.duration, Math.max(inS + minDuration, outS + dx / pps))) });
+      // The start edge moves the clip's start along with its in point, so the end stays put.
+      if (which === 'in') {
+        const d = round(Math.max(-inS, -start, Math.min(outS - minDuration - inS, dx / pps)));
+        trimClip(id, { inS: round6(inS + d), start: round6(start + d) });
+      } else trimClip(id, { outS: round(Math.min(src.duration, Math.max(inS + minDuration, outS + dx / pps))) });
     });
   };
 
