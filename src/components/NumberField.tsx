@@ -32,6 +32,7 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
     const x0 = e.clientX;
     const v0 = value;
     let dx = 0;
+    let travel = 0;
     let lastX = x0;
     let cursorY = e.clientY;
     let moved = false;
@@ -48,9 +49,13 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
     };
     const move = (ev: globalThis.PointerEvent) => {
       const locked = document.pointerLockElement === el;
-      dx += locked ? ev.movementX : ev.clientX - lastX;
+      const delta = locked ? ev.movementX : ev.clientX - lastX;
+      dx += delta;
+      travel += Math.abs(delta);
+      // Stop accumulating past min/max, so reversing the drag moves the value straight away.
+      dx = Math.min((max - v0) / step * PX_PER_STEP, Math.max((min - v0) / step * PX_PER_STEP, dx));
       lastX = ev.clientX;
-      if (!moved && Math.abs(dx) > 2) { moved = true; lock(); }
+      if (!moved && travel > 2) { moved = true; lock(); }
       if (!moved) return;
       commit(v0 + Math.round(dx / PX_PER_STEP) * step);
       ticks.current?.style.setProperty('--jog', `${dx}px`);
