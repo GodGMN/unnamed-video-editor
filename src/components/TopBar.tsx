@@ -35,14 +35,14 @@ export function TopBar({ projectName, clipCount, totalTime, onExport }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button className="ib square" aria-label="Undo (Ctrl+Z)" title="Undo · Ctrl+Z"><Undo stroke="#C8CEC9" /></button>
         <button className="ib square" aria-label="Redo (Ctrl+Shift+Z)" title="Redo · Ctrl+Shift+Z"><Redo stroke="#C8CEC9" /></button>
+        <button className="ib square" onClick={toggleFullscreen} aria-pressed={fullscreen}
+          aria-label={fullscreen ? 'Exit full screen (F11)' : 'Full screen (F11)'} title={fullscreen ? 'Exit full screen · F11' : 'Full screen · F11'}>
+          {fullscreen ? <Minimize stroke="#C8CEC9" /> : <Maximize stroke="#C8CEC9" />}
+        </button>
       </div>
       <button className="export-btn" onClick={onExport}>
         <Download size={15} strokeWidth={2.2} />
         Export
-      </button>
-      <button className="ib square" onClick={toggleFullscreen} aria-pressed={fullscreen}
-        aria-label={fullscreen ? 'Exit full screen (F11)' : 'Full screen (F11)'} title={fullscreen ? 'Exit full screen · F11' : 'Full screen · F11'}>
-        {fullscreen ? <Minimize stroke="#C8CEC9" /> : <Maximize stroke="#C8CEC9" />}
       </button>
     </header>
   );
