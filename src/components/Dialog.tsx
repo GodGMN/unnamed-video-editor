@@ -36,7 +36,7 @@ export function Dialog({ id, className, title, subtitle, warn, width, onClose, c
   }, [opener]);
 
   return (
-    <dialog ref={modal} className="scrim" aria-labelledby={id} onKeyDown={e => {
+    <dialog ref={modal} className="scrim" role="dialog" aria-modal="true" aria-labelledby={id} onKeyDown={e => {
       if (e.key !== 'Tab' || e.defaultPrevented || (e.target as Element).closest('dialog') !== e.currentTarget) return;
       const controls = [...e.currentTarget.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]')]
         .filter(el => el.tabIndex >= 0 && !el.matches(':disabled') && !el.closest('[inert]') && el.getClientRects().length > 0);

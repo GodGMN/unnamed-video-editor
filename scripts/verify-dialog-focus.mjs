@@ -1,3 +1,4 @@
+// Start Vite, then run with PLAYWRIGHT_MODULE and BASE_URL when using external installations.
 import assert from 'node:assert/strict';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
@@ -33,6 +34,17 @@ try {
   await page.getByRole('button', { name: 'New project', exact: true }).click();
   const exp = page.getByRole('button', { name: /Export/ }).first();
   await exp.click(); await contained(dialog); await escapeTo(exp);
+  const editorSettings = page.getByRole('button', { name: 'Settings', exact: true });
+  await editorSettings.click();
+  const play = page.locator('.play-btn');
+  const labelBefore = await play.getAttribute('aria-label');
+  await page.evaluate(() => window.addEventListener('keydown', event => {
+    if (event.code === 'Space') window.modalSpaceHandled = event.defaultPrevented;
+  }, { once: true }));
+  await page.keyboard.press('Space');
+  assert.equal(await play.getAttribute('aria-label'), labelBefore, 'Space in a modal started editor playback');
+  assert.equal(await page.evaluate(() => window.modalSpaceHandled), false, 'background playback consumed Space');
+  await escapeTo(editorSettings);
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
   await page.evaluate(async () => {
     const { createProject } = await import('/src/editor/storage.ts');

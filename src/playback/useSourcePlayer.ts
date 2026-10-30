@@ -77,7 +77,7 @@ export function useSourcePlayer(media: Media | null, volume: number) {
     if (!id) return;
     const key = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
-      if (event.code !== 'Space' || event.repeat || target.closest('input, textarea, select, button, [contenteditable=true]')) return;
+      if (document.querySelector('[aria-modal=true]') || event.code !== 'Space' || event.repeat || target.closest('input, textarea, select, button, [contenteditable=true]')) return;
       event.preventDefault(); void toggle();
     };
     window.addEventListener('keydown', key);
