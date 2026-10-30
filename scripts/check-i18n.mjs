@@ -17,7 +17,7 @@ try {
   });
   await page.goto(process.env.I18N_URL ?? 'http://127.0.0.1:5158');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByLabel('Language', { exact: true }).selectOption('de');
+  await page.getByRole('group', { name: 'Language', exact: true }).getByRole('button', { name: 'Deutsch (test)' }).click();
   await page.getByRole('heading', { name: 'Einstellungen' }).waitFor();
   assert.equal(await page.locator('html').getAttribute('lang'), 'de');
   await page.screenshot({ path: '/tmp/task-58-test-locale.png' });
@@ -30,7 +30,7 @@ try {
   await page.reload();
   await page.getByRole('button', { name: 'Einstellungen', exact: true }).click();
   await page.getByRole('heading', { name: 'Einstellungen' }).waitFor();
-  await page.getByLabel('Sprache', { exact: true }).selectOption('en');
+  await page.getByRole('group', { name: 'Sprache', exact: true }).getByRole('button', { name: 'English' }).click();
   await page.getByRole('heading', { name: 'Settings' }).waitFor();
   await page.screenshot({ path: process.env.I18N_SCREENSHOT ?? '/tmp/task-58-settings.png' });
   console.log('PASS: live UI switching, persistence across reload, pluralization, interpolation, missing-key warning and fallback, unknown locale, regional detection, Intl number formatting.');
