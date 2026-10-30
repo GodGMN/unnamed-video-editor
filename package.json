@@ -12,6 +12,8 @@
   "dependencies": {
     "@fontsource/figtree": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
+    "@mediabunny/aac-encoder": "^1.65.0",
+    "mediabunny": "^1.65.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
