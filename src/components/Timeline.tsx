@@ -1,8 +1,8 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
-import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
+import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, findClip, partnersOf, pickedPair, clipDuration, clipEnd, snapClipStart } from '../editor/model';
-import type { AudioClip, ClipSelection, TextItem, TransitionType, Tool, Track, VideoClip } from '../editor/model';
+import type { AudioClip, ClipSelection, Project, TextItem, TransitionType, Tool, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { CutLine, Crossfade, Cursor, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
@@ -44,6 +44,22 @@ function overlapInsets(clips: (VideoClip | AudioClip)[]) {
     get(o.from.id).tail = o.end - o.start;
   }
   return insets;
+}
+
+const TRANSITION_MIME = 'application/x-timeline-transition';
+const isTransitionDrag = (e: { dataTransfer: DataTransfer }) => e.dataTransfer.types.includes(TRANSITION_MIME);
+
+/**
+ * The video clip whose outgoing transition a drop at `time` on `track` sets, or null. Audio overlaps
+ * stand in for their linked video clips' overlap; `slop` widens narrow overlaps so they're easy to hit.
+ */
+function transitionTargetAt(project: Project, track: Track, time: number, slop: number): string | null {
+  if (track.kind === 'text') return null;
+  const hit = overlapsOf<VideoClip | AudioClip>(track.clips).find((o) => time >= o.start - slop && time <= o.end + slop);
+  if (!hit) return null;
+  if (track.kind === 'video') return hit.from.id;
+  const video = partnersOf(project, hit.from).map((c) => findClip(project, c.id)!).find((f) => f.track.kind === 'video');
+  return video && overlapsOf<VideoClip | AudioClip>(video.track.clips).some((o) => o.from.id === video.clip.id) ? video.clip.id : null;
 }
 
 export function Timeline({ editor }: { editor: Editor }) {
@@ -94,6 +110,13 @@ export function Timeline({ editor }: { editor: Editor }) {
 
   const startDrag = useDrag();
   const [snapping, setSnapping] = useState(true);
+  // The video clip whose transition a dragged transition would replace, for drop highlighting.
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  useEffect(() => {
+    const clear = () => setDropTarget(null);
+    window.addEventListener('dragend', clear);
+    return () => window.removeEventListener('dragend', clear);
+  }, []);
   // Ticks run past the content and on to the right edge of the viewport when zoomed out.
   const lastTick = Math.max(Math.ceil(layout.end) + 2, Math.ceil(viewW / pps));
   const tlWidth = (Math.ceil(layout.end) + 2) * pps + 20;
@@ -118,6 +141,34 @@ export function Timeline({ editor }: { editor: Editor }) {
     const x0 = e.clientX;
     seek(x0);
     startDrag(e, (dx) => seek(x0 + dx));
+  };
+
+  // Media drops place a clip; transition drops land anywhere over an overlap, including its trim handles.
+  const transitionTarget = (e: DragEvent<HTMLDivElement>, t: Track) =>
+    transitionTargetAt(project, t, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps, 6 / pps);
+  const onTrackDragOver = (e: DragEvent<HTMLDivElement>, t: Track) => {
+    if (isTransitionDrag(e)) {
+      const target = transitionTarget(e, t);
+      setDropTarget(target);
+      if (target) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }
+    } else if (t.kind !== 'text' && e.dataTransfer.types.includes('application/x-editor-media')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  };
+  const onTrackDrop = (e: DragEvent<HTMLDivElement>, t: Track) => {
+    e.preventDefault();
+    setDropTarget(null);
+    if (isTransitionDrag(e)) {
+      const type = e.dataTransfer.getData(TRANSITION_MIME);
+      const target = transitionTarget(e, t);
+      if (!target || !Object.hasOwn(TRANSITION_NAMES, type)) return;
+      editor.updateTransition(target, { type: type as TransitionType });
+      select({ kind: 'trans', id: target });
+      return;
+    }
+    const id = e.dataTransfer.getData('application/x-editor-media');
+    if (id) editor.placeMedia(id, t.id, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps);
   };
 
   const onTextDown = (item: TextItem) => (e: PointerEvent<HTMLButtonElement>) => {
@@ -205,8 +256,8 @@ export function Timeline({ editor }: { editor: Editor }) {
             {project.tracks.map((t) => {
               const insets = t.kind === 'text' ? null : overlapInsets(t.clips);
               return (
-              <div key={t.id} className="track" onDragOver={(e) => { if (t.kind !== 'text' && e.dataTransfer.types.includes('application/x-editor-media')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
-                onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('application/x-editor-media'); if (id) editor.placeMedia(id, t.id, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps); }}
+              <div key={t.id} className="track" onDragOver={(e) => onTrackDragOver(e, t)} onDrop={(e) => onTrackDrop(e, t)}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null); }}
                 data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
                 {t.kind === 'text' && t.items.map((x) => (
                   <button key={x.id} className="text-clip" style={{ left: x.start * pps + 1, width: x.duration * pps - 2 }}
@@ -221,7 +272,7 @@ export function Timeline({ editor }: { editor: Editor }) {
                 {t.kind === 'video' && (
                   <>
                     {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} inset={insets!.get(c.id)} onMenu={onContextMenu('clip', c.id)} />)}
-                    <Transitions pps={pps} editor={editor} clips={t.clips} />
+                    <Transitions pps={pps} editor={editor} clips={t.clips} dropTarget={dropTarget} />
                     <TrimHandles pps={pps} editor={editor} clips={t.clips} />
                   </>
                 )}
@@ -369,7 +420,7 @@ function TrimHandles({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
 }
 
 /** A chip on every boundary between adjacent clips; a full-height band where they overlap. */
-function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[]; pps: number }) {
+function Transitions({ editor, clips, pps, dropTarget }: { editor: Editor; clips: VideoClip[]; pps: number; dropTarget: string | null }) {
   const { ui, layout, select } = editor;
   return (
     <>
@@ -382,21 +433,12 @@ function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
         if (overlap < -1e-6) return null;
         const tt = c.transitionOut ?? DEFAULT_TRANSITION;
         const w = overlap > 0 ? overlap * pps - 2 : 26;
-        const typeFrom = (e: { dataTransfer: DataTransfer }) => e.dataTransfer.getData('application/x-timeline-transition');
         return (
-          <button key={c.id} className={overlap > 0 ? 'overlap-band' : 'trans-chip'}
+          <button key={c.id} className={overlap > 0 ? 'overlap-band' + (dropTarget === c.id ? ' drop-target' : '') : 'trans-chip'}
             style={{ left: overlap > 0 ? overlapStart * pps + 1 : overlapStart * pps - w / 2, width: w }}
             aria-label={`${TRANSITION_NAMES[tt.type]} transition between ${layout.clips[c.id].name} and ${layout.clips[next.id].name}`}
             title={overlap > 0 ? `${overlap.toFixed(2)}s overlap · drop a transition here` : 'Overlap clips to add a transition'}
             aria-pressed={ui.sel?.kind === 'trans' && ui.sel.id === c.id}
-            onDragOver={e => { if (overlap > 0 && e.dataTransfer.types.includes('application/x-timeline-transition')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
-            onDrop={e => {
-              e.preventDefault();
-              const type = typeFrom(e);
-              if (overlap <= 0 || !['cut', 'fade', 'crossfade'].includes(type)) return;
-              editor.updateTransition(c.id, { type: type as TransitionType });
-              select({ kind: 'trans', id: c.id });
-            }}
             onClick={() => select({ kind: 'trans', id: c.id })}>
             {(overlap <= 0 || w >= 22) && (
               <span className="trans-icon">
