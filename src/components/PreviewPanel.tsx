@@ -1,6 +1,7 @@
+import { PreviewStrip } from '../media/PreviewStrip';
 import { useState } from 'react';
 import type { CSSProperties, PointerEvent } from 'react';
-import { filmstrip, findClip, fmtTime, textTracks, videoTracks } from '../editor/model';
+import { findClip, fmtTime, textTracks, videoTracks } from '../editor/model';
 import type { Clip, Media, Project, TimelineLayout, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
@@ -153,9 +154,7 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: Clip; src: Medi
       <div className="trim-row">
         <span className="trim-time">{fmtTime(cs.inS)}</span>
         <div className="trim-bar" style={{ background: src.tone }}>
-          <div className="strip" style={{ borderRadius: 8 }} aria-hidden="true">
-            {filmstrip(560, src.seed).map((a, i) => <span key={i} style={{ background: `rgba(255,255,255,${a.toFixed(3)})` }} />)}
-          </div>
+          <PreviewStrip media={src} width={560} />
           <div className="trim-shade" style={{ left: 0, width: p(cs.inS), borderRadius: '8px 0 0 8px' }} aria-hidden="true" />
           <div className="trim-shade" style={{ left: p(cs.outS), right: 0, borderRadius: '0 8px 8px 0' }} aria-hidden="true" />
           <div style={{ position: 'absolute', top: 0, bottom: 0, left: p(cs.inS), width: usePct, borderTop: `2px solid ${accent}`, borderBottom: `2px solid ${accent}`, pointerEvents: 'none' }} aria-hidden="true" />
