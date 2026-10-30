@@ -74,6 +74,19 @@ export interface Fades {
   curveOut: number;
 }
 
+/** Makes pixels near one colour transparent, e.g. a green screen. */
+export interface ChromaKey {
+  enabled: boolean;
+  /** `#RRGGBB` colour to remove. */
+  color: string;
+  /** Percent: how far from `color` a pixel may be and still be removed completely. */
+  tolerance: number;
+  /** Percent: width of the partly transparent edge beyond `tolerance`. */
+  softness: number;
+  /** Percent: how much of the key colour's tint is taken out of the pixels that stay. */
+  spill: number;
+}
+
 export interface VideoClip extends ClipBase, Fades {
   /** Output-pixel offset from centre. */
   x: number;
@@ -90,6 +103,7 @@ export interface VideoClip extends ClipBase, Fades {
   cropL: number;
   /** Transition into the next adjacent clip on the same track; `null` is a plain cut. */
   transitionOut: Transition | null;
+  key: ChromaKey;
 }
 
 export interface AudioClip extends ClipBase, Fades {
@@ -195,6 +209,8 @@ export interface EditorUi {
   scrub: number;
   /** Timeline playhead position, in sequence seconds. */
   playhead: number;
+  /** The video clip whose key colour the next click on the preview picks, or null. */
+  keyPick: string | null;
 }
 
 /* ---------- Constants ---------- */
@@ -205,8 +221,9 @@ export const DEFAULT_TRANSITION: Transition = { type: 'cut', duration: 0.5 };
 type ClipDefaults<C> = Omit<C, 'id' | 'mediaId' | 'start' | 'inS' | 'outS' | 'linkId'>;
 /** Property values of a fresh clip; also what the properties panel's reset buttons restore. */
 export const NO_FADES: Fades = { fadeIn: 0, fadeOut: 0, curveIn: 0, curveOut: 0 };
+export const NO_KEY: ChromaKey = { enabled: false, color: '#00B140', tolerance: 25, softness: 20, spill: 50 };
 export const VIDEO_CLIP_DEFAULTS: ClipDefaults<VideoClip> = {
-  linked: true, x: 0, y: 0, scale: 100, rot: 0, fit: 'fit', cropT: 0, cropR: 0, cropB: 0, cropL: 0, transitionOut: null, ...NO_FADES,
+  linked: true, x: 0, y: 0, scale: 100, rot: 0, fit: 'fit', cropT: 0, cropR: 0, cropB: 0, cropL: 0, transitionOut: null, key: NO_KEY, ...NO_FADES,
 };
 export const AUDIO_CLIP_DEFAULTS: ClipDefaults<AudioClip> = {
   linked: true, gainDb: 0, muted: false, ...NO_FADES,
