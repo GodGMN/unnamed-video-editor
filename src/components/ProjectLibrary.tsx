@@ -148,7 +148,7 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
               <button className="project-open" disabled={!!busy} aria-label={translate('projectHomeOpen', { name: entry.project.name })} onClick={() => void run(translate('projectHomeOpeningProject'), () => open(entry.id))}>
                 <ProjectArtwork project={entry.project} /><span className="project-row-name"><strong><span>{entry.project.name}</span>{entry.favorite && <Star size={12} fill="currentColor" />}</strong><small>{durations.get(entry.id) ? `${fmtShortDuration(durations.get(entry.id)!)} · ${entry.project.output.width} × ${entry.project.output.height}` : translate('projectHomeEmptyProject')}</small></span><time dateTime={new Date(entry.updatedAt).toISOString()}>{dateLabel(entry.updatedAt)}</time><ChevronRight size={16} />
               </button>
-              <ActionMenu label={translate('projectHomeActionsFor', { name: entry.project.name })} actions={actions(entry)} disabled={!!busy} />
+              <ActionMenu contextMenuOnParent label={translate('projectHomeActionsFor', { name: entry.project.name })} actions={actions(entry)} disabled={!!busy} />
             </article>)}
             {loading && <div className="home-empty" role="status">{translate('projectHomeLoadingYourProjects')}</div>}
             {!loading && !filtered.length && entries.length > 0 && <div className="home-empty"><Search size={28} strokeWidth={1} /><h3>{query ? translate('projectHomeNoMatchingProjects') : translate('projectHomeNoFavoritesYet')}</h3><p>{query ? translate('projectHomeTryADifferentName') : translate('projectHomeAddFavoritesHint')}</p>{query && <button className="home-text-button" onClick={() => setQuery('')}>{translate('projectHomeClearSearch')}</button>}</div>}
