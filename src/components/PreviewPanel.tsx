@@ -51,11 +51,11 @@ export function PreviewPanel({ editor, totalTime }: Props) {
           {fmtTime(ui.playhead)}<span style={{ color: 'var(--text-muted)' }}> / {totalTime}</span>
         </span>
         <div style={{ flex: '1 1 auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
-          <button className="ib transport" onClick={() => playback.seek(0)} aria-label="Go to start"><SkipStart fill="#C8CEC9" /></button>
+          <button className="ib transport" onClick={() => playback.seek(editor.range.start)} aria-label="Go to start"><SkipStart fill="#C8CEC9" /></button>
           <button className="ib transport" onClick={() => playback.seek(ui.playhead - 1 / project.output.fps)} aria-label="Back one frame"><ChevronLeft stroke="#C8CEC9" strokeWidth={2.2} /></button>
           <button className="play-btn" onClick={() => void playback.toggle()} aria-label={playback.playing ? 'Pause (Space)' : 'Play (Space)'} title="Play / pause · Space">{playback.playing ? <span aria-hidden="true">Ⅱ</span> : <Play fill="var(--bg)" />}</button>
           <button className="ib transport" onClick={() => playback.seek(ui.playhead + 1 / project.output.fps)} aria-label="Forward one frame"><ChevronRight stroke="#C8CEC9" strokeWidth={2.2} /></button>
-          <button className="ib transport" onClick={() => playback.seek(editor.layout.end)} aria-label="Go to end"><SkipEnd fill="#C8CEC9" /></button>
+          <button className="ib transport" onClick={() => playback.seek(editor.range.end)} aria-label="Go to end"><SkipEnd fill="#C8CEC9" /></button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, justifyContent: 'flex-end' }}>
           <button className="ib transport" aria-label={silent ? 'Unmute preview' : 'Mute preview'} aria-pressed={silent}
