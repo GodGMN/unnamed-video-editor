@@ -20,7 +20,8 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
   const input = useRef<HTMLInputElement>(null);
   const ticks = useRef<HTMLSpanElement>(null);
   const decimals = (String(step).split('.')[1] ?? '').length;
-  const commit = (v: number) => onChange(Math.min(max, Math.max(min, Number((Math.round(v / step) * step).toFixed(decimals)))));
+  const clamp = (v: number) => Math.min(max, Math.max(min, v));
+  const commit = (v: number) => onChange(clamp(Number((Math.round(v / step) * step).toFixed(decimals))));
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 || document.activeElement === input.current) return;
@@ -61,7 +62,16 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
       onClick={(e) => e.preventDefault()}>
       {lead}
       <input ref={input} type="number" step={step} min={min} max={max} value={value} {...aria}
-        onChange={(e) => commit(Number(e.target.value) || 0)} onKeyDown={onKeyDown} />
+        onChange={(e) => {
+          const v = e.target.valueAsNumber;
+          if (v >= min && v <= max) onChange(v);
+        }}
+        onBlur={(e) => {
+          const v = Number.isNaN(e.target.valueAsNumber) ? value : clamp(e.target.valueAsNumber);
+          e.target.value = String(v);
+          if (v !== value) onChange(v);
+        }}
+        onKeyDown={onKeyDown} />
       {unit && <span>{unit}</span>}
       <span ref={ticks} className="nf-ticks" aria-hidden="true" />
     </div>
