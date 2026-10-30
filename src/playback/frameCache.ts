@@ -13,17 +13,20 @@ export interface Frames {
   dispose(): void;
 }
 
-/** Caps both dimensions while preserving the source aspect ratio. Export keeps the original resolution. */
-const previewWidth = (width: number, height: number) => Math.max(1, Math.round(Math.min(width, 960, 540 * width / height)));
+/** The preview canvas: frames decode no larger than it needs. */
+export interface Size { width: number; height: number }
+
+/** Caps both dimensions at `size` while preserving the source aspect ratio. Export keeps the original resolution. */
+const previewWidth = (width: number, height: number, size: Size) => Math.max(1, Math.round(Math.min(width, size.width, size.height * width / height)));
 
 /** A still image decoded once at preview size; every time shows the same frame. */
 export class StillFrame implements Frames {
   private image: ImageBitmap | null = null;
   private disposed = false;
 
-  constructor(file: File, changed: () => void, failed: (error: unknown) => void) {
+  constructor(file: File, size: Size, changed: () => void, failed: (error: unknown) => void) {
     createImageBitmap(file).then(async (full) => {
-      try { return await createImageBitmap(full, { resizeWidth: previewWidth(full.width, full.height), resizeQuality: 'high' }); }
+      try { return await createImageBitmap(full, { resizeWidth: previewWidth(full.width, full.height, size), resizeQuality: 'high' }); }
       finally { full.close(); }
     }).then((image) => {
       if (this.disposed) { image.close(); return; }
@@ -50,13 +53,13 @@ export class AnimatedFrame implements Frames {
   private timing: Pick<Animation, 'starts' | 'loop'> | null = null;
   private disposed = false;
 
-  constructor(file: File, type: string, changed: () => void, failed: (error: unknown) => void) {
+  constructor(file: File, type: string, size: Size, changed: () => void, failed: (error: unknown) => void) {
     const images: ImageBitmap[] = [];
     openAnimation(file, type, async (frame, _, count) => {
       if (this.disposed) return;
       const { displayWidth: w, displayHeight: h } = frame;
       const fit = Math.min(1, Math.sqrt(ANIMATION_BYTES / (count * w * h * 4)));
-      const resizeWidth = Math.max(1, Math.round(Math.min(previewWidth(w, h), w * fit)));
+      const resizeWidth = Math.max(1, Math.round(Math.min(previewWidth(w, h, size), w * fit)));
       images.push(await createImageBitmap(frame, { resizeWidth, resizeHeight: Math.max(1, Math.round(resizeWidth * h / w)), resizeQuality: 'high' }));
     }).then((animation) => {
       animation?.decoder.close();
@@ -91,11 +94,11 @@ export class FrameCache implements Frames {
   private ended = false;
   private lastTarget = -Infinity;
 
-  constructor(file: File, private changed: () => void, private failed: (error: unknown) => void) {
+  constructor(file: File, size: Size, private changed: () => void, private failed: (error: unknown) => void) {
     this.input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
     this.sink = this.input.getPrimaryVideoTrack().then(async (track) => {
       if (!track || !await track.canDecode()) throw new Error('This video could not be decoded.');
-      return new CanvasSink(track, { width: previewWidth(track.displayWidth, track.displayHeight), alpha: true, poolSize: 0 });
+      return new CanvasSink(track, { width: previewWidth(track.displayWidth, track.displayHeight, size), alpha: true, poolSize: 0 });
     });
     // The first request attaches the operational error handler; avoid an unhandled rejection during preload.
     void this.sink.catch(() => undefined);

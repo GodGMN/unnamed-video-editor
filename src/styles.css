@@ -339,6 +339,18 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .dialog-head h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.03em; }
 .dialog-sub { color: var(--text-dim); font-size: 13px; line-height: 1.5; }
 .dialog-body { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 18px; }
+.dialog-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 10px 24px; border-top: 1px solid var(--line); color: var(--text-muted); font-size: 12px; }
+.made-by { display: flex; align-items: baseline; gap: 10px; }
+/* The gimeno.dev wordmark: VT323 in phosphor green, with the site's letter wave on hover. */
+@font-face { font-family: 'VT323'; src: url('./assets/vt323.woff2') format('woff2'); font-display: swap; }
+.gimeno { font-family: 'VT323', monospace; font-size: 22px; line-height: 1; letter-spacing: 0.05em; color: #33ff33; text-shadow: 0 0 10px rgba(51, 255, 51, 0.45); }
+.gimeno:hover { color: #33ff33; }
+.gimeno span { display: inline-block; }
+.gimeno .tld { color: #74a974; }
+.gimeno:hover .tld { color: #b7ffb7; }
+.gimeno:hover span { animation: gimeno-wave 0.5s ease-in-out; animation-delay: calc(var(--i) * 35ms); }
+@keyframes gimeno-wave { 50% { color: #b7ffb7; transform: translateY(-0.22em); } }
+@media (prefers-reduced-motion: reduce) { .gimeno:hover span { animation: none; } }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .dialog-actions.split { justify-content: space-between; align-items: center; }
 .choice { border-radius: 10px; }
