@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, MISSING_MEDIA, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextItem, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
-import type { AudioClip, FitMode, TextAnchor, TextItem, TransitionType, VideoClip } from '../editor/model';
+import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, MISSING_MEDIA, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
+import type { AudioClip, FitMode, TextAnchor, TextClip, TransitionType, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { Dropper, Mute, Waveform } from './icons';
 import { ColorPopover } from './ColorPicker';
@@ -14,7 +14,7 @@ export function PropertiesPanel({ editor }: { editor: Editor }) {
   const sel = ui.sel;
   const video = sel?.kind === 'clip' || sel?.kind === 'trans' ? findVideoClip(project, sel.id) : null;
   const audio = sel?.kind === 'audio' ? findAudioClip(project, sel.id) : null;
-  const text = sel?.kind === 'text' ? findTextItem(project, sel.id) : null;
+  const text = sel?.kind === 'text' ? findTextClip(project, sel.id) : null;
   return (
     <aside className="panel props">
       <div className="props-head"><span className="panel-title">{sel ? TITLES[sel.kind] : 'Properties'}</span></div>
@@ -226,8 +226,8 @@ function TimeField({ value, onChange }: { value: number; onChange: (v: number) =
   );
 }
 
-function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
-  const updateText = (patch: Partial<TextItem>) => editor.updateText(tx.id, patch);
+function TextProps({ editor, item: tx }: { editor: Editor; item: TextClip }) {
+  const updateText = (patch: Partial<TextClip>) => editor.updateText(tx.id, patch);
   const custom = !SWATCHES.some(([, hex]) => hex === tx.color.toUpperCase());
   const pickerAnchor = useRef<HTMLButtonElement>(null);
   const [picking, setPicking] = useState(false);
