@@ -20,6 +20,7 @@ try {
   const item = page.locator('.media-item').filter({ hasText: 'sample.mp4' });
   await item.waitFor();
   assert.match(await item.innerText(), /320×180/);
+  await item.locator('img').first().waitFor();
   assert.ok(await item.locator('img').count() > 0, 'Real thumbnail generated');
   const drag = await page.evaluateHandle(() => new DataTransfer());
   await item.dispatchEvent('dragstart', { dataTransfer: drag });
@@ -50,6 +51,20 @@ try {
   await page.reload();
   await openEditor(page);
   await page.getByRole('button', { name: /Video: sample.mp4/ }).waitFor();
+  const restored = await page.evaluate(async (id) => {
+    const { readMediaFile } = await import('/src/media/files.ts');
+    const file = await readMediaFile(id);
+    if (!file) return null;
+    const video = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    try {
+      video.src = url;
+      await new Promise((resolve, reject) => { video.onloadeddata = resolve; video.onerror = reject; });
+      return { size: file.size, width: video.videoWidth, height: video.videoHeight };
+    } finally { video.removeAttribute('src'); video.load(); URL.revokeObjectURL(url); }
+  }, imported.id);
+  assert.deepEqual(restored, { size: imported.size, width: 320, height: 180 }, 'Reload restores decodable source bytes');
+  assert.doesNotMatch(await page.locator('.media-item').filter({ hasText: 'sample.mp4' }).innerText(), /Reconnect needed/);
   await page.locator('input[aria-label="Import media files"]').setInputFiles({ name: 'broken.mp4', mimeType: 'video/mp4', buffer: Buffer.from('not a movie') });
   await page.getByRole('status').filter({ hasText: 'broken.mp4' }).waitFor();
   await page.locator('.media-item').filter({ hasText: 'sample.mp4' }).scrollIntoViewIfNeeded();
