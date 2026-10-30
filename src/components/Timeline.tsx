@@ -2,7 +2,7 @@ import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, findClip, partnersOf, clipDuration, clipEnd, snapClipStart } from '../editor/model';
-import type { AudioClip, Project, TransitionType, Tool, Track, VideoClip } from '../editor/model';
+import type { AudioClip, Project, TextItem, TransitionType, Tool, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { CutLine, Crossfade, Cursor, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
@@ -63,7 +63,9 @@ function transitionTargetAt(project: Project, track: Track, time: number, slop: 
 }
 
 export function Timeline({ editor }: { editor: Editor }) {
-  const { project, ui, layout, select, setTool, setPlayhead, toggleTrack, openMenu, closeMenu } = editor;
+  const { project, ui, layout, select, setTool, setPlayhead, clearFocus, toggleTrack, openMenu, closeMenu } = editor;
+  const focus = ui.focusClip ? layout.clips[ui.focusClip] : undefined;
+  const focused = !!focus;
   const rootRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pps, setPps] = useState(PPS);
@@ -130,11 +132,12 @@ export function Timeline({ editor }: { editor: Editor }) {
     openMenu({ kind, id, left, top });
   };
 
-  // Press anywhere on the ruler to jump the playhead there, then drag to scrub.
+  // Press anywhere on the ruler to jump the playhead there, then drag to scrub. While a clip
+  // is focused the playhead stays inside it; double-click the ruler to release it.
   const onRulerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     const left = e.currentTarget.getBoundingClientRect().left;
-    const seek = (clientX: number) => setPlayhead(Math.max(0, Math.min(layout.end, (clientX - left) / pps)));
+    const seek = (clientX: number) => setPlayhead((clientX - left) / pps);
     const x0 = e.clientX;
     seek(x0);
     startDrag(e, (dx) => seek(x0 + dx));
@@ -168,6 +171,24 @@ export function Timeline({ editor }: { editor: Editor }) {
     if (id) editor.placeMedia(id, t.id, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps);
   };
 
+  const onTextDown = (item: TextItem) => (e: PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0 || ui.tool !== 'select') return;
+    select({ kind: 'text', id: item.id });
+    const targets = [0];
+    for (const track of project.tracks) {
+      if (track.kind === 'text') {
+        for (const other of track.items) if (other.id !== item.id) targets.push(other.start, other.start + other.duration);
+      } else for (const clip of track.clips) targets.push(clip.start, clipEnd(clip));
+    }
+    let dragging = false;
+    startDrag(e, dx => {
+      if (!dragging && Math.abs(dx) < 3) return;
+      dragging = true;
+      const start = Math.max(0, item.start + dx / pps);
+      editor.updateText(item.id, { start: snapping ? snapClipStart(start, item.duration, targets, pps) : start });
+    });
+  };
+
   const ticks = [];
   for (let s = 0; s <= lastTick; s++) {
     const major = s % (pps < 16 ? 10 : pps < 40 ? 5 : pps < 100 ? 2 : 1) === 0;
@@ -192,7 +213,7 @@ export function Timeline({ editor }: { editor: Editor }) {
           <span className="tool-separator" role="separator" aria-orientation="vertical" />
           <button aria-label="Snap clips" aria-pressed={snapping} title="Snap clips" onClick={() => setSnapping(v => !v)}><Magnet size={16} /></button>
         </div>
-        <span className="hint">Drag a transition onto an overlap</span>
+        <span className="hint">{focused ? 'Playhead locked to the selected clip · Double-click the time bar to release' : 'Drag a transition onto an overlap'}</span>
         <div className="spacer" />
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Video track</button>
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Audio track</button>
@@ -221,7 +242,16 @@ export function Timeline({ editor }: { editor: Editor }) {
 
         <div ref={scrollRef} className="tl-scroll">
           <div style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
-            <div className="ruler" onPointerDown={onRulerDown}>{ticks}</div>
+            <div className="ruler" onPointerDown={onRulerDown} onDoubleClick={clearFocus}
+              title={focused ? 'Double-click to release the selected clip' : undefined}>
+              {ticks}
+              {focus && (
+                <div className="focus-band" style={{ left: focus.start * pps, width: (focus.end - focus.start) * pps }} aria-hidden="true">
+                  <span className="focus-handle start"><span className="grip" /></span>
+                  <span className="focus-handle end"><span className="grip" /></span>
+                </div>
+              )}
+            </div>
 
             {project.tracks.map((t) => {
               const insets = t.kind === 'text' ? null : overlapInsets(t.clips);
@@ -233,6 +263,7 @@ export function Timeline({ editor }: { editor: Editor }) {
                   <button key={x.id} className="text-clip" style={{ left: x.start * pps + 1, width: x.duration * pps - 2 }}
                     aria-label={`Text overlay: ${x.content}`}
                     aria-pressed={ui.sel?.kind === 'text' && ui.sel.id === x.id}
+                    onPointerDown={onTextDown(x)}
                     onClick={() => select({ kind: 'text', id: x.id })}>
                     <TextT size={12} strokeWidth={2.2} />
                     <span>{x.content}</span>
@@ -259,6 +290,12 @@ export function Timeline({ editor }: { editor: Editor }) {
               );
             })}
 
+            {focus && (
+              <>
+                <div className="focus-dim" style={{ left: 0, width: focus.start * pps }} aria-hidden="true" />
+                <div className="focus-dim" style={{ left: focus.end * pps, right: 0 }} aria-hidden="true" />
+              </>
+            )}
             <div className="playhead" style={{ left: ui.playhead * pps }} />
           </div>
         </div>

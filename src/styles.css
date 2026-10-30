@@ -78,6 +78,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .slider.compact .slider-value { height: 18px; margin-right: -4px; padding: 0 4px; }
 .slider.compact { height: 26px; padding: 0 8px; border-radius: 7px; }
 .slider.compact .slider-value { font-size: 11px; }
+.slider.compact .slider-value input { max-width: 3ch; }
 .stat { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: var(--inset); border: 1px solid var(--control); border-radius: 8px; }
 .stat > :first-child { font-size: 11px; color: var(--text-dim); }
 .stat > :last-child { font: 500 12px var(--mono); }
@@ -255,6 +256,12 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .vol-line:hover::after, .vol-line:active::after, .vol-line:focus-visible::after { top: 4px; height: 4px; background: var(--text-bright); }
 .curve-handle { position: absolute; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .curve-handle > span { width: 9px; height: 9px; border-radius: 999px; background: var(--accent); border: 2px solid var(--bg); box-sizing: content-box; }
+.focus-dim { position: absolute; top: 0; bottom: 0; background: rgba(12, 14, 13, 0.62); backdrop-filter: grayscale(0.8); pointer-events: none; z-index: 2; transition: left 120ms, width 120ms; }
+.focus-band { position: absolute; top: 4px; bottom: 4px; border-radius: 5px; background: rgba(198, 240, 191, 0.1); box-shadow: inset 0 1px 0 rgba(198, 240, 191, 0.45), inset 0 -1px 0 rgba(198, 240, 191, 0.45); pointer-events: none; }
+.focus-handle { position: absolute; top: 0; bottom: 0; width: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; }
+.focus-handle.start { left: 0; border-radius: 5px 0 0 5px; }
+.focus-handle.end { right: 0; border-radius: 0 5px 5px 0; }
+.focus-handle .grip { height: 10px; }
 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-bright); z-index: 3; pointer-events: none; }
 .playhead::before { content: ''; position: absolute; top: 0; left: -5px; width: 12px; height: 12px; border-radius: 3px 3px 6px 6px; background: var(--text-bright); }
 
@@ -264,6 +271,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .menu .ib > span:first-of-type { flex: 1 1 auto; }
 .menu .ib .kbd { font-size: 11px; }
 .menu .ib.danger { color: var(--danger); }
+.menu-note { padding: 4px 10px 6px; white-space: normal; }
 .menu-sep { height: 1px; background: var(--line-strong); margin: 4px 6px; }
 
 /* Dialogs */

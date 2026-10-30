@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { codecFamily, fmtShortDuration, videoTracks } from '../editor/model';
 import type { Media, Project } from '../editor/model';
-import { Convert, Plus, Warning } from './icons';
+import { Convert, Plus, Trash, Warning } from './icons';
 
 import { importMedia } from '../media/import';
 import { PreviewStrip } from '../media/PreviewStrip';
@@ -15,7 +15,10 @@ interface Props {
   project: Project;
   onConvert: (media: Media) => void;
   onImport: (media: Media) => void;
+  onRemove: (mediaId: string) => void;
 }
+
+interface MediaMenu { id: string; left: number; top: number }
 
 const TIMES = ['', 'once', 'twice', 'three times'];
 
@@ -37,7 +40,26 @@ function mediaMeta(project: Project, m: Media): string {
   return `${v.width}×${v.height} · ${Math.round(v.fps)} fps · ${note}`;
 }
 
-export function MediaPanel({ project, onConvert, onImport }: Props) {
+/** How many timeline clips (video and audio) play this source. */
+function clipCount(project: Project, mediaId: string): number {
+  return project.tracks.reduce((n, t) => n + (t.kind === 'text' ? 0 : t.clips.filter((c) => c.mediaId === mediaId).length), 0);
+}
+
+export function MediaPanel({ project, onConvert, onImport, onRemove }: Props) {
+  const [menu, setMenu] = useState<MediaMenu | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('blur', close);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('blur', close);
+    };
+  }, [menu]);
   const [dragOver, setDragOver] = useState(false);
   const media = Object.values(project.media);
   const input = useRef<HTMLInputElement>(null);
@@ -79,7 +101,11 @@ export function MediaPanel({ project, onConvert, onImport }: Props) {
       <div className="media-list">
         {media.map((m) => (
           <div key={m.id} className="media-item" draggable={m.decodable}
-            onDragStart={(e) => { e.dataTransfer.setData('application/x-editor-media', m.id); e.dataTransfer.effectAllowed = 'copy'; }}>
+            onDragStart={(e) => { e.dataTransfer.setData('application/x-editor-media', m.id); e.dataTransfer.effectAllowed = 'copy'; }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenu({ id: m.id, left: Math.min(e.clientX + 4, window.innerWidth - 240), top: Math.min(e.clientY + 4, window.innerHeight - 110) });
+            }}>
             <div className="media-thumb" style={{ background: m.tone }}>
               <PreviewStrip media={m} width={100} />
               {!m.decodable && <div className="warn"><Warning stroke="var(--warn-icon)" /></div>}
@@ -98,6 +124,20 @@ export function MediaPanel({ project, onConvert, onImport }: Props) {
           </div>
         ))}
       </div>
+      {menu && project.media[menu.id] && (() => {
+        const clips = clipCount(project, menu.id);
+        return (
+          <div role="menu" aria-label={project.media[menu.id].name} className="menu" style={{ position: 'fixed', left: menu.left, top: menu.top }}
+            onPointerDown={(e) => e.stopPropagation()}>
+            <span className="menu-label">{project.media[menu.id].name}</span>
+            <button role="menuitem" className="ib danger" autoFocus onClick={() => { onRemove(menu.id); setMenu(null); }}>
+              <Trash size={14} />
+              <span>Delete from project</span>
+            </button>
+            {clips > 0 && <span className="menu-label menu-note">Also removes {clips} clip{clips === 1 ? '' : 's'} from the timeline.</span>}
+          </div>
+        );
+      })()}
       <div className="transitions">
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
           <span className="panel-title">Transitions</span>

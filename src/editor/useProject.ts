@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, DEFAULT_TRANSITION, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, settle, videoTracks } from './model';
+import { newId, placeMedia, DEFAULT_TRANSITION, clipEnd, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, videoTracks } from './model';
 import type { AudioClip, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
+import { removeMediaFiles } from '../media/files';
 
 const SAVE_DELAY_MS = 250;
 
@@ -59,15 +60,52 @@ function usePersistentProject(onLoad: (p: Project) => void) {
   return [project, setProject] as const;
 }
 
+export interface PlayRange {
+  start: number;
+  end: number;
+}
+
+const clamp = (t: number, r: PlayRange) => Math.max(r.start, Math.min(r.end, t));
+
+/**
+ * Where the playhead may go: the whole sequence, or only the focused clip while one is
+ * focused. The range ends on the clip's last frame so the preview never shows its neighbour.
+ */
+function playRange(p: Project, end: number, focusClip: string | null): PlayRange {
+  const clip = findClip(p, focusClip)?.clip;
+  if (!clip) return { start: 0, end };
+  return { start: clip.start, end: Math.max(clip.start, clipEnd(clip) - 1 / p.output.fps) };
+}
+
 export function useProject() {
   const [ui, setUi] = useState<EditorUi>(initialUi);
   const onLoad = useCallback((p: Project) => setUi((u) => reconcileUi(p, u)), []);
   const [project, setProject] = usePersistentProject(onLoad);
+  const projectRef = useRef(project);
+  projectRef.current = project;
+  const layout = useMemo(() => (project ? layoutTimeline(project) : null), [project]);
+  const range = useMemo(() => (project && layout ? playRange(project, layout.end, ui.focusClip) : null), [project, layout, ui.focusClip]);
+  const rangeRef = useRef(range);
+  rangeRef.current = range;
+
+  // Pull the playhead into range when the focus changes or the focused clip is trimmed.
+  useLayoutEffect(() => {
+    if (range) setUi((u) => (u.playhead === clamp(u.playhead, range) ? u : { ...u, playhead: clamp(u.playhead, range) }));
+  }, [range]);
 
   const actions = useMemo(() => {
     const edit = (fn: (p: Project) => Project) => setProject((p) => (p ? settle(fn(p)) : p));
     return {
       addMedia: (media: Media) => edit((p) => ({ ...p, media: { ...p.media, [media.id]: media } })),
+      /** Deletes a source, its clips on the timeline, and its stored files. */
+      removeMedia: (mediaId: string) => {
+        const p = projectRef.current;
+        if (!p) return;
+        const next = removeMedia(p, mediaId);
+        setProject(next);
+        setUi((u) => reconcileUi(next, u));
+        removeMediaFiles(mediaId).catch(() => undefined);
+      },
       placeMedia: (mediaId: string, trackId: string, time: number) => {
         const id = newId();
         edit((p) => placeMedia(p, mediaId, trackId, time, id));
@@ -79,7 +117,9 @@ export function useProject() {
       moveClip: (snapshot: Project, id: string, start: number) => setProject(moveClip(snapshot, id, start)),
       setTool: (tool: Tool) => setUi((u) => ({ ...u, tool })),
       setScrub: (scrub: number) => setUi((u) => ({ ...u, scrub })),
-      setPlayhead: (playhead: number) => setUi((u) => ({ ...u, playhead })),
+      setPlayhead: (playhead: number) => setUi((u) => ({ ...u, playhead: rangeRef.current ? clamp(playhead, rangeRef.current) : playhead })),
+      /** Releases the focused clip so the playhead can roam the whole sequence again. */
+      clearFocus: () => setUi((u) => ({ ...u, sel: null, focusClip: null, menu: null })),
       openMenu: (menu: MenuState) => setUi((u) => ({ ...u, menu, sel: { kind: menu.kind, id: menu.id }, focusClip: menu.id })),
       closeMenu: () => setUi((u) => (u.menu ? { ...u, menu: null } : u)),
 
@@ -101,10 +141,8 @@ export function useProject() {
     };
   }, [setProject]);
 
-  const layout = useMemo(() => (project ? layoutTimeline(project) : null), [project]);
-
-  if (!project || !layout) return null;
-  return { project, ui, layout, ...actions };
+  if (!project || !layout || !range) return null;
+  return { project, ui, layout, range, ...actions };
 }
 
 export type Editor = NonNullable<ReturnType<typeof useProject>>;
