@@ -1,4 +1,4 @@
-import { clipEnd, overlapAfter, findVideoClip, partnersOf, videoTracks } from '../editor/model';
+import { clipEnd, dbToGain, overlapAfter, findVideoClip, partnersOf, videoTracks } from '../editor/model';
 import type { AudioClip, MediaClip, Project, VideoClip } from '../editor/model';
 
 export type RenderContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -28,8 +28,8 @@ export function fadeLevel(clip: MediaClip, time: number): number {
   return level;
 }
 
-/** Incoming opacity for crossfade; outgoing stays opaque underneath it. */
-export function videoOpacity(p: Project, clip: VideoClip, time: number): number {
+/** Incoming opacity for crossfade; outgoing stays opaque underneath it. `shape` maps crossfade progress to a level. */
+export function videoOpacity(p: Project, clip: VideoClip, time: number, shape = (t: number) => t): number {
   const track = videoTracks(p).find((t) => t.clips.some((c) => c.id === clip.id));
   if (!track) return 1;
   const i = track.clips.findIndex((c) => c.id === clip.id);
@@ -37,7 +37,7 @@ export function videoOpacity(p: Project, clip: VideoClip, time: number): number 
   let alpha = 1;
   if (prev && prev.transitionOut?.type === 'crossfade') {
     const overlap = overlapAfter(prev, clip);
-    if (overlap > 0) alpha *= clamp((time - clip.start) / overlap);
+    if (overlap > 0) alpha *= shape(clamp((time - clip.start) / overlap));
   }
   if (prev?.transitionOut?.type === 'fade') {
     const overlap = overlapAfter(prev, clip);
@@ -50,17 +50,20 @@ export function videoOpacity(p: Project, clip: VideoClip, time: number): number 
   return alpha;
 }
 
+/** Equal-power crossfade level: the two sides' powers sum to one, so the overlap has no dip in loudness. */
+const equalPower = (t: number) => Math.sin(t * Math.PI / 2);
+
 export function audioGain(p: Project, clip: AudioClip, time: number): number {
   if (clip.muted || time < clip.start || time >= clipEnd(clip)) return 0;
-  let gain = clip.vol / 100 * fadeLevel(clip, time);
+  let gain = dbToGain(clip.gainDb) * fadeLevel(clip, time);
   const partner = partnersOf(p, clip).map((c) => findVideoClip(p, c.id)).find((c) => !!c);
   if (partner) {
-    gain *= videoOpacity(p, partner, time);
+    gain *= videoOpacity(p, partner, time, equalPower);
     const track = videoTracks(p).find((t) => t.clips.some((c) => c.id === partner.id));
     const next = track?.clips[track.clips.findIndex((c) => c.id === partner.id) + 1];
     if (next && partner.transitionOut?.type === 'crossfade') {
       const overlap = overlapAfter(partner, next);
-      if (overlap > 0) gain *= clamp((Math.min(clipEnd(partner), clipEnd(next)) - time) / overlap);
+      if (overlap > 0) gain *= equalPower(clamp((Math.min(clipEnd(partner), clipEnd(next)) - time) / overlap));
     }
   }
   return gain;

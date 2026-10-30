@@ -1,7 +1,7 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, clipKind, curveName, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, removeTrack as removeTrackModel, clipDuration, clipEnd, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
+import { DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, clipKind, curveName, dbToFader, dbToGain, faderToDb, fmtDb, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, removeTrack as removeTrackModel, clipDuration, clipEnd, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
 import type { AudioClip, Clip, ClipKind, Fades, ClipSelection, MediaClip, Project, TextClip, TransitionType, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
@@ -237,7 +237,7 @@ export function Timeline({ editor }: { editor: Editor }) {
   };
 
   // Drag on empty timeline space to draw a box; every clip it touches is picked.
-  // Ctrl, Cmd or Shift adds the boxed clips to the current selection.
+  // Ctrl, Cmd or Shift adds the boxed clips to the current selection; a plain click without a drag clears it.
   const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const onMarqueeDown = (e: PointerEvent<HTMLDivElement>) => {
     const content = contentRef.current;
@@ -277,7 +277,9 @@ export function Timeline({ editor }: { editor: Editor }) {
       const key = picked.map((x) => x.id).join();
       if (key !== lastKey) { lastKey = key; editor.pickClips(picked); }
     };
-    const end = () => {
+    const end = (ev: globalThis.PointerEvent) => {
+      // A plain click on empty space (no box drawn) deselects everything.
+      if (!dragging && ev.type === 'pointerup' && !base.length) editor.pickClips([]);
       setMarquee(null);
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', end);
@@ -700,31 +702,32 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
     const n = Math.max(1, Math.floor((width - 24) / 4));
     const time = cs.inS + k / n * span;
     const v = preview?.peaks[Math.min(preview.peaks.length - 1, Math.floor(time / src.duration * preview.peaks.length))] ?? 0;
-    bars.push(cs.muted ? 2 : Math.max(2, Math.min(40, Math.round((4 + v * 34) * Math.min(2, cs.vol / 100)))));
+    bars.push(cs.muted ? 2 : Math.max(2, Math.min(40, Math.round((4 + v * 34) * Math.min(2, dbToGain(cs.gainDb))))));
   }
 
-  // Gain line: the clip's height spans 0–200%, the line sits at the level and follows the pointer.
-  const volY = Math.round(H * (1 - Math.min(200, cs.vol) / 200));
+  // Gain line: the clip's height is a fader from −∞ to +12 dB, the line sits at the level and follows the pointer.
+  const volY = Math.round(H * (1 - dbToFader(cs.gainDb)));
+  const level = `${fmtDb(cs.gainDb)} dB`;
   const volDown = (e: PointerEvent<HTMLButtonElement>) => {
     // The gain line spans the clip, so Ctrl-clicks on it pick the clip too.
     if (additive(e)) { e.preventDefault(); togglePick({ kind: 'audio', id }); return; }
     select({ kind: 'audio', id });
-    const v0 = cs.vol;
-    startDrag(e, (_dx, dy) => updateClip(id, { vol: Math.round(Math.max(0, Math.min(200, v0 - dy * 200 / H))) }));
+    const pos0 = dbToFader(cs.gainDb);
+    startDrag(e, (_dx, dy) => updateClip(id, { gainDb: faderToDb(pos0 - dy / H) }));
   };
   const volKey = (e: KeyboardEvent<HTMLButtonElement>) => {
-    const step = e.shiftKey ? 10 : 1;
+    const step = e.shiftKey ? 6 : 1;
     const d = e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0;
     if (!d) return;
     e.preventDefault();
-    updateClip(id, { vol: Math.max(0, Math.min(200, cs.vol + d)) });
+    updateClip(id, { gainDb: Math.round(Math.max(GAIN_MIN_DB, Math.min(GAIN_MAX_DB, cs.gainDb + d)) * 10) / 10 });
   };
 
   return (
     <div className={'audio-clip' + (picked ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked')}
       style={{ left: cs.start * pps + 1, width }}>
       <button className="audio-wave"
-        aria-label={`Audio: ${src.name}, volume ${cs.vol}%${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
+        aria-label={`Audio: ${src.name}, volume ${level}${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
         aria-pressed={picked}
         onPointerDown={move.onPointerDown}
         onClick={move.onClick}
@@ -734,15 +737,19 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
           <span key={i} style={{ height: h, background: cs.muted ? 'rgba(241,244,240,0.22)' : 'rgba(198,240,191,0.7)' }} />
         ))}
       </button>
-      <span className="vol-headroom" style={{ height: volY }} aria-hidden="true" />
-      <FadeRamps clip={cs} width={width} height={H} />
       <button className={'vol-line' + (cs.muted ? ' muted' : '')} style={{ top: volY - 6 }}
-        aria-label={`Volume ${cs.vol}%, drag up or down to adjust`} title={`Volume ${cs.vol}% · drag to adjust`}
+        aria-label={`Volume ${level}, drag up or down to adjust`} title={`Volume ${level} · drag to adjust`}
         onPointerDown={volDown} onKeyDown={volKey} />
+      {/* Drawn apart from the line's hit area so the clip's rounded corners can clip it at −∞ and +12 dB. */}
+      <div className="vol-clip" aria-hidden="true">
+        <span className="vol-headroom" style={{ height: volY }} />
+        <FadeRamps clip={cs} width={width} height={H} />
+        <span className="vol-mark" style={{ top: Math.max(0, Math.min(H - 2, volY - 1)) }} />
+      </div>
       <span className="audio-badge" style={inset && { right: 8 + inset.tail * pps }}>
         {!cs.linked && <span className="unlinked">unlinked</span>}
         {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
-        {cs.vol}%
+        {level}
       </span>
     </div>
   );
@@ -770,7 +777,7 @@ function FadeRamps({ clip, width, height: H }: { clip: MediaClip; width: number;
   const { fiW, foW, ci, co } = fadeGeometry(clip, width, H);
   return (
     <>
-      <svg width={f1(fiW)} height={H} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', borderRadius: '8px 0 0 8px' }} aria-hidden="true">
+      <svg width={f1(fiW)} height={H} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} aria-hidden="true">
         <path d={`M0,0 L${f1(fiW)},0 Q${f1(ci.cx)},${f1(ci.cy)} 0,${H} Z`} fill="rgba(12,14,13,0.62)" />
         <path d={`M0,${H} Q${f1(ci.cx)},${f1(ci.cy)} ${f1(fiW)},0`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
       </svg>
