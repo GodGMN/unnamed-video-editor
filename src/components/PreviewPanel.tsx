@@ -78,10 +78,14 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: Clip; src: Medi
   const startDrag = useDrag();
   const accent = 'var(--accent)';
   const clipId = cs.id;
-  const scrub = Math.max(cs.inS, Math.min(cs.outS, cs.inS + ui.playhead - cs.start));
+  const at = cs.inS + ui.playhead - cs.start;
+  // Where the timeline playhead sits relative to this clip; outside it there's no scrub position to show.
+  const outside = at < cs.inS - 1e-6 ? 'before' : at > cs.outS + 1e-6 ? 'after' : null;
+  const scrub = Math.max(cs.inS, Math.min(cs.outS, at));
   const p = (s: number) => (s / src.duration * 100).toFixed(2) + '%';
   const usePct = p(cs.outS - cs.inS);
   const round = (x: number) => Math.round(x * 100) / 100;
+  const seek = (time: number) => { setScrub(time); setPlayhead(cs.start + time - cs.inS); };
 
   const dragHandle = (which: 'in' | 'out') => (e: PointerEvent<HTMLButtonElement>) => {
     const bar = e.currentTarget.parentElement!.getBoundingClientRect();
@@ -116,11 +120,13 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: Clip; src: Medi
           <div style={{ position: 'absolute', top: 0, bottom: 0, left: p(cs.inS), width: usePct, borderTop: `2px solid ${accent}`, borderBottom: `2px solid ${accent}`, pointerEvents: 'none' }} aria-hidden="true" />
           <input
             type="range" min={cs.inS} max={cs.outS} step={0.01} value={scrub}
-            onChange={(e) => { const time = Number(e.target.value); setScrub(time); setPlayhead(cs.start + time - cs.inS); }}
+            onChange={(e) => seek(Number(e.target.value))}
+            // A click on the edge the playhead is clamped to changes nothing, so it wouldn't fire onChange.
+            onClick={(e) => outside && seek(Number(e.currentTarget.value))}
             aria-label="Playhead within the trimmed clip"
             style={{ position: 'absolute', top: 0, height: '100%', left: p(cs.inS), width: usePct, opacity: 0, cursor: 'pointer', zIndex: 2 }}
           />
-          <div className="scrub-line" style={{ left: p(scrub) }} aria-hidden="true" />
+          {!outside && <div className="scrub-line" style={{ left: p(scrub) }} aria-hidden="true" />}
           <button className="trim-handle" aria-label="Trim in point, drag to adjust" title="Drag to set the in point"
             onPointerDown={dragHandle('in')}
             style={{ left: p(cs.inS), marginLeft: -14, borderRadius: '6px 0 0 6px' }}>
@@ -135,7 +141,9 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: Clip; src: Medi
         <span className="trim-time" style={{ textAlign: 'right' }}>{fmtTime(cs.outS)}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
-        Playhead <span className="mono" style={{ color: 'var(--text)' }}>{fmtTime(scrub)}</span>
+        {outside
+          ? `Playhead is ${outside} this clip · click the bar to jump in`
+          : <>Playhead <span className="mono" style={{ color: 'var(--text)' }}>{fmtTime(scrub)}</span></>}
       </div>
     </div>
   );
