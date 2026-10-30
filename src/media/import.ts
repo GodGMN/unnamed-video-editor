@@ -24,7 +24,15 @@ function thumbnail(image: CanvasImageSource, width: number, height: number, targ
   return canvas.toDataURL('image/jpeg', 0.7);
 }
 
-async function importStill(file: File, handle?: ReadHandle): Promise<Media> {
+/**
+ * A probed file: `media` is ready to show and place (marked `importing`), and `finish` links the
+ * source and builds its previews, resolving to the same media without the mark.
+ */
+export interface Probe { media: Media; finish: () => Promise<Media> }
+
+const done = ({ importing: _, ...media }: Media): Media => media;
+
+async function probeStill(file: File, handle?: ReadHandle): Promise<Probe> {
   const image = await createImageBitmap(file).catch(() => { throw new Error(translate('thisImageCouldNotBeDecoded')); });
   const id = newId();
   try {
@@ -40,23 +48,25 @@ async function importStill(file: File, handle?: ReadHandle): Promise<Media> {
       id, fingerprint: await fingerprint(file), lastModified: file.lastModified, name: file.name, container,
       duration: animation ? animationDuration(animation.loop) : STILL_DURATION, size: file.size, bitrate: 0,
       video: { codec: 'image', width: image.width, height: image.height, fps: animation ? animation.starts.length / animation.loop : 0 }, audio: null,
-      decodable: true, tone: '#4A4433', seed: 0, still: true, ...(animation && { animation: animation.loop }),
+      decodable: true, tone: '#4A4433', seed: 0, still: true, ...(animation && { animation: animation.loop }), importing: true,
     };
     if (!animation) thumbnails.push(thumbnail(image, image.width, image.height));
-    await linkFile(id, file, handle);
-    try { await writePreview(id, { thumbnails, peaks: [], cover: thumbnail(image, image.width, image.height, 960) }); }
-    catch (error) { await removeMediaFiles(id).catch(() => undefined); throw error; }
-    return media;
+    const cover = thumbnail(image, image.width, image.height, 960);
+    const finish = async () => {
+      await linkFile(id, file, handle);
+      try { await writePreview(id, { thumbnails, peaks: [], cover }); }
+      catch (error) { await removeMediaFiles(id).catch(() => undefined); throw error; }
+      return done(media);
+    };
+    return { media, finish };
   } finally { image.close(); }
 }
 
-
-
-export async function importMedia(file: File, handle?: ReadHandle): Promise<Media> {
-  if (isImageFile(file)) return importStill(file, handle);
+/** Reads what `file` holds from its header, without decoding, linking or previewing it. */
+export async function probeMedia(file: File, handle?: ReadHandle): Promise<Probe> {
+  if (isImageFile(file)) return probeStill(file, handle);
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   const id = newId();
-  let stored = false;
   try {
     const [video, audio, duration, format] = await Promise.all([
       input.getPrimaryVideoTrack(), input.getPrimaryAudioTrack(), input.computeDuration(), input.getFormat(),
@@ -69,16 +79,29 @@ export async function importMedia(file: File, handle?: ReadHandle): Promise<Medi
       id, fingerprint: await fingerprint(file), lastModified: file.lastModified, name: file.name, container: format.name, duration, size: file.size, bitrate: file.size * 8 / duration,
       video: video ? { codec: await video.getCodecParameterString() ?? video.codec ?? 'unknown', width: video.displayWidth, height: video.displayHeight, fps: stats?.averagePacketRate ?? 0 } : null,
       audio: audio ? { codec: await audio.getCodecParameterString() ?? audio.codec ?? 'unknown', sampleRate: audio.sampleRate, channels: audio.numberOfChannels } : null,
-      decodable: videoOk && audioOk, tone: '#35503F', seed: 0,
+      decodable: videoOk && audioOk, tone: '#35503F', seed: 0, importing: true,
     };
-    await linkFile(id, file, handle);
-    stored = true;
-    await generatePreview(media, video, audio, videoOk, audioOk);
-    return media;
+    const finish = async () => {
+      let stored = false;
+      try {
+        await linkFile(id, file, handle);
+        stored = true;
+        await generatePreview(media, video, audio, videoOk, audioOk);
+        return done(media);
+      } catch (error) {
+        if (stored) await removeMediaFiles(id).catch(() => undefined);
+        throw error;
+      } finally { input.dispose(); }
+    };
+    return { media, finish };
   } catch (error) {
-    if (stored) await removeMediaFiles(id).catch(() => undefined);
+    input.dispose();
     throw error;
-  } finally { input.dispose(); }
+  }
+}
+
+export async function importMedia(file: File, handle?: ReadHandle): Promise<Media> {
+  return (await probeMedia(file, handle)).finish();
 }
 
 async function generatePreview(media: Media, video: Awaited<ReturnType<Input['getPrimaryVideoTrack']>>, audio: Awaited<ReturnType<Input['getPrimaryAudioTrack']>>, videoOk: boolean, audioOk: boolean) {
@@ -115,7 +138,7 @@ async function generatePreview(media: Media, video: Awaited<ReturnType<Input['ge
 }
 export async function regeneratePreview(media: Media, file: File) {
   if (media.still) {
-    const generated = await importStill(file);
+    const generated = await importMedia(file);
     try { const preview = await readPreview(generated.id); if (preview) await writePreview(media.id, preview); } finally { await removeMediaFiles(generated.id); }
     window.dispatchEvent(new Event('media-preview-change')); return;
   }

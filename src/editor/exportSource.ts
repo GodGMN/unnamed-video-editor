@@ -19,6 +19,8 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
         ...videoTracks(p).filter((t) => !t.hidden).flatMap((t) => t.clips.map((c) => c.mediaId)),
         ...audioTracks(p).filter((t) => !t.muted).flatMap((t) => t.clips.filter((c) => !c.muted && c.gainDb > GAIN_MIN_DB).map((c) => c.mediaId)),
       ]);
+      const importing = [...ids].find((id) => p.media[id]?.importing);
+      if (importing) throw new Error(translate('stillImportingExportOnceItFinishes', { value1: p.media[importing].name }));
       const files: Record<string, File> = {};
       for (const id of ids) {
         signal.throwIfAborted();

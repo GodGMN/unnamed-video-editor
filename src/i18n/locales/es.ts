@@ -609,5 +609,12 @@ export const es: Record<TranslationKey, Message> = {
   "mediaSelectOriginalWithReconnect": "Selecciona el archivo original con Reconectar.",
   "saveConverted": "Guardar {name}",
   "couldNotImportConvertedMedia": "No se han podido importar los medios convertidos.",
-  "library": "Biblioteca"
+  "library": "Biblioteca",
+  "importing": "Importando…",
+  "uiImporting": ", importando",
+  "importDroppedFiles": {
+    "one": "Importar archivo",
+    "other": "Importar {count} archivos"
+  },
+  "stillImportingExportOnceItFinishes": "\"{value1}\" aún se está importando. Exporta cuando termine."
 };
