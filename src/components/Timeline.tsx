@@ -1,6 +1,6 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
-import { useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, findClip, partnersOf } from '../editor/model';
 import type { AudioClip, Tool, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
@@ -25,8 +25,40 @@ const isOff = (t: Track) => (t.kind === 'audio' ? t.muted : t.hidden);
 export function Timeline({ editor }: { editor: Editor }) {
   const { project, ui, layout, select, setTool, setPlayhead, toggleTrack, openMenu, closeMenu } = editor;
   const rootRef = useRef<HTMLElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [pps, setPps] = useState(PPS);
+  const scaleRef = useRef(PPS);
+  const pendingScroll = useRef<number | null>(null);
+
+  useEffect(() => {
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const scroll = scrollRef.current;
+      if (!scroll || event.deltaY === 0) return;
+      const oldScale = scaleRef.current;
+      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroll.clientWidth : 1);
+      const nextScale = Math.max(8, Math.min(320, oldScale * Math.exp(-Math.max(-100, Math.min(100, delta)) * 0.002)));
+      if (nextScale === oldScale) return;
+      const anchor = Math.max(0, Math.min(scroll.clientWidth, event.clientX - scroll.getBoundingClientRect().left));
+      const left = pendingScroll.current ?? scroll.scrollLeft;
+      pendingScroll.current = (left + anchor) * nextScale / oldScale - anchor;
+      scaleRef.current = nextScale;
+      setPps(nextScale);
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (scrollRef.current && pendingScroll.current !== null) {
+      scrollRef.current.scrollLeft = pendingScroll.current;
+      pendingScroll.current = null;
+    }
+  }, [pps]);
+
   const startDrag = useDrag();
-  const tlWidth = (Math.ceil(layout.end) + 2) * PPS + 20;
+  const tlWidth = (Math.ceil(layout.end) + 2) * pps + 20;
 
   const onContextMenu = (kind: 'clip' | 'audio', id: string) => (e: MouseEvent) => {
     e.preventDefault();
@@ -43,19 +75,19 @@ export function Timeline({ editor }: { editor: Editor }) {
   const onRulerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     const left = e.currentTarget.getBoundingClientRect().left;
-    const seek = (clientX: number) => setPlayhead(Math.max(0, Math.min(layout.end, (clientX - left) / PPS)));
+    const seek = (clientX: number) => setPlayhead(Math.max(0, Math.min(layout.end, (clientX - left) / pps)));
     const x0 = e.clientX;
     seek(x0);
     startDrag(e, (dx) => seek(x0 + dx));
   };
 
   const ticks = [];
-  for (let s = 0; s <= 120; s++) {
-    const major = s % 5 === 0;
+  for (let s = 0; s <= Math.ceil(layout.end) + 2; s++) {
+    const major = s % (pps < 16 ? 10 : pps < 40 ? 5 : pps < 100 ? 2 : 1) === 0;
     ticks.push(
       <div key={s}>
-        <div className="tick" style={{ left: s * PPS, height: major ? 10 : 5 }} />
-        {major && <span className="tick-label" style={{ left: s * PPS + 4 }}>00:{String(s).padStart(2, '0')}</span>}
+        <div className="tick" style={{ left: s * pps, height: major ? 10 : 5 }} />
+        {major && <span className="tick-label" style={{ left: s * pps + 4 }}>{String(Math.floor(s / 60)).padStart(2, '0')}:{String(s % 60).padStart(2, '0')}</span>}
       </div>,
     );
   }
@@ -71,7 +103,7 @@ export function Timeline({ editor }: { editor: Editor }) {
             </button>
           ))}
         </div>
-        <span className="hint">Right-click a clip for more</span>
+        <span className="hint">Ctrl + scroll to zoom · Right-click a clip for more</span>
         <div className="spacer" />
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Video track</button>
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Audio track</button>
@@ -98,16 +130,16 @@ export function Timeline({ editor }: { editor: Editor }) {
           })}
         </div>
 
-        <div className="tl-scroll">
+        <div ref={scrollRef} className="tl-scroll">
           <div style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
             <div className="ruler" onPointerDown={onRulerDown}>{ticks}</div>
 
             {project.tracks.map((t) => (
               <div key={t.id} className="track" onDragOver={(e) => { if (t.kind !== 'text' && e.dataTransfer.types.includes('application/x-editor-media')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
-                onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('application/x-editor-media'); if (id) editor.placeMedia(id, t.id, (e.clientX - e.currentTarget.getBoundingClientRect().left) / PPS); }}
+                onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('application/x-editor-media'); if (id) editor.placeMedia(id, t.id, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps); }}
                 data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
                 {t.kind === 'text' && t.items.map((x) => (
-                  <button key={x.id} className="text-clip" style={{ left: x.start * PPS + 1, width: x.duration * PPS - 2 }}
+                  <button key={x.id} className="text-clip" style={{ left: x.start * pps + 1, width: x.duration * pps - 2 }}
                     aria-label={`Text overlay: ${x.content}`}
                     aria-pressed={ui.sel?.kind === 'text' && ui.sel.id === x.id}
                     onClick={() => select({ kind: 'text', id: x.id })}>
@@ -117,17 +149,17 @@ export function Timeline({ editor }: { editor: Editor }) {
                 ))}
                 {t.kind === 'video' && (
                   <>
-                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} clip={c} onMenu={onContextMenu('clip', c.id)} />)}
-                    <Transitions editor={editor} clips={t.clips} />
+                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} clip={c} onMenu={onContextMenu('clip', c.id)} />)}
+                    <Transitions pps={pps} editor={editor} clips={t.clips} />
                   </>
                 )}
                 {t.kind === 'audio' && t.clips.map((c) => (
-                  <AudioClipView key={c.id} editor={editor} clip={c} onMenu={onContextMenu('audio', c.id)} />
+                  <AudioClipView key={c.id} editor={editor} pps={pps} clip={c} onMenu={onContextMenu('audio', c.id)} />
                 ))}
               </div>
             ))}
 
-            <div className="playhead" style={{ left: ui.playhead * PPS }} />
+            <div className="playhead" style={{ left: ui.playhead * pps }} />
           </div>
         </div>
       </div>
@@ -139,6 +171,7 @@ export function Timeline({ editor }: { editor: Editor }) {
 
 interface ClipProps<C> {
   editor: Editor;
+  pps: number;
   clip: C;
   onMenu: (e: MouseEvent) => void;
 }
@@ -149,19 +182,19 @@ function partnerSelected({ project, ui }: Editor, clip: VideoClip | AudioClip, k
   return !!sel && sel.kind === kind && clip.linked && clip.linkId !== null && findClip(project, sel.id)?.clip.linkId === clip.linkId;
 }
 
-function VideoClipView({ editor, clip: cs, onMenu }: ClipProps<VideoClip>) {
+function VideoClipView({ editor, pps, clip: cs, onMenu }: ClipProps<VideoClip>) {
   const { project, ui, layout, select } = editor;
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const l = layout.clips[id];
-  const width = (l.ve - l.vs) * PPS - 3;
+  const width = (l.ve - l.vs) * pps - 3;
   const dur = cs.outS - cs.inS;
   const selected = ui.sel?.kind === 'clip' && ui.sel.id === id;
   const partner = partnerSelected(editor, cs, 'audio');
 
   return (
     <button className={'clip' + (partner ? ' partner' : '')}
-      style={{ left: l.vs * PPS + 1, width, background: src.tone, cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
+      style={{ left: l.vs * pps + 1, width, background: src.tone, cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
       aria-label={`Video: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
       aria-pressed={selected}
       onClick={() => select({ kind: 'clip', id })}
@@ -185,7 +218,7 @@ function VideoClipView({ editor, clip: cs, onMenu }: ClipProps<VideoClip>) {
 }
 
 /** A chip on every boundary between adjacent clips. */
-function Transitions({ editor, clips }: { editor: Editor; clips: VideoClip[] }) {
+function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[]; pps: number }) {
   const { ui, layout, select } = editor;
   return (
     <>
@@ -193,9 +226,9 @@ function Transitions({ editor, clips }: { editor: Editor; clips: VideoClip[] }) 
         const l = layout.clips[c.id];
         if (!l.nextId) return null;
         const tt = c.transitionOut ?? DEFAULT_TRANSITION;
-        const w = tt.type === 'cut' ? 26 : Math.max(26, tt.duration * PPS);
+        const w = tt.type === 'cut' ? 26 : Math.max(26, tt.duration * pps);
         return (
-          <button key={c.id} className="trans-chip" style={{ left: l.ve * PPS - w / 2, width: w }}
+          <button key={c.id} className="trans-chip" style={{ left: l.ve * pps - w / 2, width: w }}
             aria-label={`${TRANSITION_NAMES[tt.type]} transition between ${l.name} and ${layout.clips[l.nextId].name}`}
             aria-pressed={ui.sel?.kind === 'trans' && ui.sel.id === c.id}
             onClick={() => select({ kind: 'trans', id: c.id })}>
@@ -211,14 +244,14 @@ function Transitions({ editor, clips }: { editor: Editor; clips: VideoClip[] }) 
 
 const f1 = (x: number) => x.toFixed(1);
 
-function AudioClipView({ editor, clip: cs, onMenu }: ClipProps<AudioClip>) {
+function AudioClipView({ editor, pps, clip: cs, onMenu }: ClipProps<AudioClip>) {
   const { project, ui, layout, select, updateAudioClip: updateClip } = editor;
   const startDrag = useDrag();
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const l = layout.clips[id];
   const span = (l.ve - l.vs) || 1;
-  const width = (l.ve - l.vs) * PPS - 3;
+  const width = (l.ve - l.vs) * pps - 3;
   const pxs = width / span;
   const selected = ui.sel?.kind === 'audio' && ui.sel.id === id;
   const partner = partnerSelected(editor, cs, 'clip');
@@ -276,7 +309,7 @@ function AudioClipView({ editor, clip: cs, onMenu }: ClipProps<AudioClip>) {
 
   return (
     <div className={'audio-clip' + (selected ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked')}
-      style={{ left: l.vs * PPS + 1, width }}>
+      style={{ left: l.vs * pps + 1, width }}>
       <button className="audio-wave" style={{ cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
         aria-label={`Audio: ${src.name}, volume ${cs.vol}%${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
         aria-pressed={selected}
