@@ -78,6 +78,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .slider.compact .slider-value { height: 18px; margin-right: -4px; padding: 0 4px; }
 .slider.compact { height: 26px; padding: 0 8px; border-radius: 7px; }
 .slider.compact .slider-value { font-size: 11px; }
+.slider.compact .slider-value input { max-width: 3ch; }
 .stat { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: var(--inset); border: 1px solid var(--control); border-radius: 8px; }
 .stat > :first-child { font-size: 11px; color: var(--text-dim); }
 .stat > :last-child { font: 500 12px var(--mono); }
