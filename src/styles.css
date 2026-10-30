@@ -386,7 +386,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .choice > button > :first-child { font-weight: 700; font-size: 14px; }
 .choice > button > :last-child { font-size: 11px; opacity: 0.75; }
 .dialog .seg { background: var(--bg); }
-.lang { --r: calc(44px * var(--corner)); grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.lang { --r: calc(44px * var(--corner)); grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
 .lang > button { height: 36px; display: flex; align-items: center; justify-content: center; gap: 9px; font-size: 13px; }
 .flag { flex: none; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12); }
 .lang > button:not([aria-pressed='true']) .flag { filter: saturate(0.55); opacity: 0.8; }
