@@ -361,10 +361,9 @@ export function moveClip(p: Project, id: string, start: number): Project {
   const delta = Math.max(start - found.clip.start, -Math.min(...group.map(c => c.start)));
   return { ...p, tracks: p.tracks.map(t => {
     if (t.kind === 'text') return t;
-    const affected = t.clips.some(c => ids.has(c.id));
     const clips = t.clips.map(c => ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c)
       .sort((a, b) => a.start - b.start);
-    return { ...t, ...(t.kind === 'video' && affected ? { magnetic: false } : {}), clips } as Track;
+    return { ...t, clips } as Track;
   }) };
 }
 
