@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { edgeTargets, snapEdge } from '../src/editor/model.ts';
 
 const project = () => ({ name: 'Test', media: {}, output: { width: 1920, height: 1080, fps: 30 }, tracks: [
-  { kind: 'text', id: 't', name: 'T', label: '', hidden: false, items: [
+  { kind: 'text', id: 't', name: 'T', label: '', hidden: false, clips: [
     { id: 'x', content: 'Hi', size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start: 10, duration: 13.6 },
   ] },
   { kind: 'video', id: 'v', name: 'V', label: '', hidden: false, magnetic: false, clips: [

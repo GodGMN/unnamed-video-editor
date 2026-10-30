@@ -54,6 +54,6 @@ test('tracks only take media they can play', () => {
   assert.equal(acceptsMedia(v, p.media.sound), false);
   assert.equal(acceptsMedia(a, p.media.sound), true);
   assert.equal(acceptsMedia(a, p.media.silent), false);
-  assert.equal(acceptsMedia({ kind: 'text', items: [] }, p.media.new), false);
+  assert.equal(acceptsMedia({ kind: 'text', clips: [] }, p.media.new), false);
   assert.equal(placeMedia(p, 'sound', 'v', 0, 'n'), p);
 });
