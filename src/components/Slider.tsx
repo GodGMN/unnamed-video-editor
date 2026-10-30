@@ -34,7 +34,7 @@ export function Slider({ label, value, unit, min, max, step = 1, defaultValue, h
       <span className="slider-value" onMouseDown={(e) => { if (e.target !== field.current) { e.preventDefault(); field.current?.focus(); } }}
         onClick={(e) => e.preventDefault()}>
         <input ref={field} type="text" inputMode="decimal" aria-label={`${label} value`} value={draft ?? value}
-          size={Math.max(1, String(draft ?? value).length)}
+          style={{ width: `${Math.max(1, String(draft ?? value).length)}ch` }}
           onFocus={(e) => { setDraft(String(value)); e.target.select(); }}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={(e) => commit(e.target.value)}
