@@ -4,7 +4,7 @@ import { filmstrip, findClip, fmtTime, textTracks, videoTracks } from '../editor
 import type { Clip, Media, Project, TimelineLayout, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { ChevronLeft, ChevronRight, Play, SkipEnd, SkipStart, Volume } from './icons';
+import { ChevronLeft, ChevronRight, Mute, Play, SkipEnd, SkipStart, Volume } from './icons';
 import { Slider } from './Slider';
 
 const ALIGN: Record<string, CSSProperties['alignItems']> = { t: 'flex-start', c: 'center', b: 'flex-end', l: 'flex-start', r: 'flex-end' };
@@ -27,6 +27,8 @@ function clipAt(project: Project, layout: TimelineLayout, t: number): VideoClip 
 export function PreviewPanel({ editor, totalTime }: Props) {
   const { project, ui, layout } = editor;
   const [volume, setVolume] = useState(70);
+  const [muted, setMuted] = useState(false);
+  const silent = muted || volume === 0;
   const accent = 'var(--accent)';
   const { width: ow, height: oh } = project.output;
 
@@ -100,9 +102,13 @@ export function PreviewPanel({ editor, totalTime }: Props) {
           <button className="ib transport" aria-label="Go to end"><SkipEnd fill="#C8CEC9" /></button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, justifyContent: 'flex-end' }}>
-          <Volume stroke="#C8CEC9" />
+          <button className="ib transport" aria-label={silent ? 'Unmute preview' : 'Mute preview'} aria-pressed={silent}
+            onClick={() => { setMuted(!silent); if (silent && volume === 0) setVolume(70); }}>
+            {silent ? <Mute stroke="var(--warn)" /> : <Volume stroke="#C8CEC9" />}
+          </button>
           <div style={{ width: 110 }}>
-            <Slider label="Preview volume" hideLabel className="compact" value={volume} unit="%" min={0} max={100} onChange={setVolume} />
+            <Slider label="Preview volume" hideLabel className="compact" value={muted ? 0 : volume} unit="%" min={0} max={100}
+              onChange={(v) => { setVolume(v); setMuted(false); }} />
           </div>
         </div>
       </div>
