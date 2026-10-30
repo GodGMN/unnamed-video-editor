@@ -3,6 +3,9 @@ import { fmtTime, videoTracks } from './editor/model';
 import type { Media } from './editor/model';
 import { exportSource } from './editor/exportSource';
 import { useProject } from './editor/useProject';
+import type { Editor } from './editor/useProject';
+import { useConversionJob } from './convert/job';
+import { importMedia } from './media/import';
 import { ConvertDialog } from './components/ConvertDialog';
 import { DesktopOnly } from './components/DesktopOnly';
 import { ExportDialog } from './components/ExportDialog';
@@ -24,11 +27,33 @@ function useWindowWidth() {
   return width;
 }
 
+const imported = new WeakSet<File>();
+
+/** Puts each finished conversion into the Media library, and at the end of V1 if the user asked for that. */
+function useConvertedMedia(editor: Editor | null) {
+  const job = useConversionJob();
+  const output = job?.state.status === 'done' ? job.state.output : null;
+  const addToTimeline = job?.addToTimeline ?? false;
+  const add = editor?.addMedia;
+  const place = editor?.placeMedia;
+  const main = editor?.project.tracks.find((t) => t.kind === 'video' && t.magnetic)?.id;
+  useEffect(() => {
+    if (!output || !add || !place || imported.has(output)) return;
+    imported.add(output);
+    importMedia(output).then((media) => {
+      add(media);
+      // V1 is magnetic, so the clip goes after its last clip whatever time is passed.
+      if (addToTimeline && main) place(media.id, main, 0);
+    }, (error: unknown) => console.error('[convert] could not add the copy to the Media library', error));
+  }, [output, add, place, addToTimeline, main]);
+}
+
 export function App() {
   const width = useWindowWidth();
   const editor = useProject();
   const [exporting, setExporting] = useState(false);
   const [converting, setConverting] = useState<Media | null>(null);
+  useConvertedMedia(editor);
 
   if (width < MIN_WIDTH) return <DesktopOnly width={width} />;
   // The saved project loads from IndexedDB in a few milliseconds.
@@ -51,7 +76,7 @@ export function App() {
         <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project, editor.layout)}
           onClose={() => setExporting(false)} />
       )}
-      {converting && <ConvertDialog fileName={converting.name} onClose={() => setConverting(null)} />}
+      {converting && <ConvertDialog mediaId={converting.id} fileName={converting.name} onClose={() => setConverting(null)} />}
     </div>
   );
 }
