@@ -425,6 +425,7 @@ export function Timeline({ editor }: { editor: Editor }) {
                     {overlapsOf(t.clips).map((o) => (
                       <span key={o.from.id} className="overlap-band audio" style={{ left: o.start * pps + 1, width: (o.end - o.start) * pps - 2 }} aria-hidden="true" />
                     ))}
+                    <TrimHandles pps={pps} editor={editor} clips={t.clips} snapping={snapping} onGuide={setSnapGuide} />
                   </>
                 )}
                 {cut?.trackIds.includes(t.id) && <span className="split-guide" style={{ left: cut.time * pps }} aria-hidden="true" />}
@@ -603,7 +604,7 @@ function trimTargets(project: Project, clip: Clip) {
  * transition chip, so where clips touch or overlap the active clip's handles win.
  */
 function TrimHandles({ editor, clips, pps, snapping, onGuide }: TrimProps & { clips: Clip[] }) {
-  const { project, ui, trimEdge, updateVideoClip } = editor;
+  const { project, ui, trimEdge, updateVideoClip, updateAudioClip } = editor;
   const startDrag = useDrag();
   const sel = ui.sel;
   const cs = sel && sel.kind !== 'trans' ? clips.find((c) => c.id === sel.id) : undefined;
@@ -633,6 +634,11 @@ function TrimHandles({ editor, clips, pps, snapping, onGuide }: TrimProps & { cl
       {sel?.kind === 'clip' && (
         <div className="fade-layer" style={{ left, width: right - left, height: VIDEO_CLIP_H }}>
           <FadeHandles clip={cs as VideoClip} width={right - left} height={VIDEO_CLIP_H} update={(patch) => updateVideoClip(cs.id, patch)} />
+        </div>
+      )}
+      {sel?.kind === 'audio' && (
+        <div className="fade-layer" style={{ left, width: right - left, height: AUDIO_CLIP_H }}>
+          <FadeHandles clip={cs as AudioClip} width={right - left} height={AUDIO_CLIP_H} update={(patch) => updateAudioClip(cs.id, patch)} />
         </div>
       )}
     </>
@@ -677,7 +683,7 @@ function Transitions({ editor, clips, pps, dropTarget }: { editor: Editor; clips
 const f1 = (x: number) => x.toFixed(1);
 
 function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<AudioClip>) {
-  const { project, ui, select, togglePick, updateAudioClip: updateClip } = editor;
+  const { project, select, togglePick, updateAudioClip: updateClip } = editor;
   const startDrag = useDrag();
   const move = useClipMove(editor, cs, 'audio', snapping);
   const id = cs.id;
@@ -686,8 +692,6 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   const width = clipDuration(cs) * pps - 3;
   const H = AUDIO_CLIP_H;
   const picked = isPicked(editor, id);
-  // Fade and curve handles only show on the primary selection.
-  const selected = ui.sel?.kind === 'audio' && ui.sel.id === id;
   const partner = partnerSelected(editor, cs, 'clip');
 
   const preview = useMediaPreview(src.id);
@@ -741,7 +745,6 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
         {level}
       </span>
-      {selected && <FadeHandles clip={cs} width={width} height={H} update={(patch) => updateClip(id, patch)} />}
     </div>
   );
 }
