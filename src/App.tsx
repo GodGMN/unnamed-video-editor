@@ -11,6 +11,7 @@ import { DesktopOnly } from './components/DesktopOnly';
 import { ExportDialog } from './components/ExportDialog';
 import { MediaPanel } from './components/MediaPanel';
 import { PreviewPanel } from './components/PreviewPanel';
+import { SettingsDialog } from './components/SettingsDialog';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { Timeline } from './components/Timeline';
 import { TopBar } from './components/TopBar';
@@ -52,6 +53,7 @@ export function App() {
   const width = useWindowWidth();
   const editor = useProject();
   const [exporting, setExporting] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [converting, setConverting] = useState<Pick<Media, 'id' | 'name'> | null>(null);
   useConvertedMedia(editor);
 
@@ -66,7 +68,7 @@ export function App() {
   return (
     <div className="editor">
       <TopBar projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
-        onShowConversion={(id, name) => setConverting({ id, name })} />
+        onSettings={() => setSettings(true)} onShowConversion={(id, name) => setConverting({ id, name })} />
       <div className="workspace">
         <MediaPanel onImport={editor.addMedia} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
         <PreviewPanel editor={editor} totalTime={totalTime} />
@@ -77,6 +79,7 @@ export function App() {
         <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project, editor.layout)}
           onClose={() => setExporting(false)} />
       )}
+      {settings && <SettingsDialog output={project.output} onClose={() => setSettings(false)} />}
       {converting && <ConvertDialog mediaId={converting.id} fileName={converting.name} onClose={() => setConverting(null)} />}
     </div>
   );

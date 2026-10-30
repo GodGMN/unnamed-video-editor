@@ -118,7 +118,7 @@ export class PlaybackEngine {
       if (entry.disposed) return;
       if (!file) { this.unavailable.set(entry.mediaId, { missing: true }); return; }
       if (!audio) {
-        entry.frames = new FrameCache(file, () => this.scheduleDraw(), (error) => this.fail(entry, error));
+        entry.frames = new FrameCache(file, this.canvas, () => this.scheduleDraw(), (error) => this.fail(entry, error));
       } else {
         const element = document.createElement('audio');
         const url = URL.createObjectURL(file);
@@ -178,6 +178,12 @@ export class PlaybackEngine {
         if (entry.disposed || !player.wantedPlaying || !latest?.playing || latest.time < clip.start || latest.time >= clipEnd(clip)) element.pause();
       }, (error) => { if (!entry.disposed) this.fail(entry, error); }).finally(() => { player.busy = false; });
     }
+  }
+
+  /** The canvas changed size: decoders reopen at the new resolution. */
+  resize() {
+    for (const [id, entry] of this.entries) if (entry.frames) this.release(id);
+    if (this.latest) this.update(this.latest);
   }
 
   private scheduleDraw() {

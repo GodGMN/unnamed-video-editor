@@ -9,6 +9,7 @@ import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { ChevronLeft, ChevronRight, Close, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
 import { Slider } from './Slider';
+import { previewSize, useSettings } from '../settings';
 
 interface Props {
   editor: Editor;
@@ -20,7 +21,8 @@ export function PreviewPanel({ editor, totalTime }: Props) {
   const [volume, setVolume] = useState(70);
   const [muted, setMuted] = useState(false);
   const silent = muted || volume === 0;
-  const playback = usePlayback(editor, silent ? 0 : volume / 100);
+  const preview = previewSize(project.output, useSettings().previewResolution);
+  const playback = usePlayback(editor, silent ? 0 : volume / 100, preview.height);
   const source = ui.source ? project.media[ui.source] ?? null : null;
   const sourcePlayer = useSourcePlayer(source, silent ? 0 : volume / 100);
   const { height: oh } = project.output;
@@ -50,7 +52,7 @@ export function PreviewPanel({ editor, totalTime }: Props) {
           </div>
         ) : (
           <div className="preview-pills">
-            <span className="pill">Preview at 540p</span>
+            <span className="pill">{`Preview at ${preview.height}p`}</span>
             <span className="pill">{`Export ${oh}p · ${project.output.fps} fps`}</span>
           </div>
         )}
@@ -59,7 +61,7 @@ export function PreviewPanel({ editor, totalTime }: Props) {
       <div className="stage-wrap">
         <div className="stage-fit">
           <div className="stage" style={{ aspectRatio: `${project.output.width} / ${oh}` }}>
-            <canvas ref={playback.canvas} width={960} height={Math.round(960 * oh / project.output.width)} aria-label="Timeline preview" style={{ width: '100%', height: '100%', display: 'block' }} />
+            <canvas ref={playback.canvas} width={preview.width} height={preview.height} aria-label="Timeline preview" style={{ width: '100%', height: '100%', display: 'block' }} />
             <video ref={sourcePlayer.video} className="source-video" hidden={!source} playsInline preload="auto" aria-label={source ? `Source preview: ${source.name}` : undefined} />
             {transport.status && (
               <div role="alert" className="stage-alert">

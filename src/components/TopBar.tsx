@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Brand } from './Brand';
-import { Download, Maximize, Minimize, Pencil, Redo, Undo } from './icons';
+import { Cog, Download, Maximize, Minimize, Pencil, Redo, Undo } from './icons';
 import { progressPercent, useConversionJob } from '../convert/job';
 
 function useFullscreen() {
@@ -20,6 +20,7 @@ interface Props {
   clipCount: number;
   totalTime: string;
   onExport: () => void;
+  onSettings: () => void;
   /** Reopens the Convert dialog for the conversion running in the background. */
   onShowConversion: (mediaId: string, fileName: string) => void;
 }
@@ -83,7 +84,7 @@ function ProjectName({ name, onRename }: { name: string; onRename: Props['onRena
   );
 }
 
-export function TopBar({ projectName, onRename, clipCount, totalTime, onExport, onShowConversion }: Props) {
+export function TopBar({ projectName, onRename, clipCount, totalTime, onExport, onSettings, onShowConversion }: Props) {
   const [fullscreen, toggleFullscreen] = useFullscreen();
   return (
     <header className="topbar">
@@ -99,6 +100,9 @@ export function TopBar({ projectName, onRename, clipCount, totalTime, onExport, 
         <button className="ib square" onClick={toggleFullscreen} aria-pressed={fullscreen}
           aria-label={fullscreen ? 'Exit full screen (F11)' : 'Full screen (F11)'} title={fullscreen ? 'Exit full screen · F11' : 'Full screen · F11'}>
           {fullscreen ? <Minimize stroke="#C8CEC9" /> : <Maximize stroke="#C8CEC9" />}
+        </button>
+        <button className="ib square" onClick={onSettings} aria-label="Settings" title="Settings">
+          <Cog stroke="#C8CEC9" />
         </button>
       </div>
       <button className="export-btn" onClick={onExport}>

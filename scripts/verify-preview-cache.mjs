@@ -49,7 +49,7 @@ try {
     await wait(() => pixel()[0] > 240, 'seek back');
     // A completed decoder must restart when an idle scrub moves backward outside its frame window.
     const { FrameCache } = await import('/src/playback/frameCache.ts');
-    const isolated = new FrameCache(file, () => {}, (e) => { throw e; });
+    const isolated = new FrameCache(file, canvas, () => {}, (e) => { throw e; });
     isolated.request(1.7, false);
     await wait(() => isolated.frame(1.7, false), 'isolated forward seek');
     isolated.request(0.1, false);

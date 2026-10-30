@@ -19,12 +19,13 @@ export class FrameCache {
   private ended = false;
   private lastTarget = -Infinity;
 
-  constructor(file: File, private changed: () => void, private failed: (error: unknown) => void) {
+  /** `size` is the preview canvas: frames decode no larger than it needs. */
+  constructor(file: File, size: { width: number; height: number }, private changed: () => void, private failed: (error: unknown) => void) {
     this.input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
     this.sink = this.input.getPrimaryVideoTrack().then(async (track) => {
       if (!track || !await track.canDecode()) throw new Error('This video could not be decoded.');
       // Cap both dimensions while preserving the source aspect ratio. Export keeps the original resolution.
-      const width = Math.max(1, Math.round(Math.min(track.displayWidth, 960, 540 * track.displayWidth / track.displayHeight)));
+      const width = Math.max(1, Math.round(Math.min(track.displayWidth, size.width, size.height * track.displayWidth / track.displayHeight)));
       return new CanvasSink(track, { width, alpha: true, poolSize: 0 });
     });
     // The first request attaches the operational error handler; avoid an unhandled rejection during preload.
