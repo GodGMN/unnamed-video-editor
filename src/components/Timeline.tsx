@@ -860,12 +860,12 @@ function FadeHandles({ clip: cs, width, height: H, update }: { clip: MediaClip; 
           <span />
         </button>
       )}
-      <button className="fade-handle" style={{ left: fiW - 10 }}
+      <button className={`fade-handle in${cs.fadeIn ? '' : ' flush'}`} style={{ left: fiW - 10 }}
         aria-label={translate('fadeInSecondsDragToAdjust', { value1: formatNumber(cs.fadeIn, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })} title={translate('dragToSetTheFadeIn')}
         onPointerDown={fadeDown('fadeIn', 1)}>
         <span />
       </button>
-      <button className="fade-handle" style={{ right: foW - 10 }}
+      <button className={`fade-handle out${cs.fadeOut ? '' : ' flush'}`} style={{ right: foW - 10 }}
         aria-label={translate('fadeOutSecondsDragToAdjust', { value1: formatNumber(cs.fadeOut, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })} title={translate('dragToSetTheFadeOut')}
         onPointerDown={fadeDown('fadeOut', -1)}>
         <span />
