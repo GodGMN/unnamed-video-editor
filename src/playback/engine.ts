@@ -75,6 +75,8 @@ export class PlaybackEngine {
     for (const track of project.tracks) {
       if (track.kind === 'text' || (track.kind === 'video' ? track.hidden : track.muted)) continue;
       for (const clip of track.clips) {
+        // Its file isn't stored yet, so it plays as a gap until the import finishes.
+        if (project.media[clip.mediaId]?.importing) continue;
         if (time >= clip.start && time < clipEnd(clip)) {
           active.add(clip.id);
           this.prepare(clip, track.kind === 'audio', time, playing);

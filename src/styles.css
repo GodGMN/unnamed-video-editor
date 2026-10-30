@@ -472,6 +472,16 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .drop-ghost > span { overflow: hidden; text-overflow: ellipsis; }
 .drop-ghost.insert { box-shadow: -3px 0 0 var(--accent); }
 
+/* A source still importing: its clips and library item wear moving stripes until the file is stored. */
+.clip.importing::after, .audio-clip.importing::after, .media-item.importing .media-thumb::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: repeating-linear-gradient(-45deg, rgba(198, 240, 191, 0.12) 0 8px, transparent 8px 16px);
+  background-size: 22.63px 22.63px; animation: importing 1s linear infinite;
+}
+@keyframes importing { to { background-position: 22.63px 0; } }
+@media (prefers-reduced-motion: reduce) { .clip.importing::after, .audio-clip.importing::after, .media-item.importing .media-thumb::after { animation: none; } }
+.media-importing { position: absolute; left: 4px; top: 3px; z-index: 1; font: 500 10px var(--mono); background: rgba(0, 0, 0, 0.6); color: var(--accent); padding: 1px 4px; border-radius: 4px; }
+
 /* Split mode: scissors over every clip; the hotspot is where the blades cross. */
 .timeline.splitting .track, .timeline.splitting .track * { cursor: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"%3E%3Cg transform="rotate%2890 12 12%29"%3E%3Cg stroke="%230C0E0D" stroke-width="4"%3E%3Ccircle cx="6" cy="6" r="3"/%3E%3Ccircle cx="6" cy="18" r="3"/%3E%3Cpath d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/%3E%3C/g%3E%3Cg stroke="%23F1F4F0" stroke-width="1.8"%3E%3Ccircle cx="6" cy="6" r="3"/%3E%3Ccircle cx="6" cy="18" r="3"/%3E%3Cpath d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E') 12 12, crosshair !important; }
 .timeline.splitting .vol-line, .timeline.splitting .fade-handle, .timeline.splitting .curve-handle { pointer-events: none; }
