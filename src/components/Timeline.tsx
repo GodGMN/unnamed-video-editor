@@ -2,7 +2,7 @@ import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, findClip, partnersOf, clipDuration, clipEnd, snapClipStart } from '../editor/model';
-import type { AudioClip, TransitionType, Tool, Track, VideoClip } from '../editor/model';
+import type { AudioClip, TextItem, TransitionType, Tool, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { CutLine, Crossfade, Cursor, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
@@ -120,6 +120,24 @@ export function Timeline({ editor }: { editor: Editor }) {
     startDrag(e, (dx) => seek(x0 + dx));
   };
 
+  const onTextDown = (item: TextItem) => (e: PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0 || ui.tool !== 'select') return;
+    select({ kind: 'text', id: item.id });
+    const targets = [0];
+    for (const track of project.tracks) {
+      if (track.kind === 'text') {
+        for (const other of track.items) if (other.id !== item.id) targets.push(other.start, other.start + other.duration);
+      } else for (const clip of track.clips) targets.push(clip.start, clipEnd(clip));
+    }
+    let dragging = false;
+    startDrag(e, dx => {
+      if (!dragging && Math.abs(dx) < 3) return;
+      dragging = true;
+      const start = Math.max(0, item.start + dx / pps);
+      editor.updateText(item.id, { start: snapping ? snapClipStart(start, item.duration, targets, pps) : start });
+    });
+  };
+
   const ticks = [];
   for (let s = 0; s <= lastTick; s++) {
     const major = s % (pps < 16 ? 10 : pps < 40 ? 5 : pps < 100 ? 2 : 1) === 0;
@@ -194,6 +212,7 @@ export function Timeline({ editor }: { editor: Editor }) {
                   <button key={x.id} className="text-clip" style={{ left: x.start * pps + 1, width: x.duration * pps - 2 }}
                     aria-label={`Text overlay: ${x.content}`}
                     aria-pressed={ui.sel?.kind === 'text' && ui.sel.id === x.id}
+                    onPointerDown={onTextDown(x)}
                     onClick={() => select({ kind: 'text', id: x.id })}>
                     <TextT size={12} strokeWidth={2.2} />
                     <span>{x.content}</span>
