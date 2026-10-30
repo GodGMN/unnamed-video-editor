@@ -6,6 +6,7 @@ import { Check, Clock, Close, Info, Play, Warning } from './icons';
 
 interface DialogProps {
   id: string;
+  className?: string;
   title: string;
   subtitle: string;
   /** The title's trailing dot turns amber when something went wrong. */
@@ -15,7 +16,7 @@ interface DialogProps {
   children: ReactNode;
 }
 
-export function Dialog({ id, title, subtitle, warn, width, onClose, children }: DialogProps) {
+export function Dialog({ id, className, title, subtitle, warn, width, onClose, children }: DialogProps) {
   useT();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -25,7 +26,7 @@ export function Dialog({ id, title, subtitle, warn, width, onClose, children }: 
 
   return (
     <div className="scrim" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby={id} className="dialog" style={{ maxWidth: width }} onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-labelledby={id} className={['dialog', className].filter(Boolean).join(' ')} style={{ maxWidth: width }} onClick={(e) => e.stopPropagation()}>
         <div className="dialog-head">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <h2 id={id}>{title}<span style={{ color: warn ? 'var(--warn)' : 'var(--accent)' }}>.</span></h2>
