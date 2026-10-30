@@ -143,18 +143,27 @@ the current save to commit. The former single `current` save migrates into the
 library when the database opens. A failed load never replaces a saved project
 with the demo.
 
-New imports do not copy source bytes into browser storage. On browsers with
-`showOpenFilePicker`, Import stores a read-only file handle. Access may need to
-be granted again after reopening. Dropped files and browsers without that picker
-use session references; select the originals again with **Reconnect** after a
-reload. Source handles stay outside project documents and worker messages.
+Imported source files are persisted in IndexedDB so media stays playable after
+reload, including dropped files and imports without a native file picker. This
+requirement from #86 supersedes #62's reference-only storage. Optional read-only
+handles remain available for older linked sources. Source bytes and handles stay
+outside project documents and worker messages.
+
+Source storage uses the browser's available quota, separately from the 128 MiB
+preview cache. If storage is full, the operation fails visibly and asks you to
+clear the preview cache in Settings > Storage or free disk space and retry.
+Existing sources and projects are retained. A failed package import removes its
+partially imported sources. The editor does not silently downgrade to session-only
+media or delete existing sources to make room.
 
 Reconnect checks the source size and a sampled content signature covering the
 beginning, middle, and end. This detects accidental substitutions without reading
 an entire multi-gigabyte file. It is not a full-file integrity checksum. Legacy
 media without signatures is checked against its name, size, duration, and stream
-metadata instead. A changed linked file needs reconnecting. **Relink original**
-(right-click a media item) points an available source at another copy. Relinking a shared
+metadata instead. An older handle-only source needs reconnecting if its external
+file changes. Persisted bytes are unaffected by changes to the external original.
+**Relink original** (right-click a media item) points an available source at
+another copy. Relinking a shared
 source affects project duplicates that use that source.
 
 Only generated thumbnails and waveforms enter the new disposable cache. Writes
@@ -163,7 +172,7 @@ and eviction share one IndexedDB transaction and cap it at 128 MiB across tabs.
 choose **Rebuild previews** to regenerate its previews.
 Old OPFS/IndexedDB source copies remain readable. Reconnecting an original or
 deleting its last saved reference removes that old copy, never the external
-original. Copies retained from older versions are outside the preview budget.
+original. All source files are outside the preview budget.
 Converted output stays available for the session; save the MP4 from its completed
 conversion dialog and relink that saved file to retain access across sessions.
 
@@ -171,10 +180,10 @@ The project menu's **Download project** writes a versioned `.uve.json` document 
 media identifiers, without browser handles or media. Reconnect sources after
 opening it. **Package with media** writes a self-contained `.uvepack`, streaming
 to the selected destination where a save picker is available. Other browsers use
-an explicit Blob download. Opening a package links byte ranges within that file;
-it does not extract source copies into browser storage. Keep the package on disk.
-Without persisted handles use **Reconnect package** after reloading to restore
-media access while keeping subsequent edits, or reconnect its original source files. Imported documents receive new media IDs so they
+an explicit Blob download. Opening a package persists its media slices in browser storage so they also play
+after reload. Keep the package on disk as a backup. **Reconnect package** restores
+missing or older linked media while keeping subsequent edits, or reconnect its
+original source files. Imported documents receive new media IDs so they
 cannot replace another project's links.
 
 The package format is eight ASCII bytes `UVEPACK1`, a little-endian uint32 JSON
@@ -184,7 +193,7 @@ exactly match the package size. Video is already compressed, so packaging does
 not transcode it or add a second compression pass.
 
 The library belongs to this origin and browser profile. Clearing site data also
-removes saved edits and handles. Keep downloadable project backups for work you
+removes saved edits, source files, previews, and handles. Keep downloadable project backups for work you
 need to retain. Concurrent editing of the same project in different tabs is not
 synchronized.
 
@@ -196,9 +205,9 @@ PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs \
 node scripts/verify-projects.mjs
 ```
 
-The script generates real A/V media with ffmpeg and checks imports without
-copies, session reconnect, mismatched-source rejection, shared references,
-package roundtrip, handle persistence, validation, migration, and cache eviction.
+The script generates real A/V media with ffmpeg and checks persistent imports and reload decoding, quota failures, mismatched-source
+rejection, shared references, package roundtrip, handle persistence, validation,
+migration, and cache eviction.
 Its handle-persistence fixture uses a genuine serializable OPFS handle as a
 controlled stand-in for a handle returned by the native picker. Native permission
 prompts and cross-browser picker behavior still need manual testing.

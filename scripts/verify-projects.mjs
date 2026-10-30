@@ -33,7 +33,7 @@ try {
     let copied = false; try { await root.getDirectoryHandle('media'); copied = true; } catch {}
     return { media: m, size: (await readMediaFile(m.id)).size, copied };
   });
-  assert.equal(source.copied, false); assert.equal(source.size, bytes.length); checks.push('UI imports source without OPFS copy');
+  assert.equal(source.copied, false); assert.equal(source.size, bytes.length); checks.push('UI persists source in IndexedDB without legacy OPFS copy');
   const download = page.waitForEvent('download');
   await returnHome(page);
   await projectAction(page, 'Untitled project', 'Package with media');
@@ -41,6 +41,70 @@ try {
   await openEditor(page);
   await page.reload();
   await openEditor(page);
+  const playback = await page.evaluate(async id => {
+    const file = await (await import('/src/media/files.ts')).readMediaFile(id);
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video'); video.muted = true; video.src = url;
+    try {
+      document.body.append(video);
+      const frame = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Reloaded source did not decode a video frame')), 10000);
+        video.requestVideoFrameCallback(() => { clearTimeout(timer); resolve(); });
+      });
+      await video.play();
+      await frame;
+      return { size: file.size, width: video.videoWidth, height: video.videoHeight };
+    } finally { video.pause(); video.removeAttribute('src'); video.load(); video.remove(); URL.revokeObjectURL(url); }
+  }, source.media.id);
+  assert.deepEqual(playback, { size: bytes.length, width: 320, height: 180 });
+  checks.push('Real imported MP4 survives reload and decodes video during playback');
+  try {
+    // Picker-backed Files may not consume new blob quota in Chromium. Inject the
+    // boundary failure for the UI, then exercise a real quota abort below.
+    await page.evaluate(() => {
+      window.originalSourcePut = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (...args) {
+        if (this.name === 'sources') throw new DOMException('UI quota fixture', 'QuotaExceededError');
+        return window.originalSourcePut.apply(this, args);
+      };
+    });
+    await page.locator('input[aria-label="Import media files"]').setInputFiles(fixture);
+    await page.locator('.media-status').filter({ hasText: /Browser storage is full/ }).waitFor({ timeout: 15000 });
+    await page.locator('.media-item.importing').waitFor({ state: 'detached' });
+    assert.equal(await page.locator('.media-item').count(), 1);
+    await page.evaluate(() => { IDBObjectStore.prototype.put = window.originalSourcePut; delete window.originalSourcePut; });
+    await page.screenshot({ path: join(dir, 'quota-error.png') });
+    const retained = await page.evaluate(async id => {
+      const project = await (await import('/src/editor/storage.ts')).loadProject();
+      const { mediaTransaction } = await import('/src/media/links.ts');
+      return { ids: Object.keys(project.media), sources: await mediaTransaction('sources', 'readonly', s => s.getAllKeys()), size: (await (await import('/src/media/files.ts')).readMediaFile(id))?.size };
+    }, source.media.id);
+    assert.deepEqual(retained, { ids: [source.media.id], sources: [source.media.id], size: bytes.length });
+    checks.push('Injected quota failure is actionable in the UI and preserves existing project/source');
+    const quotaContext = await browser.newContext();
+    const quotaPage = await quotaContext.newPage();
+    await quotaPage.route('**/quota-check', route => route.fulfill({ contentType: 'text/html', body: '<html></html>' }));
+    await quotaPage.goto(new URL('/quota-check', page.url()).href);
+    const cdp = await quotaContext.newCDPSession(quotaPage);
+    await cdp.send('Storage.overrideQuotaForOrigin', { origin: new URL(page.url()).origin, quotaSize: 1 });
+    const handleQuota = await quotaPage.evaluate(async ({ id, bytes }) => {
+      const handle = {};
+      const original = IDBObjectStore.prototype.put;
+      let attempts = 0;
+      IDBObjectStore.prototype.put = function (...args) { if (this.name === 'sources') attempts++; return original.apply(this, args); };
+      let message;
+      try { await (await import('/src/media/links.ts')).linkFile(id, new File([new Uint8Array(4 * 1024 * 1024)], 'replacement.mp4'), handle); }
+      catch (error) { message = error.message; }
+      finally { IDBObjectStore.prototype.put = original; }
+      return { attempts, message, size: (await (await import('/src/media/files.ts')).readMediaFile(id))?.size };
+    }, { id: source.media.id, bytes });
+    assert.equal(handleQuota.attempts, 1);
+    assert.match(handleQuota.message, /Browser storage is full/);
+    assert.equal(handleQuota.size, undefined);
+    await quotaContext.close();
+    checks.push('Real IndexedDB quota abort with an optional handle makes one attempt and stores no source');
+  } finally { await page.evaluate(() => { if (window.originalSourcePut) { IDBObjectStore.prototype.put = window.originalSourcePut; delete window.originalSourcePut; } }); }
+
   await page.locator('.media-item[data-source="ready"]').filter({ hasText: 'original.mp4' }).waitFor();
   checks.push('Imports stay available after reload');
   const relink = async file => {
@@ -67,15 +131,23 @@ try {
   await originalRow.waitFor({ state: 'detached' });
   const retained = await page.evaluate(async id => !!await (await import('/src/media/files.ts')).readMediaFile(id), source.media.id);
   assert.equal(retained, true); checks.push('Duplicate shares source and deletion preserves references');
+  await projectAction(page, 'Untitled project copy', 'Delete project');
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete project', exact: true }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.home-project-row').length === 0);
+  assert.equal(await page.evaluate(async id => (await import('/src/media/files.ts')).readMediaFile(id), source.media.id), null);
+  assert.equal(readFileSync(fixture).length, bytes.length);
+  checks.push('Deleting the last shared reference removes browser source and preserves the external original');
   await page.locator('input[aria-label="Import project file"]').setInputFiles(packagePath);
   await page.getByRole('button', { name: 'Rename project Untitled project', exact: true }).waitFor();
   const restored = await page.evaluate(async () => {
     const p = await (await import('/src/editor/storage.ts')).loadProject();
     const m = Object.values(p.media)[0]; return { id: m.id, size: (await (await import('/src/media/files.ts')).readMediaFile(m.id)).size };
   });
-  assert.notEqual(restored.id, source.media.id); assert.equal(restored.size, bytes.length); checks.push('Portable package roundtrip remaps media and reads slices without copying');
+  assert.notEqual(restored.id, source.media.id); assert.equal(restored.size, bytes.length); checks.push('Portable package roundtrip remaps media and persists source slices');
   await page.reload();
   await openEditor(page);
+  assert.equal(await page.evaluate(async id => (await (await import('/src/media/files.ts')).readMediaFile(id))?.size, restored.id), bytes.length);
+  checks.push('Package source persists across reload');
   await returnHome(page);
   await projectAction(page, 'Untitled project', 'Reconnect package');
   await page.locator('input[aria-label="Reconnect package"]').setInputFiles(packagePath);
@@ -83,6 +155,39 @@ try {
   await page.locator('.media-item[data-source="ready"]').filter({ hasText: 'original.mp4' }).waitFor();
   assert.equal(await page.evaluate(async id => (await (await import('/src/media/files.ts')).readMediaFile(id))?.size, restored.id), bytes.length);
   checks.push('Reconnect package restores current project media after reload');
+  const rollback = await page.evaluate(async bytes => {
+    const { mediaTransaction, linkFile, linkedFile, forgetLink } = await import('/src/media/links.ts');
+    const { loadProject } = await import('/src/editor/storage.ts');
+    const { projectDocument } = await import('/src/projects/document.ts');
+    const { openProjectFile } = await import('/src/projects/portable.ts');
+    const project = await loadProject();
+    const media = Object.values(project.media)[0];
+    const doc = projectDocument({ ...project, media: { [media.id]: media, second: { ...media, id: 'second' } } });
+    const manifest = new TextEncoder().encode(JSON.stringify(doc));
+    const header = new Uint8Array(12); header.set(new TextEncoder().encode('UVEPACK1'));
+    new DataView(header.buffer).setUint32(8, manifest.length, true);
+    const file = new File([header, manifest, new Uint8Array(bytes), new Uint8Array(bytes)], 'two.uvepack');
+    const before = await mediaTransaction('sources', 'readonly', s => s.getAllKeys());
+    const original = IDBObjectStore.prototype.put;
+    let attempts = 0, message;
+    IDBObjectStore.prototype.put = function (...args) {
+      if (this.name === 'sources' && ++attempts === 2) throw new DOMException('Injected package quota', 'QuotaExceededError');
+      return original.apply(this, args);
+    };
+    try { await openProjectFile({ file }); }
+    catch (error) { message = error.message; }
+    finally { IDBObjectStore.prototype.put = original; }
+    const after = await mediaTransaction('sources', 'readonly', s => s.getAllKeys());
+    // A non-cloneable handle must still fall back to persisting the File bytes.
+    await linkFile('clone-fallback', new File([new Uint8Array(bytes)], 'original.mp4'), { nonCloneable() {} });
+    const fallback = await linkedFile('clone-fallback');
+    await forgetLink('clone-fallback');
+    return { before, after, attempts, message, fallbackSize: fallback.file?.size };
+  }, bytes);
+  assert.deepEqual(rollback.after, rollback.before);
+  assert.equal(rollback.attempts, 2); assert.match(rollback.message, /Browser storage is full/);
+  assert.equal(rollback.fallbackSize, bytes.length);
+  checks.push('Partial package failure cleans only new sources; non-cloneable handle still stores bytes');
   // Genuine serializable browser handles, using an OPFS fixture as the controlled picker source.
   const linked = await page.evaluate(async bytes => {
     const root = await navigator.storage.getDirectory();
@@ -99,9 +204,9 @@ try {
   const changed = await page.evaluate(async id => {
     const handle = await (await navigator.storage.getDirectory()).getFileHandle('linked-fixture.mp4');
     const writer = await handle.createWritable(); await writer.write(new Uint8Array([1, 2, 3])); await writer.close();
-    return await (await import('/src/media/files.ts')).readMediaFile(id);
+    return (await (await import('/src/media/files.ts')).readMediaFile(id))?.size;
   }, linked);
-  assert.equal(changed, null); checks.push('Changed linked source requires reconnect');
+  assert.equal(changed, bytes.length); checks.push('Stored source survives external original changes');
   const validation = await page.evaluate(async () => {
     const { parseDocument, projectDocument } = await import('/src/projects/document.ts');
     const { seedProject } = await import('/src/editor/seed.ts');
