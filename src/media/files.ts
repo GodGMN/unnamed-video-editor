@@ -55,7 +55,8 @@ export async function readMediaFile(id: string): Promise<File | null> {
   const linked = await linkedFile(id);
   return linked.linked ? linked.file : store().read(id, 'source');
 }
-export interface MediaPreview { cover?: string; thumbnails: string[]; peaks: number[] }
+/** `poster` is the last frame decoded from the source for large project artwork, at its source time. */
+export interface MediaPreview { cover?: string; thumbnails: string[]; peaks: number[]; poster?: { time: number; src: string } }
 export const PREVIEW_BUDGET = 128 * 1024 * 1024;
 interface CachedPreview { id: string; blob: Blob; used: number }
 export async function writePreview(id: string, preview: MediaPreview): Promise<void> {

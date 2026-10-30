@@ -65,7 +65,7 @@ Reconnect checks the source size and a sampled content signature covering the
 beginning, middle, and end. This detects accidental substitutions without reading
 an entire multi-gigabyte file. It is not a full-file integrity checksum. Legacy
 media without signatures is checked against its name, size, duration, and stream
-metadata instead. A changed linked file needs reconnecting. **Relink original…**
+metadata instead. A changed linked file needs reconnecting. **Relink original**
 (right-click a media item) points an available source at another copy. Relinking a shared
 source affects project duplicates that use that source.
 

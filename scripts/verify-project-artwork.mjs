@@ -1,4 +1,4 @@
-// Start Vite first. Project artwork shows the composed opening frame, and a placeholder without video.
+// Start Vite first. Project artwork shows the composed opening frame, sharp in the hero, and a placeholder without video.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -36,10 +36,22 @@ try {
     tall = addTextClip(tall, 0, textId);
     tall = patchClip(tall, textId, { content: 'HELLO', size: 160 });
     await createProject(tall);
-    const id = await createProject(await withVideo(blank('Landscape clip'), await importMedia(file(landscape, 'wide.mp4'))));
-    await selectProject(id);
+    const wide = await withVideo(blank('Landscape clip'), await importMedia(file(landscape, 'wide.mp4')));
+    await selectProject(await createProject(wide));
+    // The hero decodes the source while it is readable this session, and keeps that frame for later.
+    const { renderPoster } = await import('/src/projects/poster.ts');
+    await renderPoster(wide, 960);
+    const { readPreview } = await import('/src/media/files.ts');
+    for (let i = 0; i < 50 && !(await readPreview(Object.keys(wide.media)[0]))?.poster; i++) await new Promise(r => setTimeout(r, 100));
   }, { landscape: clip('wide.mp4', '640x360'), portrait: clip('tall.mp4', '360x640') });
   await page.reload();
+  assert.equal(await page.evaluate(async () => {
+    const { listProjects } = await import('/src/editor/storage.ts');
+    const { readPreview } = await import('/src/media/files.ts');
+    const entry = (await listProjects()).find(e => e.project.name === 'Landscape clip');
+    const poster = (await readPreview(Object.keys(entry.project.media)[0]))?.poster;
+    return poster && await new Promise(resolve => { const img = new Image(); img.onload = () => resolve(img.naturalWidth); img.src = poster.src; });
+  }), 640, 'the hero keeps a source-resolution frame');
   const row = name => page.locator('.home-project-row').filter({ hasText: name }).locator('.project-artwork');
   for (const name of ['Landscape clip', 'Portrait with title']) await row(name).locator('img:not(.artwork-backdrop)').waitFor();
   await page.locator('.hero-artwork img:not(.artwork-backdrop)').waitFor();

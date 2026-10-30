@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 export interface ReadHandle extends FileSystemFileHandle {
   queryPermission(options: { mode: 'read' }): Promise<PermissionState>;
   requestPermission(options: { mode: 'read' }): Promise<PermissionState>;
@@ -11,7 +12,7 @@ declare global {
 }
 export interface PickedFile { file: File; handle?: ReadHandle }
 export async function pickFiles(): Promise<PickedFile[]> {
-  if (!window.showOpenFilePicker) throw new Error('Choose files using the file input.');
+  if (!window.showOpenFilePicker) throw new Error(translate('linksChooseWithFileInput'));
   const handles = await window.showOpenFilePicker({ multiple: true });
   return Promise.all(handles.map(async handle => ({ handle, file: await handle.getFile() })));
 }
@@ -26,6 +27,7 @@ export async function fingerprint(file: Blob): Promise<string> {
 }
 export interface LinkedSource {
   handle?: ReadHandle;
+  file?: File;
   size: number;
   lastModified: number;
   name: string;
@@ -44,13 +46,13 @@ export async function mediaTransaction<T>(store: 'sources' | 'previews', mode: I
   return new Promise((resolve, reject) => {
     const request = fn(tx.objectStore(store));
     tx.oncomplete = () => resolve(request.result);
-    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Media storage failed.'));
+    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error(translate('linksMediaStorageFailed')));
   });
 }
 const session = new Map<string, File>();
 export async function linkFile(id: string, file: File, handle?: ReadHandle, range?: LinkedSource['range']) {
-  const source: LinkedSource = { handle, range, size: file.size, lastModified: file.lastModified, name: file.name, type: file.type };
-  // The source File can be a slice of an archive. Only the small handle and offsets are persisted.
+  const source: LinkedSource = { handle, range, file, size: file.size, lastModified: file.lastModified, name: file.name, type: file.type };
+  // Keep the imported bytes so reloads do not depend on external file permissions.
   if (range && handle) {
     const archive = await handle.getFile();
     source.size = archive.size; source.lastModified = archive.lastModified;
@@ -66,6 +68,7 @@ export async function linkedFile(id: string): Promise<{ linked: boolean; file: F
   if (session.has(id)) return { linked: true, file: session.get(id)! };
   const source = await mediaTransaction<LinkedSource | undefined>('sources', 'readonly', s => s.get(id));
   if (!source) return { linked: false, file: null };
+  if (source.file) return { linked: true, file: source.file };
   if (!source.handle) return { linked: true, file: null };
   try {
     if (await source.handle.queryPermission({ mode: 'read' }) !== 'granted') return { linked: true, file: null };
@@ -83,9 +86,9 @@ export async function forgetLink(id: string) {
   await mediaTransaction('sources', 'readwrite', s => s.delete(id));
 }
 
-export async function sourceKind(id: string): Promise<'linked' | 'session' | 'legacy'> {
+export async function sourceKind(id: string): Promise<'stored' | 'linked' | 'session' | 'legacy'> {
   const source = await mediaTransaction<LinkedSource | undefined>('sources', 'readonly', s => s.get(id));
-  return source ? source.handle ? 'linked' : 'session' : 'legacy';
+  return source ? source.file ? 'stored' : source.handle ? 'linked' : 'session' : 'legacy';
 }
 
 export async function copyLinks(matches: { from: string; to: string }[]) {
