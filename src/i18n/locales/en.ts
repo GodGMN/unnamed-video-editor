@@ -118,6 +118,13 @@ export const en = {
   "animated": "Animated",
   "image": "Image",
   "importFailed": "Import failed",
+  "importing": "Importing…",
+  "uiImporting": ", importing",
+  "importDroppedFiles": {
+    "one": "Import file",
+    "other": "Import {count} files"
+  },
+  "stillImportingExportOnceItFinishes": "\"{value1}\" is still importing. Export once it finishes.",
   "dropToImport": "Drop to import",
   "media": "Media",
   "importMediaFiles": "Import media files",
