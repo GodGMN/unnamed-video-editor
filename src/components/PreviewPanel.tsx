@@ -51,7 +51,6 @@ export function PreviewPanel({ editor, totalTime }: Props) {
         ) : (
           <div className="preview-pills">
             <span className="pill">Preview at 540p</span>
-            <span className="pill">{`Export ${oh}p · ${project.output.fps} fps`}</span>
           </div>
         )}
       </div>
