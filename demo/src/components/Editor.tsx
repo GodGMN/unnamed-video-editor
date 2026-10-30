@@ -32,7 +32,7 @@ import { C, mono, sans, SITE } from "../theme";
 
 // A copy of the editor at video.gimeno.dev, drawn at the app's own pixel sizes
 // in a 1440×810 window and scaled up by the browser frame. The UI copy is the
-// app's English dictionary (src/i18n/locales/en.ts); the project, files and
+// app's Spanish dictionary (src/i18n/locales/es.ts); the project, files and
 // footage are invented.
 
 export const PAGE = { w: 1440, h: 810 };
@@ -50,11 +50,11 @@ export const tlX = (s: number) => TL_BOX.x + HEADS + 10 + s * PX;
 
 export type TrackId = "T" | "V2" | "V1" | "A1" | "A2";
 const TRACKS: { id: TrackId; name: string; sub?: string; h: number; icon: "eye" | "speaker" }[] = [
-  { id: "T", name: "Text", h: 40, icon: "eye" },
-  { id: "V2", name: "V2", sub: "Overlay", h: 54, icon: "eye" },
-  { id: "V1", name: "V1", sub: "Main", h: 54, icon: "eye" },
-  { id: "A1", name: "A1", sub: "Clip audio", h: 58, icon: "speaker" },
-  { id: "A2", name: "A2", sub: "Overlay audio", h: 58, icon: "speaker" },
+  { id: "T", name: "Texto", h: 40, icon: "eye" },
+  { id: "V2", name: "V2", sub: "Superposición", h: 54, icon: "eye" },
+  { id: "V1", name: "V1", sub: "Principal", h: 54, icon: "eye" },
+  { id: "A1", name: "A1", sub: "Audio del clip", h: 58, icon: "speaker" },
+  { id: "A2", name: "A2", sub: "Audio superpuesto", h: 58, icon: "speaker" },
 ];
 const RULER_TOP = TL_BOX.y + 46;
 const TRACKS_TOP = RULER_TOP + 28;
@@ -238,13 +238,13 @@ const TopBar: React.FC<{ clipCount: string; exportPressed?: boolean }> = ({ clip
     </div>
     <div style={{ width: 1, height: 22, background: C.control, margin: "0 2px" }} />
     <Btn outlined h={32} style={{ color: C.soft, fontSize: 13, gap: 7 }}>
-      <Grid size={14} /> Projects
+      <Grid size={14} /> Proyectos
     </Btn>
     <span style={{ fontWeight: 500, fontSize: 13, display: "flex", alignItems: "center", gap: 8, marginLeft: 8 }}>
-      Lisbon weekend <Pencil size={12} color={C.muted} />
+      Finde en Lisboa <Pencil size={12} color={C.muted} />
     </span>
     <span style={{ color: C.muted, fontSize: 12, marginLeft: 8 }}>{clipCount}</span>
-    <span style={{ color: C.muted, fontSize: 12 }}>Saved</span>
+    <span style={{ color: C.muted, fontSize: 12 }}>Guardado</span>
     <div style={{ flex: 1 }} />
     {[Undo, Redo, Expand, Gear].map((I, i) => (
       <div key={i} style={{ width: 34, height: 34, display: "grid", placeItems: "center", color: C.soft }}>
@@ -266,7 +266,7 @@ const TopBar: React.FC<{ clipCount: string; exportPressed?: boolean }> = ({ clip
         transform: exportPressed ? "scale(0.95)" : undefined,
       }}
     >
-      <Download size={15} /> Export
+      <Download size={15} /> Exportar
     </div>
   </div>
 );
@@ -276,7 +276,7 @@ const TopBar: React.FC<{ clipCount: string; exportPressed?: boolean }> = ({ clip
 export type MediaTab = "media" | "transitions";
 
 // Page centres of things in the media panel.
-export const MEDIA_TAB: Record<MediaTab, [number, number]> = { media: [MEDIA_BOX.x + 48, MEDIA_BOX.y + 25], transitions: [MEDIA_BOX.x + 134, MEDIA_BOX.y + 25] };
+export const MEDIA_TAB: Record<MediaTab, [number, number]> = { media: [MEDIA_BOX.x + 44, MEDIA_BOX.y + 25], transitions: [MEDIA_BOX.x + 141, MEDIA_BOX.y + 25] };
 export const mediaRow = (i: number): [number, number] => [MEDIA_BOX.x + 50, MEDIA_BOX.y + 102 + 31 + i * 64];
 export const transitionCard = (i: number): [number, number] => [MEDIA_BOX.x + 66 + i * 114, MEDIA_BOX.y + 52 + 32];
 
@@ -320,8 +320,8 @@ const PanelTabs: React.FC<{ tabs: React.ReactNode[]; active: number; tall?: bool
 const Count: React.FC<{ n: number }> = ({ n }) => <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>{n}</span>;
 
 const TRANSITION_CARDS = [
-  ["dissolve", "Cross dissolve", "linear-gradient(90deg, #35503f, #4a6a8a)"],
-  ["fade", "Fade to black", "linear-gradient(90deg, #35503f, #0d0f0e)"],
+  ["dissolve", "Fundido encadenado", "linear-gradient(90deg, #35503f, #4a6a8a)"],
+  ["fade", "Fundido a negro", "linear-gradient(90deg, #35503f, #0d0f0e)"],
 ] as const;
 
 const MediaPanel: React.FC<{ media: MediaItem[]; tab: MediaTab; drop?: number; lift?: "dissolve" | "fade" }> = ({ media, tab, drop = 0, lift }) => (
@@ -331,10 +331,10 @@ const MediaPanel: React.FC<{ media: MediaItem[]; tab: MediaTab; drop?: number; l
       active={tab === "media" ? 0 : 1}
       tabs={[
         <>
-          Media <Count n={media.filter((m) => (m.pop ?? 1) > 0).length} />
+          Medios <Count n={media.filter((m) => (m.pop ?? 1) > 0).length} />
         </>,
         <>
-          Transitions <Count n={2} />
+          Transiciones <Count n={2} />
         </>,
       ]}
       actions={
@@ -346,7 +346,7 @@ const MediaPanel: React.FC<{ media: MediaItem[]; tab: MediaTab; drop?: number; l
     {tab === "media" ? (
       <>
         <div style={{ padding: "10px 16px 10px", fontSize: 12, color: C.muted, lineHeight: 1.4, flex: "none" }}>
-          Import links originals. Dropped files need reconnecting after reload.
+          Los medios importados se guardan en este navegador para volver a abrirlos después de recargar.
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 6px 8px", flex: 1, overflow: "hidden" }}>
           {media.map((m) => {
@@ -380,7 +380,7 @@ const MediaPanel: React.FC<{ media: MediaItem[]; tab: MediaTab; drop?: number; l
                 <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
                   <span style={{ fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</span>
                   <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.meta}</span>
-                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.3 }}>Linked original</span>
+                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.3 }}>Copia guardada</span>
                 </div>
               </div>
             );
@@ -411,7 +411,7 @@ const MediaPanel: React.FC<{ media: MediaItem[]; tab: MediaTab; drop?: number; l
             </div>
           ))}
         </div>
-        <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>Overlap two clips, then drag a transition onto their overlap.</span>
+        <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>Superpón dos clips y arrastra una transición sobre la superposición.</span>
       </div>
     )}
     {drop > 0 && (
@@ -432,7 +432,7 @@ const MediaPanel: React.FC<{ media: MediaItem[]; tab: MediaTab; drop?: number; l
           opacity: drop,
         }}
       >
-        Drop to import
+        Suelta para importar
       </div>
     )}
   </Panel>
@@ -463,7 +463,7 @@ const PreviewPanel: React.FC<{
   return (
     <Panel box={PREVIEW_BOX}>
       <div style={{ height: 44, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", flex: "none" }}>
-        <Title>Preview</Title>
+        <Title>Vista previa</Title>
         <div
           style={{
             height: 26,
@@ -541,10 +541,10 @@ const PropsPanel: React.FC<{ title: string; children: React.ReactNode }> = ({ ti
 );
 
 export type PropsTab = "transform" | "key";
-const PROPS_TABS = ["Transform", "Crop", "Key", "Timing", "Info"];
+const PROPS_TABS = ["Encuadre", "Recorte", "Croma", "Tiempo", "Info"];
 // Page centres of the video clip's tabs and of the key's Pick button.
-export const PROPS_TAB: Record<PropsTab, [number, number]> = { transform: [PROPS_BOX.x + 42, PROPS_BOX.y + 124], key: [PROPS_BOX.x + 135, PROPS_BOX.y + 124] };
-export const PICK_BUTTON: [number, number] = [PROPS_BOX.x + PROPS_BOX.w - 48, PROPS_BOX.y + 207];
+export const PROPS_TAB: Record<PropsTab, [number, number]> = { transform: [PROPS_BOX.x + 40, PROPS_BOX.y + 124], key: [PROPS_BOX.x + 164, PROPS_BOX.y + 124] };
+export const PICK_BUTTON: [number, number] = [PROPS_BOX.x + PROPS_BOX.w - 54, PROPS_BOX.y + 207];
 
 const ClipHeader: React.FC<{ thumb: Thumb; name: string; start: string }> = ({ thumb: T, name, start }) => (
   <div style={{ display: "flex", gap: 10, alignItems: "center", padding: 14, height: 62, boxSizing: "border-box" }}>
@@ -553,7 +553,7 @@ const ClipHeader: React.FC<{ thumb: Thumb; name: string; start: string }> = ({ t
     </div>
     <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
       <span style={{ fontSize: 13, fontWeight: 500 }}>{name}</span>
-      <span style={{ fontSize: 11, color: C.muted }}>Starts at {start} on the timeline</span>
+      <span style={{ fontSize: 11, color: C.muted }}>Empieza en {start} en la línea de tiempo</span>
     </div>
   </div>
 );
@@ -573,9 +573,9 @@ export const VideoProps: React.FC<{ thumb: Thumb; name: string; start: string; t
     <PanelTabs
       active={tab === "transform" ? 0 : 2}
       tabs={PROPS_TABS.map((t) =>
-        t === "Key" && keyState.on ? (
+        t === "Croma" && keyState.on ? (
           <>
-            Key <span style={{ width: 6, height: 6, borderRadius: 3, background: C.accent }} />
+            Croma <span style={{ width: 6, height: 6, borderRadius: 3, background: C.accent }} />
           </>
         ) : (
           t
@@ -618,26 +618,26 @@ const SliderRow: React.FC<{ label: string; value: string; fill: number }> = ({ l
 );
 
 const TransformBody: React.FC = () => (
-  <Section label="POSITION & SCALE" right={<span style={{ fontSize: 11, color: C.dim }}>Reset</span>}>
+  <Section label="POSICIÓN Y ESCALA" right={<span style={{ fontSize: 11, color: C.dim }}>Restablecer</span>}>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, padding: 3, background: C.inset, border: `1px solid ${C.control}`, borderRadius: 9 }}>
-      {["Fit", "Fill", "Custom"].map((l, i) => (
+      {["Ajustar", "Rellenar", "Personalizado"].map((l, i) => (
         <div key={l} style={{ height: 28, borderRadius: 6, display: "grid", placeItems: "center", fontSize: 12, background: i === 0 ? C.selected : undefined, color: i === 0 ? C.bright : C.dim }}>
           {l}
         </div>
       ))}
     </div>
-    <SliderRow label="Scale" value="100%" fill={0.27} />
-    <SliderRow label="Rotation" value="0°" fill={0.5} />
+    <SliderRow label="Escala" value="100%" fill={0.27} />
+    <SliderRow label="Rotación" value="0°" fill={0.5} />
   </Section>
 );
 
 // The app's defaults (NO_KEY in src/editor/model.ts).
 const KeyBody: React.FC<KeyState> = ({ on, picking, color = "#00B140" }) => (
   <Section
-    label="KEY"
+    label="CROMA"
     right={
       <Btn outlined h={26} style={{ fontSize: 11, padding: "0 9px", color: on ? C.accent : C.dim }}>
-        {on ? "On" : "Off"}
+        {on ? "Sí" : "No"}
       </Btn>
     }
   >
@@ -662,12 +662,12 @@ const KeyBody: React.FC<KeyState> = ({ on, picking, color = "#00B140" }) => (
         {color.toUpperCase()}
       </div>
       <Btn outlined style={{ flex: "none", color: picking ? C.accent : C.soft }}>
-        <Pipette size={13} /> {picking ? "Picking…" : "Pick"}
+        <Pipette size={13} /> {picking ? "Eligiendo…" : "Elegir"}
       </Btn>
     </div>
-    <SliderRow label="Tolerance" value="25%" fill={0.25} />
-    <SliderRow label="Softness" value="20%" fill={0.2} />
-    <SliderRow label="Spill" value="50%" fill={0.5} />
+    <SliderRow label="Tolerancia" value="25%" fill={0.25} />
+    <SliderRow label="Suavizado" value="20%" fill={0.2} />
+    <SliderRow label="Derrame" value="50%" fill={0.5} />
   </Section>
 );
 
@@ -717,7 +717,7 @@ const ClipView: React.FC<{ clip: Clip }> = ({ clip }) => {
         {text ? <TextIcon size={11} /> : !audio && <Link size={10} />}
         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{clip.name}</span>
       </span>
-      {!audio && <span style={{ fontFamily: mono, color: "#d8ded9", flex: "none" }}>{clip.dur.toFixed(1)}s</span>}
+      {!audio && <span style={{ fontFamily: mono, color: "#d8ded9", flex: "none" }}>{clip.dur.toFixed(1).replace(".", ",")}s</span>}
     </div>
   );
   return (
@@ -749,7 +749,7 @@ const ClipView: React.FC<{ clip: Clip }> = ({ clip }) => {
         <>
           <Waveform id={clip.id} width={width} height={height} />
           <div style={{ position: "absolute", left: 0, right: 0, top: height * 0.22, height: 1.5, background: C.accent, opacity: 0.8 }} />
-          <span style={{ position: "absolute", right: 8, bottom: 3, fontFamily: mono, fontSize: 10, color: "#d8ded9" }}>{clip.db ?? "0.0 dB"}</span>
+          <span style={{ position: "absolute", right: 8, bottom: 3, fontFamily: mono, fontSize: 10, color: "#d8ded9" }}>{clip.db ?? "0,0 dB"}</span>
         </>
       )}
       {!text && !audio && clip.thumb && (
@@ -837,8 +837,8 @@ const TimelinePanel: React.FC<{ clips: Clip[]; transitions: Transition[]; playhe
           <div style={{ display: "flex", gap: 2, padding: 3, background: C.inset, border: `1px solid ${C.control}`, borderRadius: 9.5 }}>
             {(
               [
-                ["Split", "S", Scissors, split],
-                ["Text", "T", TextIcon, false],
+                ["Dividir", "S", Scissors, split],
+                ["Texto", "T", TextIcon, false],
               ] as const
             ).map(([l, k, I, on]) => (
               <div
@@ -864,15 +864,15 @@ const TimelinePanel: React.FC<{ clips: Clip[]; transitions: Transition[]; playhe
               <Magnet size={14} />
             </div>
           </div>
-          {split && <span style={{ fontSize: 12, color: C.muted, marginLeft: 6 }}>Click a clip to cut it · Cuts snap to the playhead · Esc to stop splitting</span>}
+          {split && <span style={{ fontSize: 12, color: C.muted, marginLeft: 6 }}>Haz clic en un clip para cortarlo · Los cortes se ajustan al cabezal · Esc para dejar de dividir</span>}
           <div style={{ flex: 1 }} />
           <Btn outlined>
-            <Plus size={13} /> Video track
+            <Plus size={13} /> Pista de vídeo
           </Btn>
           <Btn outlined>
-            <Plus size={13} /> Audio track
+            <Plus size={13} /> Pista de audio
           </Btn>
-          <Btn outlined>Fit</Btn>
+          <Btn outlined>Ajustar</Btn>
         </div>
         <div style={{ position: "absolute", left: HEADS, top: 46, bottom: 0, width: 1, background: C.line }} />
         <div style={{ position: "absolute", left: 0, top: 46 + 28, width: HEADS }}>
@@ -929,12 +929,12 @@ const TimelinePanel: React.FC<{ clips: Clip[]; transitions: Transition[]; playhe
 // ---------------------------------------------------------------- menus & dialogs
 
 export const ASPECTS: [string, string, number][] = [
-  ["16:9", "Landscape · YouTube", 16 / 9],
+  ["16:9", "Horizontal · YouTube", 16 / 9],
   ["9:16", "Vertical · Shorts, Reels, TikTok", 9 / 16],
-  ["1:1", "Square", 1],
-  ["4:5", "Portrait · feed posts", 4 / 5],
-  ["4:3", "Classic", 4 / 3],
-  ["21:9", "Cinema widescreen", 21 / 9],
+  ["1:1", "Cuadrado", 1],
+  ["4:5", "Retrato · publicaciones del feed", 4 / 5],
+  ["4:3", "Clásico", 4 / 3],
+  ["21:9", "Panorámico de cine", 21 / 9],
 ];
 // Option rows in the open aspect menu, by page y.
 export const ASPECT_ROW_Y = (i: number) => 137 + i * 41;
@@ -960,7 +960,7 @@ export const AspectMenu: React.FC<{ hover: number; selected: number; open: numbe
         transformOrigin: "top right",
       }}
     >
-      <div style={{ padding: "6px 10px 6px", fontSize: 11, color: C.muted }}>Output frame · export keeps this shape</div>
+      <div style={{ padding: "6px 10px 6px", fontSize: 11, color: C.muted }}>Cuadro de salida · la exportación mantiene esta forma</div>
       {ASPECTS.map(([r, use, ratio], i) => (
         <div
           key={r}
@@ -1081,15 +1081,15 @@ export const ExportDialog: React.FC<{ step: "settings" | "rendering" | "done"; p
         <div style={{ display: "flex", justifyContent: "space-between", padding: "24px 24px 0" }}>
           <div>
             <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em" }}>
-              {step === "done" ? "Your video is ready" : step === "rendering" ? "Rendering" : "Export video"}
+              {step === "done" ? "Tu vídeo está listo" : step === "rendering" ? "Renderizando" : "Exportar vídeo"}
               <span style={{ color: C.accent }}>.</span>
             </div>
             <div style={{ color: C.dim, fontSize: 13, marginTop: 6 }}>
               {step === "done"
-                ? "Saved in memory — download it before closing the tab."
+                ? "Guardado en memoria: descárgalo antes de cerrar la pestaña."
                 : step === "rendering"
-                  ? "Encoding frames and mixing audio locally."
-                  : "Rendered on this device. Nothing is uploaded."}
+                  ? "Codificando fotogramas y mezclando el audio en local."
+                  : "Se renderiza en este dispositivo. No se sube nada."}
             </div>
           </div>
           <span style={{ color: C.dim }}>
@@ -1111,15 +1111,15 @@ export const ExportDialog: React.FC<{ step: "settings" | "rendering" | "done"; p
             </div>
             <div style={{ border: `1px solid ${C.control}`, borderRadius: 10, overflow: "hidden", background: C.inset }}>
               <div style={{ marginTop: -1 }}>
-                <DialogRow k="Format" v="MP4 · H.264 + AAC" />
-                <DialogRow k="Frame rate" v="30 fps" />
-                <DialogRow k="Duration" v="00:35.00" m />
-                <DialogRow k="Frames" v={String(FRAMES)} m />
+                <DialogRow k="Formato" v="MP4 · H.264 + AAC" />
+                <DialogRow k="Velocidad de fotogramas" v="30 fps" />
+                <DialogRow k="Duración" v="00:35.00" m />
+                <DialogRow k="Fotogramas" v={String(FRAMES)} m />
               </div>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              {ghost("Cancel")}
-              {primary("Start export", pressed === "start")}
+              {ghost("Cancelar")}
+              {primary("Empezar exportación", pressed === "start")}
             </div>
           </div>
         )}
@@ -1128,16 +1128,16 @@ export const ExportDialog: React.FC<{ step: "settings" | "rendering" | "done"; p
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
               <span style={{ fontWeight: 700, fontFamily: mono }}>{Math.floor(progress * 100)}%</span>
               <span style={{ fontFamily: mono, color: C.muted, fontSize: 12 }}>
-                frame {done} / {FRAMES}
+                fotograma {done} / {FRAMES}
               </span>
             </div>
             <div style={{ height: 8, borderRadius: 4, background: "#2c352f", overflow: "hidden" }}>
               <div style={{ width: `${progress * 100}%`, height: "100%", background: C.accent, borderRadius: 4 }} />
             </div>
-            <Stage label="Mixing audio" note="48 kHz stereo" status={st(0)} />
-            <Stage label="Composing and encoding frames" note={`${done} / ${FRAMES}`} status={st(1)} />
-            <Stage label="Writing MP4" note={phase === 2 ? "finishing" : "—"} status={st(2)} />
-            <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 4 }}>{ghost("Cancel export")}</div>
+            <Stage label="Mezclando audio" note="48 kHz estéreo" status={st(0)} />
+            <Stage label="Componiendo y codificando fotogramas" note={`${done} / ${FRAMES}`} status={st(1)} />
+            <Stage label="Escribiendo MP4" note={phase === 2 ? "terminando" : "—"} status={st(2)} />
+            <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 4 }}>{ghost("Cancelar exportación")}</div>
           </div>
         )}
         {step === "done" && (
@@ -1147,17 +1147,17 @@ export const ExportDialog: React.FC<{ step: "settings" | "rendering" | "done"; p
                 <Play size={16} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontWeight: 700, fontSize: 14 }}>lisbon-weekend-1080p.mp4</span>
-                <span style={{ fontSize: 12, color: C.muted }}>1920×1080 · 00:35.00 · 41.6 MB · H.264 + AAC</span>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>finde-en-lisboa-1080p.mp4</span>
+                <span style={{ fontSize: 12, color: C.muted }}>1920×1080 · 00:35.00 · 41,6 MB · H.264 + AAC</span>
               </div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ color: C.accent, fontSize: 13 }}>Export again</span>
+              <span style={{ color: C.accent, fontSize: 13 }}>Exportar de nuevo</span>
               <div style={{ display: "flex", gap: 8 }}>
-                {ghost("Back to editor")}
+                {ghost("Volver al editor")}
                 {primary(
                   <>
-                    <Download size={15} /> Download
+                    <Download size={15} /> Descargar
                   </>,
                   pressed === "download",
                 )}

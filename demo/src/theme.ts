@@ -1,7 +1,9 @@
 import { loadFont as loadMono } from "@remotion/google-fonts/JetBrainsMono";
 import { loadFont as loadSans } from "@remotion/google-fonts/Figtree";
+import { loadFont as loadHand } from "@remotion/google-fonts/Caveat";
 
 export const mono = loadMono("normal", { weights: ["400", "500", "700"], subsets: ["latin", "latin-ext"] }).fontFamily;
+export const hand = loadHand("normal", { weights: ["600", "700"], subsets: ["latin", "latin-ext"] }).fontFamily;
 export const sans = loadSans("normal", { weights: ["400", "500", "600", "700", "800"], subsets: ["latin", "latin-ext"] }).fontFamily;
 
 // The editor's own palette (src/styles.css), plus a darker stage around it.

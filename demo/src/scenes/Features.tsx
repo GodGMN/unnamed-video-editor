@@ -82,7 +82,7 @@ const stageWith = (keyed: number, title = 0) => (
   <>
     <Beach />
     <Host keyed={keyed} />
-    {title > 0 && <Title text="Lisbon ’26" size="max(9cqw, 7.5cqh)" opacity={title} />}
+    {title > 0 && <Title text="Lisboa ’26" size="max(9cqw, 7.5cqh)" opacity={title} />}
   </>
 );
 
@@ -121,7 +121,7 @@ export const Drop: React.FC = () => {
               clips={clips}
               playhead={0}
               stage={frame >= LAND ? <Coast /> : null}
-              propsTitle={frame >= LAND ? "Video clip" : "Properties"}
+              propsTitle={frame >= LAND ? "Clip de vídeo" : "Propiedades"}
               props={
 frame >= LAND && <VideoProps thumb={thumbOf("coast")} name="drone_cliffs.mp4" start="00:00.00" />
               }
@@ -153,7 +153,7 @@ frame >= LAND && <VideoProps thumb={thumbOf("coast")} name="drone_cliffs.mp4" st
                     </div>
                     <div>
                       <div style={{ fontWeight: 700 }}>{MEDIA[i].name}</div>
-                      <div style={{ color: C.dim, fontSize: 11, marginTop: 2 }}>+{MEDIA.length - 1} more files</div>
+                      <div style={{ color: C.dim, fontSize: 11, marginTop: 2 }}>+{MEDIA.length - 1} archivos más</div>
                     </div>
                   </div>
                 ))}
@@ -163,13 +163,13 @@ frame >= LAND && <VideoProps thumb={thumbOf("coast")} name="drone_cliffs.mp4" st
           </Window>
         </Stage>
         <Callout at={DROP + 30} until={GRAB + 6} style={{ left: 640, top: 360 }}>
-          MP4 · MOV · WebM · images · GIFs
+          MP4 · MOV · WebM · imágenes · GIF
         </Callout>
         <Callout at={LAND + 14} style={{ left: 820, top: 660 }}>
-          Drag it onto the timeline
+          Arrástralo a la línea de tiempo
         </Callout>
       </Camera>
-      <BigWord word="Drop." />
+      <BigWord word="Suelta." />
     </AbsoluteFill>
   );
 };
@@ -222,7 +222,7 @@ export const Cut: React.FC = () => {
               playhead={15}
               split={split}
               stage={<Coast />}
-              propsTitle="Properties"
+              propsTitle="Propiedades"
               props={null}
             >
               {dragging && (
@@ -242,7 +242,7 @@ export const Cut: React.FC = () => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Cross dissolve
+                  Fundido encadenado
                 </div>
               )}
               <Pointer path={path} clicks={[SPLIT_ON, CUT, TAB, GRAB, LAND]} />
@@ -250,13 +250,13 @@ export const Cut: React.FC = () => {
           </Window>
         </Stage>
         <Callout at={CUT + 4} until={GRAB} style={{ left: 980, top: 560 }}>
-          Split at any frame · S
+          Corta en cualquier fotograma · S
         </Callout>
         <Callout at={LAND + 8} style={{ left: 660, top: 500 }}>
-          Cross dissolve · Fade to black
+          Fundido encadenado o a negro
         </Callout>
       </Camera>
-      <BigWord word="Cut." />
+      <BigWord word="Corta." />
     </AbsoluteFill>
   );
 };
@@ -308,15 +308,17 @@ export const Key: React.FC = () => {
                       background: "rgba(12,14,13,0.85)",
                       border: `1px solid ${C.control}`,
                       fontSize: 12,
-                      whiteSpace: "nowrap",
+                      width: "max-content",
+                      maxWidth: "calc(100% - 20px)",
+                      textAlign: "center",
                       color: C.text,
                     }}
                   >
-                    Click a colour on this clip in the preview <span style={{ color: C.muted }}>· Esc to cancel</span>
+                    Haz clic en un color de este clip en la vista previa <span style={{ color: C.muted }}>· Esc para cancelar</span>
                   </div>
                 )
               }
-              propsTitle="Video clip"
+              propsTitle="Clip de vídeo"
               props={
                 <VideoProps
                   thumb={thumbOf("host")}
@@ -354,13 +356,13 @@ export const Key: React.FC = () => {
           </Window>
         </Stage>
         <Callout at={CLICK + 14} until={CLICK + 64} style={{ left: 1000, top: 330 }}>
-          Click the green. It’s gone.
+          Un clic en el verde. Adiós.
         </Callout>
         <Callout at={CLICK + 70} style={{ left: 560, top: 620 }}>
-          Chroma key, live in the preview
+          Croma en directo, en la vista previa
         </Callout>
       </Camera>
-      <BigWord word="Key." />
+      <BigWord word="Croma." />
     </AbsoluteFill>
   );
 };
@@ -400,7 +402,7 @@ export const Reframe: React.FC = () => {
               ratio={ratio}
               aspect={frame >= PICK ? "9:16 1080×1920" : "16:9 1920×1080"}
               aspectOpen={open > 0}
-              propsTitle="Video clip"
+              propsTitle="Clip de vídeo"
               props={<VideoProps thumb={thumbOf("beach")} name="praia_morning.mp4" start="00:00.00" />}
             >
               <AspectMenu hover={hover} selected={frame >= PICK ? 1 : 0} open={open} />
@@ -412,7 +414,7 @@ export const Reframe: React.FC = () => {
           16:9 · 9:16 · 1:1 · 4:5 · 4:3 · 21:9
         </Callout>
       </Camera>
-      <BigWord word="Reframe." />
+      <BigWord word="Reencuadra." />
     </AbsoluteFill>
   );
 };
@@ -426,8 +428,8 @@ export const Export: React.FC = () => {
   const DONE = 104;
   const DOWNLOAD = 124;
   const EXPORT_BTN: [number, number] = [PAGE.w - 62, 26];
-  const START_BTN: [number, number] = [906, 482];
-  const DOWNLOAD_BTN: [number, number] = [910, 333];
+  const START_BTN: [number, number] = [884, 482];
+  const DOWNLOAD_BTN: [number, number] = [902, 333];
   const path: [number, number, number][] = [
     [0, 900, 330],
     [14, ...EXPORT_BTN],
@@ -454,7 +456,7 @@ export const Export: React.FC = () => {
               playhead={playhead}
               playing={step === "rendering"}
               stage={stageWith(1, 1)}
-              propsTitle="Properties"
+              propsTitle="Propiedades"
               props={null}
               exportPressed={frame >= OPEN && frame < OPEN + 5}
             >
@@ -469,13 +471,13 @@ export const Export: React.FC = () => {
           </Window>
         </Stage>
         <Callout at={START + 10} until={DONE} style={{ left: 1260, top: 380 }}>
-          Rendered on your device
+          Se renderiza en tu ordenador
         </Callout>
         <Callout at={DONE + 6} style={{ left: 660, top: 860 }}>
-          MP4 · H.264 + AAC · up to 1080p
+          MP4 · H.264 + AAC · hasta 1080p
         </Callout>
       </Camera>
-      <BigWord word="Export." />
+      <BigWord word="Exporta." />
     </AbsoluteFill>
   );
 };

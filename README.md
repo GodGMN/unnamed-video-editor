@@ -129,7 +129,7 @@ bottom of the list, settings, resume, save-before-navigation, deletion, and the
 ## Promo video
 
 `demo/` holds a [Remotion](https://www.remotion.dev) promo of the editor
-(1920×1080, 30 fps, about 38 s). The editor UI in it is redrawn at the app's
+(1920×1080, 30 fps, about 42 s, in Spanish). The editor UI in it is redrawn at the app's
 own sizes; the project and footage are invented.
 
 ```sh

@@ -11,14 +11,14 @@ const T = 12;
 
 const SCENES: { c: React.FC; d: number; t?: "fade" | "slide" }[] = [
   { c: Poster, d: 24 },
-  { c: Problem, d: 125 },
+  { c: Problem, d: 195 },
   { c: TitleCard, d: 95, t: "fade" },
   { c: Drop, d: 165, t: "slide" },
   { c: Cut, d: 170, t: "slide" },
   { c: Key, d: 170, t: "slide" },
   { c: Reframe, d: 140, t: "slide" },
   { c: Export, d: 180, t: "slide" },
-  { c: Outro, d: 150, t: "fade" },
+  { c: Outro, d: 200, t: "fade" },
 ];
 
 const DURATION = SCENES.reduce((n, s) => n + s.d - (s.t ? T : 0), 0);
