@@ -69,7 +69,16 @@ export async function openProjectFile({ file, handle }: PickedFile): Promise<Pro
       if (media.fingerprint && await fingerprint(source) !== media.fingerprint) throw new Error(translate('portableMediaDamaged', { name: media.name }));
       pending.push({ id: imported.mapping.get(media.id)!, media, source, offset }); offset += media.size;
     }
-    for (const item of pending) await linkFile(item.id, item.source, handle, { offset: item.offset, size: item.media.size });
+    const stored: string[] = [];
+    try {
+      for (const item of pending) {
+        await linkFile(item.id, item.source, handle, { offset: item.offset, size: item.media.size });
+        stored.push(item.id);
+      }
+    } catch (error) {
+      await Promise.all(stored.map(id => forgetLink(id)));
+      throw error;
+    }
   }
   return imported.project;
 }

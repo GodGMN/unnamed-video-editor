@@ -1,6 +1,6 @@
 import { useT } from '../i18n';
 import { t as translate } from '../i18n/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Check, Clock, Close, Info, Play, Warning } from './icons';
 
@@ -18,18 +18,39 @@ interface DialogProps {
 
 export function Dialog({ id, className, title, subtitle, warn, width, onClose, children }: DialogProps) {
   useT();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  const modal = useRef<HTMLDialogElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  useLayoutEffect(() => {
+    const element = modal.current!;
+    element.showModal();
+    const field = [...element.querySelectorAll<HTMLElement>('input:not([type="hidden"]), textarea')]
+      .find(el => !el.matches(':disabled') && !el.closest('[inert]') && el.getClientRects().length > 0);
+    (field ?? heading.current)?.focus();
+    return () => {
+      element.close();
+      queueMicrotask(() => {
+        if (opener?.isConnected && !opener.closest('[inert]')) opener.focus();
+      });
+    };
+  }, [opener]);
 
   return (
-    <div className="scrim" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby={id} className={['dialog', className].filter(Boolean).join(' ')} style={{ maxWidth: width }} onClick={(e) => e.stopPropagation()}>
+    <dialog ref={modal} className="scrim" role="dialog" aria-modal="true" aria-labelledby={id} onKeyDown={e => {
+      if (e.key !== 'Tab' || e.defaultPrevented || (e.target as Element).closest('dialog') !== e.currentTarget) return;
+      const controls = [...e.currentTarget.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]')]
+        .filter(el => el.tabIndex >= 0 && !el.matches(':disabled') && !el.closest('[inert]') && el.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (!first || (e.shiftKey ? document.activeElement === first || !controls.includes(document.activeElement as HTMLElement) : document.activeElement === last)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first)?.focus();
+      }
+    }} onCancel={e => { e.preventDefault(); e.stopPropagation(); onClose(); }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={['dialog', className].filter(Boolean).join(' ')} style={{ maxWidth: width }}>
         <div className="dialog-head">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <h2 id={id}>{title}<span style={{ color: warn ? 'var(--warn)' : 'var(--accent)' }}>.</span></h2>
+            <h2 ref={heading} tabIndex={-1} id={id}>{title}<span style={{ color: warn ? 'var(--warn)' : 'var(--accent)' }}>.</span></h2>
             <span className="dialog-sub">{subtitle}</span>
           </div>
           <button className="ib square" style={{ flex: 'none' }} aria-label={translate('close')} onClick={onClose}>
@@ -38,7 +59,7 @@ export function Dialog({ id, className, title, subtitle, warn, width, onClose, c
         </div>
         {children}
       </div>
-    </div>
+    </dialog>
   );
 }
 
