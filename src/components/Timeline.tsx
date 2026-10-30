@@ -22,8 +22,34 @@ const TRACK_H = { text: TEXT_TRACK_H, video: VIDEO_TRACK_H, audio: AUDIO_TRACK_H
 
 const isOff = (t: Track) => (t.kind === 'audio' ? t.muted : t.hidden);
 
+interface Overlap { from: VideoClip | AudioClip; to: VideoClip | AudioClip; start: number; end: number }
+
+/** Overlapping regions between neighbouring clips of one track, in start order. */
+function overlapsOf<C extends VideoClip | AudioClip>(clips: C[]): Overlap[] {
+  const sorted = [...clips].sort((a, b) => a.start - b.start);
+  const out: Overlap[] = [];
+  for (let i = 0; i + 1 < sorted.length; i++) {
+    const end = Math.min(clipEnd(sorted[i]), clipEnd(sorted[i + 1]));
+    if (end - sorted[i + 1].start > 1e-6) out.push({ from: sorted[i], to: sorted[i + 1], start: sorted[i + 1].start, end });
+  }
+  return out;
+}
+
+/** Seconds of each clip covered by a neighbour at its head and at its tail. */
+function overlapInsets(clips: (VideoClip | AudioClip)[]) {
+  const insets = new Map<string, { head: number; tail: number }>();
+  const get = (id: string) => insets.get(id) ?? insets.set(id, { head: 0, tail: 0 }).get(id)!;
+  for (const o of overlapsOf(clips)) {
+    get(o.to.id).head = o.end - o.start;
+    get(o.from.id).tail = o.end - o.start;
+  }
+  return insets;
+}
+
 export function Timeline({ editor }: { editor: Editor }) {
-  const { project, ui, layout, select, setTool, setPlayhead, toggleTrack, openMenu, closeMenu } = editor;
+  const { project, ui, layout, select, setTool, setPlayhead, clearFocus, toggleTrack, openMenu, closeMenu } = editor;
+  const focus = ui.focusClip ? layout.clips[ui.focusClip] : undefined;
+  const focused = !!focus;
   const rootRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pps, setPps] = useState(PPS);
@@ -83,11 +109,12 @@ export function Timeline({ editor }: { editor: Editor }) {
     openMenu({ kind, id, left, top });
   };
 
-  // Press anywhere on the ruler to jump the playhead there, then drag to scrub.
+  // Press anywhere on the ruler to jump the playhead there, then drag to scrub. While a clip
+  // is focused the playhead stays inside it; double-click the ruler to release it.
   const onRulerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     const left = e.currentTarget.getBoundingClientRect().left;
-    const seek = (clientX: number) => setPlayhead(Math.max(0, Math.min(layout.end, (clientX - left) / pps)));
+    const seek = (clientX: number) => setPlayhead((clientX - left) / pps);
     const x0 = e.clientX;
     seek(x0);
     startDrag(e, (dx) => seek(x0 + dx));
@@ -117,7 +144,7 @@ export function Timeline({ editor }: { editor: Editor }) {
           <span className="tool-separator" role="separator" aria-orientation="vertical" />
           <button aria-label="Snap clips" aria-pressed={snapping} title="Snap clips" onClick={() => setSnapping(v => !v)}><Magnet size={16} /></button>
         </div>
-        <span className="hint">Drag a transition onto an overlap</span>
+        <span className="hint">{focused ? 'Playhead locked to the selected clip · Double-click the time bar to release' : 'Drag a transition onto an overlap'}</span>
         <div className="spacer" />
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Video track</button>
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Audio track</button>
@@ -146,9 +173,20 @@ export function Timeline({ editor }: { editor: Editor }) {
 
         <div ref={scrollRef} className="tl-scroll">
           <div style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
-            <div className="ruler" onPointerDown={onRulerDown}>{ticks}</div>
+            <div className="ruler" onPointerDown={onRulerDown} onDoubleClick={clearFocus}
+              title={focused ? 'Double-click to release the selected clip' : undefined}>
+              {ticks}
+              {focus && (
+                <div className="focus-band" style={{ left: focus.start * pps, width: (focus.end - focus.start) * pps }} aria-hidden="true">
+                  <span className="focus-handle start"><span className="grip" /></span>
+                  <span className="focus-handle end"><span className="grip" /></span>
+                </div>
+              )}
+            </div>
 
-            {project.tracks.map((t) => (
+            {project.tracks.map((t) => {
+              const insets = t.kind === 'text' ? null : overlapInsets(t.clips);
+              return (
               <div key={t.id} className="track" onDragOver={(e) => { if (t.kind !== 'text' && e.dataTransfer.types.includes('application/x-editor-media')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
                 onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('application/x-editor-media'); if (id) editor.placeMedia(id, t.id, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps); }}
                 data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
@@ -163,16 +201,31 @@ export function Timeline({ editor }: { editor: Editor }) {
                 ))}
                 {t.kind === 'video' && (
                   <>
-                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} onMenu={onContextMenu('clip', c.id)} />)}
+                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} inset={insets!.get(c.id)} onMenu={onContextMenu('clip', c.id)} />)}
                     <Transitions pps={pps} editor={editor} clips={t.clips} />
+                    <TrimHandles pps={pps} editor={editor} clips={t.clips} />
                   </>
                 )}
-                {t.kind === 'audio' && t.clips.map((c) => (
-                  <AudioClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} onMenu={onContextMenu('audio', c.id)} />
-                ))}
+                {t.kind === 'audio' && (
+                  <>
+                    {t.clips.map((c) => (
+                      <AudioClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} inset={insets!.get(c.id)} onMenu={onContextMenu('audio', c.id)} />
+                    ))}
+                    {overlapsOf(t.clips).map((o) => (
+                      <span key={o.from.id} className="overlap-band audio" style={{ left: o.start * pps + 1, width: (o.end - o.start) * pps - 2 }} aria-hidden="true" />
+                    ))}
+                  </>
+                )}
               </div>
-            ))}
+              );
+            })}
 
+            {focus && (
+              <>
+                <div className="focus-dim" style={{ left: 0, width: focus.start * pps }} aria-hidden="true" />
+                <div className="focus-dim" style={{ left: focus.end * pps, right: 0 }} aria-hidden="true" />
+              </>
+            )}
             <div className="playhead" style={{ left: ui.playhead * pps }} />
           </div>
         </div>
@@ -213,6 +266,8 @@ interface ClipProps<C> {
   pps: number;
   snapping: boolean;
   clip: C;
+  /** Seconds hidden under neighbouring clips at the head and tail. */
+  inset?: { head: number; tail: number };
   onMenu: (e: MouseEvent) => void;
 }
 
@@ -222,7 +277,7 @@ function partnerSelected({ project, ui }: Editor, clip: VideoClip | AudioClip, k
   return !!sel && sel.kind === kind && clip.linked && clip.linkId !== null && findClip(project, sel.id)?.clip.linkId === clip.linkId;
 }
 
-function VideoClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<VideoClip>) {
+function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<VideoClip>) {
   const { project, ui, select } = editor;
   const dragClip = useClipMove(editor, cs, snapping);
   const id = cs.id;
@@ -241,24 +296,51 @@ function VideoClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<Vi
       onClick={() => select({ kind: 'clip', id })}
       onContextMenu={onMenu}>
       <PreviewStrip media={src} width={width} inS={cs.inS} outS={cs.outS} />
-      <span className="clip-label">
+      <span className="clip-label" style={inset && { paddingLeft: 12 + inset.head * pps, paddingRight: 12 + inset.tail * pps }}>
         <span>
           {cs.linked && <Link size={11} stroke="#D8DED9" strokeWidth={2.4} style={{ flex: 'none' }} />}
           <span className="name">{src.name}</span>
         </span>
         <span className="mono">{dur.toFixed(1)}s</span>
       </span>
-      {selected && (
-        <>
-          <span className="clip-edge" style={{ left: 0 }}><span /></span>
-          <span className="clip-edge" style={{ right: 0 }}><span /></span>
-        </>
-      )}
     </button>
   );
 }
 
-/** A chip on every boundary between adjacent clips. */
+/**
+ * Trim handles for the selected clip on a track. They sit in their own layer above every clip and
+ * transition chip, so where clips touch or overlap the active clip's handles win.
+ */
+function TrimHandles({ editor, clips, pps }: { editor: Editor; clips: VideoClip[]; pps: number }) {
+  const { project, ui, trimClip } = editor;
+  const startDrag = useDrag();
+  const cs = ui.sel?.kind === 'clip' ? clips.find((c) => c.id === ui.sel!.id) : undefined;
+  if (!cs) return null;
+  const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
+  const left = cs.start * pps + 1;
+  const right = left + clipDuration(cs) * pps - 3;
+
+  // Trims the clip's source in/out points, clamped to the media like the trim scrubber.
+  const edgeDown = (which: 'in' | 'out') => (e: PointerEvent<HTMLSpanElement>) => {
+    if (e.button !== 0) return;
+    const { id, inS, outS } = cs;
+    const minDuration = Math.min(0.5, src.duration);
+    const round = (x: number) => Math.round(x * 100) / 100;
+    startDrag(e, (dx) => {
+      if (which === 'in') trimClip(id, { inS: round(Math.max(0, Math.min(outS - minDuration, inS + dx / pps))) });
+      else trimClip(id, { outS: round(Math.min(src.duration, Math.max(inS + minDuration, outS + dx / pps))) });
+    });
+  };
+
+  return (
+    <>
+      <span className="clip-edge in" style={{ left }} title="Drag to trim the start" onPointerDown={edgeDown('in')}><span /></span>
+      <span className="clip-edge out" style={{ left: right - 8 }} title="Drag to trim the end" onPointerDown={edgeDown('out')}><span /></span>
+    </>
+  );
+}
+
+/** A chip on every boundary between adjacent clips; a full-height band where they overlap. */
 function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[]; pps: number }) {
   const { ui, layout, select } = editor;
   return (
@@ -271,11 +353,11 @@ function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
         const overlap = overlapEnd - overlapStart;
         if (overlap < -1e-6) return null;
         const tt = c.transitionOut ?? DEFAULT_TRANSITION;
-        const w = overlap > 0 ? overlap * pps : 26;
+        const w = overlap > 0 ? overlap * pps - 2 : 26;
         const typeFrom = (e: { dataTransfer: DataTransfer }) => e.dataTransfer.getData('application/x-timeline-transition');
         return (
-          <button key={c.id} className={'trans-chip' + (overlap > 0 ? ' overlap-zone' : '')}
-            style={{ left: overlap > 0 ? overlapStart * pps : overlapStart * pps - w / 2, width: w }}
+          <button key={c.id} className={overlap > 0 ? 'overlap-band' : 'trans-chip'}
+            style={{ left: overlap > 0 ? overlapStart * pps + 1 : overlapStart * pps - w / 2, width: w }}
             aria-label={`${TRANSITION_NAMES[tt.type]} transition between ${layout.clips[c.id].name} and ${layout.clips[next.id].name}`}
             title={overlap > 0 ? `${overlap.toFixed(2)}s overlap · drop a transition here` : 'Overlap clips to add a transition'}
             aria-pressed={ui.sel?.kind === 'trans' && ui.sel.id === c.id}
@@ -288,9 +370,13 @@ function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
               select({ kind: 'trans', id: c.id });
             }}
             onClick={() => select({ kind: 'trans', id: c.id })}>
-            {tt.type === 'crossfade' && <Crossfade size={14} />}
-            {tt.type === 'fade' && <FadeBlack size={14} />}
-            {tt.type === 'cut' && <CutLine size={14} />}
+            {(overlap <= 0 || w >= 22) && (
+              <span className="trans-icon">
+                {tt.type === 'crossfade' && <Crossfade size={14} />}
+                {tt.type === 'fade' && <FadeBlack size={14} />}
+                {tt.type === 'cut' && <CutLine size={14} />}
+              </span>
+            )}
           </button>
         );
       })}
@@ -300,7 +386,7 @@ function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
 
 const f1 = (x: number) => x.toFixed(1);
 
-function AudioClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<AudioClip>) {
+function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<AudioClip>) {
   const { project, ui, select, updateAudioClip: updateClip } = editor;
   const startDrag = useDrag();
   const dragClip = useClipMove(editor, cs, snapping);
@@ -402,7 +488,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<Au
           <span />
         </button>
       )}
-      <span className="audio-badge">
+      <span className="audio-badge" style={inset && { right: 8 + inset.tail * pps }}>
         {!cs.linked && <span className="unlinked">unlinked</span>}
         {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
         {cs.vol}%
