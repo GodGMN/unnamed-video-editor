@@ -7,7 +7,7 @@ import { findClip, fmtTime } from '../editor/model';
 import type { Clip, Media } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { ChevronLeft, ChevronRight, Close, Mute, Pause, Play, SkipEnd, SkipStart, Volume } from './icons';
+import { ChevronLeft, ChevronRight, Close, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
 import { Slider } from './Slider';
 
 interface Props {
@@ -61,11 +61,16 @@ export function PreviewPanel({ editor, totalTime }: Props) {
           <div className="stage" style={{ aspectRatio: `${project.output.width} / ${oh}` }}>
             <canvas ref={playback.canvas} width={960} height={Math.round(960 * oh / project.output.width)} aria-label="Timeline preview" style={{ width: '100%', height: '100%', display: 'block' }} />
             <video ref={sourcePlayer.video} className="source-video" hidden={!source} playsInline preload="auto" aria-label={source ? `Source preview: ${source.name}` : undefined} />
+            {transport.status && (
+              <div role="alert" className="stage-alert">
+                <Warning size={18} strokeWidth={2.2} />
+                <span>{transport.status}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {transport.status && <div role="status" className="hint" style={{ padding: '4px 20px' }}>{transport.status}</div>}
       {source ? <SourceScrub src={source} time={sourcePlayer.time} seek={sourcePlayer.seek} />
         : focus && focusMedia ? <Trim editor={editor} clip={focus.clip} src={focusMedia} /> : <div className="trim" />}
 

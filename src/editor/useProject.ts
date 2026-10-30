@@ -137,7 +137,8 @@ export function useProject() {
         const sel = kept ?? clips.at(-1) ?? null;
         return { ...u, sel, picked: clips, menu: null, focusClip: sel?.id ?? u.focusClip };
       }),
-      moveClip: (snapshot: Project, id: string, start: number) => setProject(moveClip(snapshot, id, start)),
+      /** Moves clip `id` to `start`; `others` shift by the same amount. */
+      moveClip: (snapshot: Project, id: string, start: number, others: string[] = []) => setProject(moveClip(snapshot, id, start, others)),
       setTool: (tool: Tool) => setUi((u) => ({ ...u, tool })),
       setScrub: (scrub: number) => setUi((u) => ({ ...u, scrub })),
       setPlayhead: (playhead: number) => setUi((u) => ({ ...u, playhead: rangeRef.current ? clamp(playhead, rangeRef.current) : playhead })),
