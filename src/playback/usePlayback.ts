@@ -16,8 +16,17 @@ export function usePlayback(editor: Editor, volume: number) {
     return () => { instance.dispose(); engine.current = null; };
   }, []);
 
+  const clock = useRef({ time: editor.ui.playhead, started: performance.now() });
+  const position = useRef(editor.ui.playhead);
+  const published = useRef(editor.ui.playhead);
+
   useEffect(() => {
-    engine.current?.update({ project: editor.project, time: editor.ui.playhead, playing, volume });
+    // UI publications acknowledge the clock; external seeks re-anchor it.
+    if (!playing || editor.ui.playhead !== published.current) {
+      position.current = editor.ui.playhead;
+      clock.current = { time: editor.ui.playhead, started: performance.now() };
+    }
+    engine.current?.update({ project: editor.project, time: position.current, playing, volume });
   }, [editor.project, editor.ui.playhead, playing, volume]);
 
   // A source previewing from the Media panel takes over the player and its Space key.
@@ -26,13 +35,19 @@ export function usePlayback(editor: Editor, volume: number) {
 
   useEffect(() => {
     if (!playing) return;
-    let last = performance.now();
+    clock.current = { time: position.current, started: performance.now() };
+    let lastPublished = 0;
     let frame = 0;
     const tick = (now: number) => {
-      const { editor } = current.current;
-      const next = Math.min(editor.range.end, editor.ui.playhead + (now - last) / 1000);
-      last = now;
-      editor.setPlayhead(next);
+      const { editor, volume } = current.current;
+      const next = Math.max(editor.range.start, Math.min(editor.range.end, clock.current.time + (now - clock.current.started) / 1000));
+      position.current = next;
+      engine.current?.update({ project: editor.project, time: next, playing: next < editor.range.end, volume });
+      if (now - lastPublished >= 100 || next >= editor.range.end) {
+        lastPublished = now;
+        published.current = next;
+        editor.setPlayhead(next);
+      }
       if (next >= editor.range.end) setPlaying(false);
       else frame = requestAnimationFrame(tick);
     };
@@ -42,7 +57,7 @@ export function usePlayback(editor: Editor, volume: number) {
 
   const toggle = useCallback(async () => {
     const { editor, playing } = current.current;
-    if (playing) { setPlaying(false); return; }
+    if (playing) { published.current = position.current; editor.setPlayhead(position.current); setPlaying(false); return; }
     try {
       await engine.current?.resumeAudio();
       if (editor.ui.playhead >= editor.range.end) editor.setPlayhead(editor.range.start);

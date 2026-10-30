@@ -48,11 +48,33 @@ try {
  const before = await page.locator('canvas').evaluate((c) => c.toDataURL());
  await page.getByRole('button', { name: 'Forward one frame', exact: true }).click();
  assert.match(await page.locator('.transport-bar').innerText(), /00:00.03/);
+ // Count actual engine ticks separately from React's visible time updates.
+ await page.evaluate(async () => {
+   const engineUrl = performance.getEntriesByType('resource').map((r) => r.name).filter((url) => new URL(url).pathname === '/src/playback/engine.ts').at(-1);
+   const { PlaybackEngine } = await import(engineUrl);
+   const update = PlaybackEngine.prototype.update;
+   window.playbackTicks = [];
+   PlaybackEngine.prototype.update = function (request) {
+     if (request.playing) window.playbackTicks.push({ wall: performance.now(), time: request.time });
+     return update.call(this, request);
+   };
+   window.transportChanges = 0;
+   window.transportObserver = new MutationObserver(() => window.transportChanges++);
+   window.transportObserver.observe(document.querySelector('.transport-bar'), { childList: true, subtree: true, characterData: true });
+ });
  await page.getByRole('button', { name: 'Play (Space)', exact: true }).click();
  await page.waitForFunction(() => {
    const text = document.querySelector('.transport-bar').textContent;
    return /00:0[12]\./.test(text.split('/')[0]);
  });
+ const clock = await page.evaluate(() => {
+   window.transportObserver.disconnect();
+   const ticks = window.playbackTicks;
+   const first = ticks[0], last = ticks.at(-1);
+   return { ticks: ticks.length, uiUpdates: window.transportChanges, elapsed: (last.wall - first.wall) / 1000, advanced: last.time - first.time };
+ });
+ assert.ok(clock.ticks > clock.uiUpdates * 2, 'engine updates independently of throttled React time display');
+ assert.ok(Math.abs(clock.elapsed - clock.advanced) < 0.1, 'timeline follows elapsed clock time');
  const audio = await page.evaluate(() => window.testGains.map(({ gain, analyser }) => {
    const samples = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(samples);
    return { gain: gain.gain.value, rms: Math.sqrt(samples.reduce((s, x) => s + x * x, 0) / samples.length) };
@@ -98,8 +120,8 @@ try {
    const pixel = () => Array.from(ctx.getImageData(50, 50, 1, 1).data);
    renderFrame(p, 1.5, ctx, (clip) => clip.id === 'a' ? red : blue);
    const crossfade = pixel();
-   a.transitionOut = { type: 'fade', duration: 1 }; b.start = 2;
-   renderFrame(p, 2, ctx, (clip) => clip.id === 'a' ? red : blue);
+   a.transitionOut = { type: 'fade', duration: 1 };
+   renderFrame(p, 1.5, ctx, (clip) => clip.id === 'a' ? red : blue);
    const black = pixel();
    a.transitionOut = null; track.clips = [{ ...a, fit: 'custom', scale: 50 }];
    renderFrame(p, 0.5, ctx, () => red);
@@ -146,5 +168,5 @@ try {
  await page.waitForTimeout(150);
  await page.screenshot({ path: process.env.SCREENSHOT_PATH ?? '/tmp/editor-media-check/playback.png' });
  assert.deepEqual(errors, []);
- console.log(JSON.stringify({ result: 'PASS', audio, compositor, checks: ['rendered real media', 'play/pause', 'audio samples', 'preview mute', 'frame stepping', 'transport limits', 'crossfade pixels', 'fade-to-black pixels', 'transform', 'crop', 'hidden track', 'fade curves', 'play into clip', 'ruler scrub', 'trim scrub', 'properties update', 'worker render'] }, null, 2));
+ console.log(JSON.stringify({ result: 'PASS', clock, audio, compositor, checks: ['rendered real media', 'play/pause', 'audio samples', 'preview mute', 'frame stepping', 'transport limits', 'crossfade pixels', 'fade-to-black pixels', 'transform', 'crop', 'hidden track', 'fade curves', 'play into clip', 'ruler scrub', 'trim scrub', 'properties update', 'worker render'] }, null, 2));
 } finally { await browser.close(); }

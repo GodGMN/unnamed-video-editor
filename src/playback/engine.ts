@@ -1,9 +1,11 @@
 import { clipEnd } from '../editor/model';
-import type { Clip, Project } from '../editor/model';
+import type { AudioClip, Clip, Project } from '../editor/model';
 import { readMediaFile } from '../media/files';
 import { audioGain, renderFrame } from './compositor';
+import { FrameCache } from './frameCache';
 
-interface Player { element: HTMLVideoElement; url: string; gain: GainNode | null; source: MediaElementAudioSourceNode | null; audio: boolean }
+interface Player { element: HTMLAudioElement; url: string; gain: GainNode | null; source: MediaElementAudioSourceNode | null; ready: boolean; busy: boolean; wantedPlaying: boolean }
+interface Entry { mediaId: string; used: number; frames: FrameCache | null; audio: Player | null; disposed: boolean }
 interface Request { project: Project; time: number; playing: boolean; volume: number }
 /** Why a source can't play: its file is gone, or it failed to decode. */
 type Unavailable = { missing: true } | { missing: false; error: string };
@@ -41,14 +43,15 @@ function waitFor(element: HTMLMediaElement, event: string, action: () => void) {
   });
 }
 
-/** Owns media elements, URLs, and the Web Audio graph for this preview only. */
+/** Preparation runs independently for each clip. Drawing never awaits a load, seek, or play promise. */
 export class PlaybackEngine {
-  private players = new Map<string, Player>();
+  private entries = new Map<string, Entry>();
   private unavailable = new Map<string, Unavailable>();
   private context: AudioContext | null = null;
   private latest: Request | null = null;
-  private busy = false;
   private disposed = false;
+  private serial = 0;
+  private redraw = 0;
   constructor(private canvas: HTMLCanvasElement, private status: (message: string) => void) {}
 
   async resumeAudio() {
@@ -58,110 +61,156 @@ export class PlaybackEngine {
 
   update(request: Request) {
     this.latest = request;
-    // Pause immediately, even when an old seek is still pending.
-    if (!request.playing) for (const p of this.players.values()) p.element.pause();
-    if (!this.busy) void this.flush();
-  }
-
-  private async player(clip: Clip, audio: boolean): Promise<Player | null> {
-    if (this.players.has(clip.id)) return this.players.get(clip.id)!;
-    if (this.unavailable.has(clip.mediaId)) return null;
-    const file = await readMediaFile(clip.mediaId);
-    if (this.disposed) return null;
-    if (!file) {
-      this.unavailable.set(clip.mediaId, { missing: true });
-      return null;
-    }
-    const element = document.createElement('video');
-    const url = URL.createObjectURL(file);
-    const player: Player = { element, url, gain: null, source: null, audio };
-    element.preload = 'auto'; element.playsInline = true; element.muted = !audio;
-    // Register before loading so disposal also releases an in-flight decoder.
-    this.players.set(clip.id, player);
-    try {
-      await waitFor(element, 'loadeddata', () => { element.src = url; element.load(); });
-      return this.disposed ? null : player;
-    } catch (error) {
-      this.release(clip.id);
-      if (!this.disposed) this.unavailable.set(clip.mediaId, { missing: false, error: error instanceof Error ? error.message : 'Unknown error.' });
-      return null;
-    }
-  }
-
-  /** A newer pause supersedes async work. Playback queues a request every frame, so those must not. */
-  private get superseded() { return !!this.latest && !this.latest.playing; }
-
-  private async flush() {
-    this.busy = true;
-    try {
-      while (this.latest && !this.disposed) {
-        const request = this.latest;
-        this.latest = null;
-        const { project, time, playing, volume } = request;
-        const active = new Set<string>();
-        const ready = new Map<string, HTMLVideoElement>();
-        const problems = new Map<string, Unavailable>();
-        await Promise.all(project.tracks.flatMap((track) => {
-          if (track.kind === 'text' || (track.kind === 'video' ? track.hidden : track.muted)) return [];
-          return track.clips.filter((clip) => time >= clip.start && time < clipEnd(clip)).map(async (clip) => {
-            active.add(clip.id);
-            const audio = track.kind === 'audio';
-            const player = await this.player(clip, audio);
-            if (!player || this.disposed) {
-              const problem = this.unavailable.get(clip.mediaId);
-              if (problem) problems.set(clip.mediaId, problem);
-              return;
-            }
-            const element = player.element;
-            const target = Math.min(element.duration - 0.001, Math.max(0, clip.inS + time - clip.start));
-            const drift = Math.abs(element.currentTime - target);
-            if (drift > (playing && !element.paused ? 0.15 : 0.002)) {
-              await waitFor(element, 'seeked', () => { element.currentTime = target; });
-            }
-            if (this.disposed) return;
-            if (this.superseded) return;
-            if (audio && this.context) {
-              if (!player.gain) {
-                player.source = this.context.createMediaElementSource(element);
-                player.gain = this.context.createGain();
-                player.source.connect(player.gain).connect(this.context.destination);
-              }
-              const clipGain = audioGain(project, clip as import('../editor/model').AudioClip, time);
-              player.gain.gain.setTargetAtTime(playing ? volume * clipGain : 0, this.context.currentTime, 0.01);
-            }
-            // No browser-default audio may bypass the gain graph.
-            element.muted = !audio || !this.context;
-            if (playing) await element.play(); else element.pause();
-            if (!audio && element.readyState >= 2) ready.set(clip.id, element);
-          });
-        }));
-        for (const [id, player] of this.players) if (!active.has(id)) { player.element.pause(); this.release(id); }
-        if (this.disposed || this.superseded) continue;
-        const ctx = this.canvas.getContext('2d');
-        if (ctx) renderFrame(project, time, ctx, (clip) => ready.get(clip.id) ?? null);
-        this.status(unavailableMessage(problems, project));
+    const { project, time, playing } = request;
+    const active = new Set<string>();
+    const upcoming: { clip: Clip; audio: boolean }[] = [];
+    for (const track of project.tracks) {
+      if (track.kind === 'text' || (track.kind === 'video' ? track.hidden : track.muted)) continue;
+      for (const clip of track.clips) {
+        if (time >= clip.start && time < clipEnd(clip)) {
+          active.add(clip.id);
+          this.prepare(clip, track.kind === 'audio', time, playing);
+        } else if (clip.start > time && clip.start <= time + 2) upcoming.push({ clip, audio: track.kind === 'audio' });
       }
-    } catch (error) {
-      if (!this.disposed) this.status(error instanceof Error ? error.message : 'Playback failed.');
-    } finally {
-      this.busy = false;
-      if (this.latest && !this.disposed) void this.flush();
+    }
+    // Keep the next video and audio pair warm, without opening every decoder on a long timeline.
+    upcoming.sort((a, b) => a.clip.start - b.clip.start);
+    const warm = new Set<string>();
+    for (const { clip, audio } of upcoming.slice(0, 2)) {
+      warm.add(clip.id);
+      this.prepare(clip, audio, clip.start, false);
+    }
+    for (const [id, entry] of this.entries) {
+      if (!active.has(id) && entry.audio) { entry.audio.wantedPlaying = false; entry.audio.element.pause(); }
+      if (!project.media[entry.mediaId]) this.release(id);
+    }
+    // Active clips are pinned. Keep at most two inactive entries, preferring upcoming clips over old ones.
+    const idle = [...this.entries].filter(([id]) => !active.has(id))
+      .sort(([a, x], [b, y]) => Number(warm.has(b)) - Number(warm.has(a)) || y.used - x.used);
+    for (const [id] of idle.slice(2)) this.release(id);
+    this.draw();
+  }
+
+  private prepare(clip: Clip, audio: boolean, time: number, playing: boolean) {
+    let entry = this.entries.get(clip.id);
+    if (entry && entry.mediaId !== clip.mediaId) { this.release(clip.id); entry = undefined; }
+    if (!entry) {
+      if (this.unavailable.has(clip.mediaId)) return;
+      entry = { mediaId: clip.mediaId, used: ++this.serial, frames: null, audio: null, disposed: false };
+      this.entries.set(clip.id, entry);
+      const created = entry;
+      void this.load(created, audio).then(() => {
+        if (!created.disposed && this.latest) this.update(this.latest);
+      });
+    }
+    entry.used = ++this.serial;
+    const target = Math.max(0, clip.inS + time - clip.start);
+    entry.frames?.request(target, playing);
+    if (entry.audio?.ready) this.syncAudio(entry, clip as AudioClip, target, playing);
+  }
+
+  private async load(entry: Entry, audio: boolean) {
+    try {
+      const file = await readMediaFile(entry.mediaId);
+      if (entry.disposed) return;
+      if (!file) { this.unavailable.set(entry.mediaId, { missing: true }); return; }
+      if (!audio) {
+        entry.frames = new FrameCache(file, () => this.scheduleDraw(), (error) => this.fail(entry, error));
+      } else {
+        const element = document.createElement('audio');
+        const url = URL.createObjectURL(file);
+        const player: Player = { element, url, gain: null, source: null, ready: false, busy: false, wantedPlaying: false };
+        entry.audio = player;
+        element.preload = 'auto'; element.muted = true;
+        await waitFor(element, 'loadeddata', () => { element.src = url; element.load(); });
+        if (!entry.disposed) player.ready = true;
+      }
+    } catch (error) { if (!entry.disposed) this.fail(entry, error); }
+  }
+
+  private fail(entry: Entry, error: unknown) {
+    this.unavailable.set(entry.mediaId, { missing: false, error: error instanceof Error ? error.message : 'Unknown error.' });
+    this.scheduleDraw();
+  }
+
+  private syncAudio(entry: Entry, clip: AudioClip, target: number, playing: boolean) {
+    const player = entry.audio!;
+    const { element } = player;
+    player.wantedPlaying = playing;
+    if (!playing) element.pause();
+    const context = this.context;
+    if (context && !player.gain) {
+      player.source = context.createMediaElementSource(element);
+      player.gain = context.createGain();
+      player.source.connect(player.gain).connect(context.destination);
+    }
+    const request = this.latest!;
+    if (context && player.gain) {
+      player.gain.gain.setTargetAtTime(playing ? request.volume * audioGain(request.project, clip, request.time) : 0, context.currentTime, 0.01);
+    }
+    element.muted = !context;
+    if (player.busy) return;
+    const drift = Math.abs(element.currentTime - target);
+    if (drift > (playing && !element.paused ? 0.25 : 0.002)) {
+      player.busy = true;
+      void waitFor(element, 'seeked', () => { element.currentTime = Math.min(element.duration - 0.001, target); })
+        .then(async () => {
+          // Start from the prepared position rather than chasing a moving target while still paused.
+          if (!entry.disposed && player.wantedPlaying) {
+            await element.play();
+            if (entry.disposed || !player.wantedPlaying) element.pause();
+          }
+        }).catch((error: unknown) => { if (!entry.disposed) this.fail(entry, error); })
+        .finally(() => {
+          player.busy = false;
+          if (!entry.disposed && this.latest) this.update(this.latest);
+        });
+      return;
+    }
+    if (playing && element.paused) {
+      player.busy = true;
+      void element.play().then(() => {
+        const latest = this.latest;
+        if (entry.disposed || !player.wantedPlaying || !latest?.playing || latest.time < clip.start || latest.time >= clipEnd(clip)) element.pause();
+      }, (error) => { if (!entry.disposed) this.fail(entry, error); }).finally(() => { player.busy = false; });
     }
   }
 
+  private scheduleDraw() {
+    if (this.disposed || this.redraw) return;
+    this.redraw = requestAnimationFrame(() => { this.redraw = 0; this.draw(); });
+  }
+  private draw() {
+    if (this.disposed || !this.latest) return;
+    const { project, time, playing } = this.latest;
+    const ctx = this.canvas.getContext('2d');
+    if (ctx) renderFrame(project, time, ctx, (clip, sourceTime) => this.entries.get(clip.id)?.frames?.frame(sourceTime, playing) ?? null);
+    const problems = new Map<string, Unavailable>();
+    for (const track of project.tracks) {
+      if (track.kind === 'text' || (track.kind === 'video' ? track.hidden : track.muted)) continue;
+      for (const clip of track.clips) {
+        const problem = this.unavailable.get(clip.mediaId);
+        if (problem && time >= clip.start && time < clipEnd(clip)) problems.set(clip.mediaId, problem);
+      }
+    }
+    this.status(unavailableMessage(problems, project));
+  }
   private release(id: string) {
-    const player = this.players.get(id);
-    if (!player) return;
-    player.element.pause();
-    player.source?.disconnect(); player.gain?.disconnect();
-    player.element.removeAttribute('src'); player.element.load();
-    URL.revokeObjectURL(player.url);
-    this.players.delete(id);
+    const entry = this.entries.get(id);
+    if (!entry) return;
+    entry.disposed = true;
+    entry.frames?.dispose();
+    if (entry.audio) {
+      const { element, source, gain, url } = entry.audio;
+      element.pause(); source?.disconnect(); gain?.disconnect();
+      element.removeAttribute('src'); element.load(); URL.revokeObjectURL(url);
+    }
+    this.entries.delete(id);
   }
   dispose() {
     this.disposed = true;
-    this.latest = null;
-    for (const id of this.players.keys()) this.release(id);
+    cancelAnimationFrame(this.redraw);
+    for (const id of this.entries.keys()) this.release(id);
     void this.context?.close();
   }
 }
