@@ -43,10 +43,15 @@ export async function mediaTransaction<T>(store: 'sources' | 'previews', mode: I
     request.onerror = () => { db = undefined; reject(request.error); };
   });
   const tx = (await db).transaction(store, mode);
-  return new Promise((resolve, reject) => {
+  return new Promise<T>((resolve, reject) => {
     const request = fn(tx.objectStore(store));
     tx.oncomplete = () => resolve(request.result);
-    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error(translate('linksMediaStorageFailed')));
+    tx.onabort = () => reject(tx.error ?? new Error(translate('linksMediaStorageFailed')));
+  }).catch(error => {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      throw new Error(translate('linksStorageQuotaExceeded'), { cause: error });
+    }
+    throw error;
   });
 }
 const session = new Map<string, File>();
@@ -59,7 +64,7 @@ export async function linkFile(id: string, file: File, handle?: ReadHandle, rang
   }
   try { await mediaTransaction('sources', 'readwrite', s => s.put(source, id)); }
   catch (error) {
-    if (!handle) throw error;
+    if (!handle || !(error instanceof DOMException) || error.name !== 'DataCloneError') throw error;
     await mediaTransaction('sources', 'readwrite', s => s.put({ ...source, handle: undefined }, id));
   }
   session.set(id, file);
