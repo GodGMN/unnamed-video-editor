@@ -343,6 +343,14 @@ export function removeMedia(p: Project, mediaId: string): Project {
   } as Track) };
 }
 
+/** Removes clips (with their linked partners) and text items by id. */
+export function deleteItems(p: Project, ids: string[]): Project {
+  const gone = new Set([...ids, ...movingGroup(p, ids).map((c) => c.id)]);
+  return { ...p, tracks: p.tracks.map((t) => (t.kind === 'text'
+    ? { ...t, items: t.items.filter((x) => !gone.has(x.id)) }
+    : { ...t, clips: t.clips.filter((c) => !gone.has(c.id)) } as Track)) };
+}
+
 /** Keep track order deterministic without changing user-authored positions. */
 export function settle(p: Project): Project {
   return { ...p, tracks: p.tracks.map(t => t.kind === 'text' ? t : {
