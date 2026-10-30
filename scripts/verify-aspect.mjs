@@ -1,3 +1,4 @@
+import { openEditor } from './browser-helpers.mjs';
 // Start Vite, then run with PLAYWRIGHT_MODULE and optional TEST_URL / ARTIFACT_DIR.
 // Switches a 16:9 project to 9:16 in the UI, exports 1080p and checks the MP4 is 1080×1920 with
 // the 16:9 source letterboxed the same way as the preview.
@@ -15,7 +16,9 @@ const url = process.env.TEST_URL ?? 'http://127.0.0.1:5216';
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
 try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, acceptDownloads: true });
+  await page.addInitScript(() => { window.showOpenFilePicker = undefined; });
   await page.goto(url);
+  await openEditor(page);
   await page.evaluate(async (bytes) => {
     const { importMedia } = await import('/src/media/import.ts');
     const { seedProject } = await import('/src/editor/seed.ts');
@@ -30,6 +33,9 @@ try {
     await (await import('/src/editor/storage.ts')).saveProject(p);
   }, [...readFileSync(file)]);
   await page.reload();
+  await openEditor(page);
+  await page.locator('input[aria-label="Reconnect landscape.mp4"]').setInputFiles(file);
+  await page.locator('.media-item').filter({ hasText: 'landscape.mp4' }).getByRole('button', { name: 'Rebuild previews' }).waitFor();
   const button = page.getByRole('button', { name: /^Output aspect ratio/ });
   await button.waitFor();
   assert.match(await button.innerText(), /16:9\s*1920×1080/);

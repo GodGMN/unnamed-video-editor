@@ -5,13 +5,15 @@ import type { MediaPreview } from './files';
 import { loopTime } from './animation';
 
 export function useMediaPreview(id: string) {
+  const [revision, setRevision] = useState(0);
+  useEffect(() => { const refresh = () => setRevision(n => n + 1); window.addEventListener('media-preview-change', refresh); return () => window.removeEventListener('media-preview-change', refresh); }, []);
   const [preview, setPreview] = useState<MediaPreview | null>(null);
   useEffect(() => {
     let cancelled = false;
     setPreview(null);
     readPreview(id).then((value) => { if (!cancelled) setPreview(value); }).catch(console.warn);
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, revision]);
   return preview;
 }
 export function PreviewStrip({ media, width, inS = 0, outS = media.duration }: { media: Media; width: number; inS?: number; outS?: number }) {

@@ -1,3 +1,4 @@
+import { openEditor } from './browser-helpers.mjs';
 // Run Vite, then PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs TEST_URL=http://127.0.0.1:5269 node scripts/verify-chroma-key.mjs
 // Optional ARTIFACT_DIR keeps the screenshots.
 import assert from 'node:assert/strict';
@@ -21,7 +22,9 @@ try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => { window.showOpenFilePicker = undefined; });
   await page.goto(url);
+  await openEditor(page);
   await page.waitForSelector('canvas[aria-label="Timeline preview"]');
 
   // Compositor, engine sampling and export renderer, outside the UI.
@@ -66,7 +69,7 @@ try {
     const preparedAlone = await exportSource(alone, layoutTimeline(alone)).prepare(320, 180, 48000, new AbortController().signal);
     const exportedAlone = px(10, 170, await preparedAlone.renderFrame({ index: 15, time: 0.5 }));
     preparedAlone.dispose();
-    return { over, transparent, black, sampled, off, exported, exportedAlone, fgId: fgMedia.id, bgId: bgMedia.id };
+    return { over, transparent, black, sampled, off, exported, exportedAlone, fgId: fgMedia.id, bgId: bgMedia.id, fgMedia, bgMedia };
   }, [[...readFileSync(fg)], [...readFileSync(bg)]]);
 
   const isGreen = ([r, g, b]) => g > 150 && r < 40 && b < 90;
@@ -86,17 +89,15 @@ try {
   assert.deepEqual(engine.exportedAlone.slice(0, 3), [0, 0, 0], 'MP4 export flattens transparency onto black');
 
   // The UI: pick the key colour from the preview, then look at it with and without the grid.
-  await page.evaluate(async ({ fgId, bgId }) => {
+  await page.evaluate(async ({ fgMedia, bgMedia }) => {
     const { VIDEO_CLIP_DEFAULTS } = await import('/src/editor/model.ts');
     const { saveProject } = await import('/src/editor/storage.ts');
     const { seedProject } = await import('/src/editor/seed.ts');
     const p = seedProject();
-    const fgMedia = { id: fgId, name: 'greenscreen.mp4', container: 'MP4', duration: 2, size: 1, bitrate: 1, video: { codec: 'avc1.64000d', width: 320, height: 180, fps: 30 }, audio: null, decodable: true, tone: '#35503F', seed: 0 };
-    const bgMedia = { ...fgMedia, id: bgId, name: 'backdrop.mp4' };
     // The editor opens with the playhead at 12.4 s.
     const clip = (id, m) => ({ ...VIDEO_CLIP_DEFAULTS, id, mediaId: m.id, start: 11.5, inS: 0, outS: 2, linkId: null, linked: false });
     p.output = { width: 1920, height: 1080, fps: 30 };
-    p.media = { [fgId]: fgMedia, [bgId]: bgMedia };
+    p.media = { [fgMedia.id]: fgMedia, [bgMedia.id]: bgMedia };
     p.tracks = [
       { id: 'V2', name: 'V2', label: 'Key', kind: 'video', hidden: false, magnetic: false, clips: [clip('fg', fgMedia)] },
       { id: 'V1', name: 'V1', label: 'Main', kind: 'video', hidden: false, magnetic: false, clips: [clip('bg', bgMedia)] },
@@ -105,6 +106,11 @@ try {
     await saveProject(p);
   }, engine);
   await page.reload();
+  await openEditor(page);
+  for (const [name, path] of [['greenscreen.mp4', fg], ['backdrop.mp4', bg]]) {
+    await page.locator(`input[aria-label="Reconnect ${name}"]`).setInputFiles(path);
+    await page.locator('.media-item').filter({ hasText: name }).getByRole('button', { name: 'Rebuild previews' }).waitFor();
+  }
   const stage = page.locator('canvas[aria-label="Timeline preview"]');
   await stage.waitFor();
   // Select the keyed clip on V2.
