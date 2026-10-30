@@ -41,3 +41,16 @@ The same Dockerfile builds a static bundle served by nginx:
 docker build --target production -t unnamed-video-editor .
 docker run --rm -p 8080:80 unnamed-video-editor
 ```
+
+## Promo video
+
+`demo/` holds a [Remotion](https://www.remotion.dev) promo of the editor
+(1920×1080, 30 fps, about 38 s). The editor UI in it is redrawn at the app's
+own sizes; the project and footage are invented.
+
+```sh
+cd demo
+npm install
+npm run studio   # preview and scrub in the browser
+npm run render   # writes out/unnamed-video-editor-promo.mp4
+```
