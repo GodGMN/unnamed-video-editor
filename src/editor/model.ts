@@ -465,6 +465,24 @@ export function snapClipStart(start: number, duration: number, targets: number[]
   return result;
 }
 
+/** Every clip start and end on the timeline, plus 0, skipping the clips in `skip`. */
+export function edgeTargets(p: Project, skip: Set<string>): number[] {
+  const targets = [0];
+  for (const track of p.tracks) for (const c of track.clips as Clip[]) if (!skip.has(c.id)) targets.push(c.start, clipEnd(c));
+  return targets;
+}
+
+/** The target closest to `time` within the snap radius (8 screen pixels), or null if none is that close. */
+export function snapEdge(time: number, targets: number[], pixelsPerSecond: number): number | null {
+  let result: number | null = null;
+  let distance = 8 / pixelsPerSecond;
+  for (const target of targets) {
+    const d = Math.abs(target - time);
+    if (d < distance) { result = target; distance = d; }
+  }
+  return result;
+}
+
 /** Shortest piece a split may leave on either side of the cut, in seconds. */
 export const MIN_SPLIT_PIECE = 0.05;
 

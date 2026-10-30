@@ -265,7 +265,7 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextClip }) {
           {(['t', 'c', 'b'] as const).flatMap((v) => (['l', 'c', 'r'] as const).map((h) => {
             const k: TextAnchor = `${v}${h}`;
             return (
-              <button key={k} aria-label={`${V_NAMES[v]} ${H_NAMES[h]}`} aria-pressed={tx.pos === k} onClick={() => updateText({ pos: k })}>
+              <button key={k} aria-label={`${V_NAMES[v]} ${H_NAMES[h]}`} aria-pressed={tx.pos === k} onClick={() => updateText({ pos: k, x: 0, y: 0 })}>
                 <span />
               </button>
             );
