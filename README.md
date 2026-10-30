@@ -153,12 +153,14 @@ Reconnect checks the source size and a sampled content signature covering the
 beginning, middle, and end. This detects accidental substitutions without reading
 an entire multi-gigabyte file. It is not a full-file integrity checksum. Legacy
 media without signatures is checked against its name, size, duration, and stream
-metadata instead. A changed linked file needs reconnecting. Relinking a shared
+metadata instead. A changed linked file needs reconnecting. **Relink original**
+(right-click a media item) points an available source at another copy. Relinking a shared
 source affects project duplicates that use that source.
 
 Only generated thumbnails and waveforms enter the new disposable cache. Writes
 and eviction share one IndexedDB transaction and cap it at 128 MiB across tabs.
-**Settings → Clear preview cache** removes them; **Rebuild previews** regenerates a source's previews.
+**Settings → Clear preview cache** removes them; right-click a media item and
+choose **Rebuild previews** to regenerate its previews.
 Old OPFS/IndexedDB source copies remain readable. Reconnecting an original or
 deleting its last saved reference removes that old copy, never the external
 original. Copies retained from older versions are outside the preview budget.
