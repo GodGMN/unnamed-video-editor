@@ -22,6 +22,30 @@ const TRACK_H = { text: TEXT_TRACK_H, video: VIDEO_TRACK_H, audio: AUDIO_TRACK_H
 
 const isOff = (t: Track) => (t.kind === 'audio' ? t.muted : t.hidden);
 
+interface Overlap { from: VideoClip | AudioClip; to: VideoClip | AudioClip; start: number; end: number }
+
+/** Overlapping regions between neighbouring clips of one track, in start order. */
+function overlapsOf<C extends VideoClip | AudioClip>(clips: C[]): Overlap[] {
+  const sorted = [...clips].sort((a, b) => a.start - b.start);
+  const out: Overlap[] = [];
+  for (let i = 0; i + 1 < sorted.length; i++) {
+    const end = Math.min(clipEnd(sorted[i]), clipEnd(sorted[i + 1]));
+    if (end - sorted[i + 1].start > 1e-6) out.push({ from: sorted[i], to: sorted[i + 1], start: sorted[i + 1].start, end });
+  }
+  return out;
+}
+
+/** Seconds of each clip covered by a neighbour at its head and at its tail. */
+function overlapInsets(clips: (VideoClip | AudioClip)[]) {
+  const insets = new Map<string, { head: number; tail: number }>();
+  const get = (id: string) => insets.get(id) ?? insets.set(id, { head: 0, tail: 0 }).get(id)!;
+  for (const o of overlapsOf(clips)) {
+    get(o.to.id).head = o.end - o.start;
+    get(o.from.id).tail = o.end - o.start;
+  }
+  return insets;
+}
+
 export function Timeline({ editor }: { editor: Editor }) {
   const { project, ui, layout, select, setTool, setPlayhead, toggleTrack, openMenu, closeMenu } = editor;
   const rootRef = useRef<HTMLElement>(null);
@@ -148,7 +172,9 @@ export function Timeline({ editor }: { editor: Editor }) {
           <div style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
             <div className="ruler" onPointerDown={onRulerDown}>{ticks}</div>
 
-            {project.tracks.map((t) => (
+            {project.tracks.map((t) => {
+              const insets = t.kind === 'text' ? null : overlapInsets(t.clips);
+              return (
               <div key={t.id} className="track" onDragOver={(e) => { if (t.kind !== 'text' && e.dataTransfer.types.includes('application/x-editor-media')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
                 onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('application/x-editor-media'); if (id) editor.placeMedia(id, t.id, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps); }}
                 data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
@@ -163,15 +189,23 @@ export function Timeline({ editor }: { editor: Editor }) {
                 ))}
                 {t.kind === 'video' && (
                   <>
-                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} onMenu={onContextMenu('clip', c.id)} />)}
+                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} inset={insets!.get(c.id)} onMenu={onContextMenu('clip', c.id)} />)}
                     <Transitions pps={pps} editor={editor} clips={t.clips} />
                   </>
                 )}
-                {t.kind === 'audio' && t.clips.map((c) => (
-                  <AudioClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} onMenu={onContextMenu('audio', c.id)} />
-                ))}
+                {t.kind === 'audio' && (
+                  <>
+                    {t.clips.map((c) => (
+                      <AudioClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} inset={insets!.get(c.id)} onMenu={onContextMenu('audio', c.id)} />
+                    ))}
+                    {overlapsOf(t.clips).map((o) => (
+                      <span key={o.from.id} className="overlap-band audio" style={{ left: o.start * pps + 1, width: (o.end - o.start) * pps - 2 }} aria-hidden="true" />
+                    ))}
+                  </>
+                )}
               </div>
-            ))}
+              );
+            })}
 
             <div className="playhead" style={{ left: ui.playhead * pps }} />
           </div>
@@ -213,6 +247,8 @@ interface ClipProps<C> {
   pps: number;
   snapping: boolean;
   clip: C;
+  /** Seconds hidden under neighbouring clips at the head and tail. */
+  inset?: { head: number; tail: number };
   onMenu: (e: MouseEvent) => void;
 }
 
@@ -222,7 +258,7 @@ function partnerSelected({ project, ui }: Editor, clip: VideoClip | AudioClip, k
   return !!sel && sel.kind === kind && clip.linked && clip.linkId !== null && findClip(project, sel.id)?.clip.linkId === clip.linkId;
 }
 
-function VideoClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<VideoClip>) {
+function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<VideoClip>) {
   const { project, ui, select } = editor;
   const dragClip = useClipMove(editor, cs, snapping);
   const id = cs.id;
@@ -241,7 +277,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<Vi
       onClick={() => select({ kind: 'clip', id })}
       onContextMenu={onMenu}>
       <PreviewStrip media={src} width={width} inS={cs.inS} outS={cs.outS} />
-      <span className="clip-label">
+      <span className="clip-label" style={inset && { paddingLeft: 12 + inset.head * pps, paddingRight: 12 + inset.tail * pps }}>
         <span>
           {cs.linked && <Link size={11} stroke="#D8DED9" strokeWidth={2.4} style={{ flex: 'none' }} />}
           <span className="name">{src.name}</span>
@@ -258,7 +294,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<Vi
   );
 }
 
-/** A chip on every boundary between adjacent clips. */
+/** A chip on every boundary between adjacent clips; a full-height band where they overlap. */
 function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[]; pps: number }) {
   const { ui, layout, select } = editor;
   return (
@@ -271,11 +307,11 @@ function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
         const overlap = overlapEnd - overlapStart;
         if (overlap < -1e-6) return null;
         const tt = c.transitionOut ?? DEFAULT_TRANSITION;
-        const w = overlap > 0 ? overlap * pps : 26;
+        const w = overlap > 0 ? overlap * pps - 2 : 26;
         const typeFrom = (e: { dataTransfer: DataTransfer }) => e.dataTransfer.getData('application/x-timeline-transition');
         return (
-          <button key={c.id} className={'trans-chip' + (overlap > 0 ? ' overlap-zone' : '')}
-            style={{ left: overlap > 0 ? overlapStart * pps : overlapStart * pps - w / 2, width: w }}
+          <button key={c.id} className={overlap > 0 ? 'overlap-band' : 'trans-chip'}
+            style={{ left: overlap > 0 ? overlapStart * pps + 1 : overlapStart * pps - w / 2, width: w }}
             aria-label={`${TRANSITION_NAMES[tt.type]} transition between ${layout.clips[c.id].name} and ${layout.clips[next.id].name}`}
             title={overlap > 0 ? `${overlap.toFixed(2)}s overlap · drop a transition here` : 'Overlap clips to add a transition'}
             aria-pressed={ui.sel?.kind === 'trans' && ui.sel.id === c.id}
@@ -288,9 +324,13 @@ function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
               select({ kind: 'trans', id: c.id });
             }}
             onClick={() => select({ kind: 'trans', id: c.id })}>
-            {tt.type === 'crossfade' && <Crossfade size={14} />}
-            {tt.type === 'fade' && <FadeBlack size={14} />}
-            {tt.type === 'cut' && <CutLine size={14} />}
+            {(overlap <= 0 || w >= 22) && (
+              <span className="trans-icon">
+                {tt.type === 'crossfade' && <Crossfade size={14} />}
+                {tt.type === 'fade' && <FadeBlack size={14} />}
+                {tt.type === 'cut' && <CutLine size={14} />}
+              </span>
+            )}
           </button>
         );
       })}
@@ -300,7 +340,7 @@ function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
 
 const f1 = (x: number) => x.toFixed(1);
 
-function AudioClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<AudioClip>) {
+function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<AudioClip>) {
   const { project, ui, select, updateAudioClip: updateClip } = editor;
   const startDrag = useDrag();
   const dragClip = useClipMove(editor, cs, snapping);
@@ -402,7 +442,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<Au
           <span />
         </button>
       )}
-      <span className="audio-badge">
+      <span className="audio-badge" style={inset && { right: 8 + inset.tail * pps }}>
         {!cs.linked && <span className="unlinked">unlinked</span>}
         {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
         {cs.vol}%
