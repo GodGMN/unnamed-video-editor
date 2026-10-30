@@ -13,13 +13,13 @@ type Res = '720' | '1080';
 export interface ExportSource {
   /** Sequence length in seconds. */
   duration: number;
+  fps: number;
   /** Returns the frame callback for one export at the given output size. */
   frames: (width: number, height: number) => ExportOptions['renderFrame'];
   /** Mixes the timeline's audio to a single buffer starting at 0 s, or `null` for a silent export. */
   mixAudio: (sampleRate: number) => Promise<AudioBuffer | null>;
 }
 
-const FPS = 30;
 const SAMPLE_RATE = 48000;
 const CHANNELS = 2;
 const SIZES: Record<Res, [number, number]> = { '720': [1280, 720], '1080': [1920, 1080] };
@@ -60,6 +60,7 @@ interface Props {
 }
 
 export function ExportDialog({ projectSlug, source, onClose }: Props) {
+  const { fps } = source;
   const [step, setStep] = useState<Step>('settings');
   const [res, setRes] = useState<Res>('1080');
   const [support, setSupport] = useState<SupportReport | 'failed' | null>(null);
@@ -69,15 +70,15 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
   const controller = useRef<AbortController | null>(null);
   const [title, subtitle] = COPY[step];
   const [width, height] = SIZES[res];
-  const totalFrames = Math.max(1, Math.round(source.duration * FPS));
+  const totalFrames = Math.max(1, Math.round(source.duration * fps));
 
   useEffect(() => {
     let live = true;
     setSupport(null);
-    probeExportSupport({ width, height, fps: FPS, audio: { sampleRate: SAMPLE_RATE, numberOfChannels: CHANNELS } })
+    probeExportSupport({ width, height, fps, audio: { sampleRate: SAMPLE_RATE, numberOfChannels: CHANNELS } })
       .then((r) => { if (live) setSupport(r); }, () => { if (live) setSupport('failed'); });
     return () => { live = false; };
-  }, [width, height]);
+  }, [width, height, fps]);
 
   // Closing the dialog mid-export stops it.
   useEffect(() => () => controller.current?.abort(), []);
@@ -94,7 +95,7 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
       ctl.signal.throwIfAborted();
       const t0 = performance.now();
       const out = await exportMp4({
-        width, height, fps: FPS, duration: source.duration,
+        width, height, fps, duration: source.duration,
         renderFrame: source.frames(width, height),
         audio: audio ?? undefined,
         signal: ctl.signal,
@@ -138,11 +139,11 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
           ]} />
           <div className="rows">
             <div><span className="k">Format</span><span className="v">MP4 · H.264 + AAC</span></div>
-            <div><span className="k">Frame rate</span><span className="v">{FPS} fps</span></div>
+            <div><span className="k">Frame rate</span><span className="v">{fps} fps</span></div>
             <div><span className="k">Duration</span><span className="mono">{fmtTime(source.duration)}</span></div>
             <div><span className="k">Frames</span><span className="mono">{totalFrames}</span></div>
           </div>
-          <BrowserCheck support={support} width={width} height={height} />
+          <BrowserCheck support={support} width={width} height={height} fps={fps} />
           <div className="dialog-actions" style={{ paddingTop: 4 }}>
             <button className="gb" onClick={onClose}>Cancel</button>
             <button className="primary" onClick={start} disabled={!supported}>Start export</button>
@@ -163,7 +164,7 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
       {step === 'done' && result && (
         <div className="dialog-body" style={{ paddingTop: 22 }}>
           <ResultCard tone="#35503F" name={`${projectSlug}-${result.res}p.mp4`}
-            meta={`${SIZES[result.res].join('×')} · ${fmtTime(result.out.frameCount / FPS)} · ${fmtBytes(result.out.blob.size)} · H.264 + AAC`}
+            meta={`${SIZES[result.res].join('×')} · ${fmtTime(result.out.frameCount / fps)} · ${fmtBytes(result.out.blob.size)} · H.264 + AAC`}
             extra={<span className="mono" style={{ color: 'var(--text-muted)', fontSize: 11 }}>{codecLine(result.out)}</span>} />
           <div className="dialog-actions split">
             <button className="link-btn" onClick={() => setStep('settings')}>Export again</button>
@@ -190,14 +191,14 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
   );
 }
 
-function BrowserCheck({ support, width, height }: { support: SupportReport | 'failed' | null; width: number; height: number }) {
+function BrowserCheck({ support, width, height, fps }: { support: SupportReport | 'failed' | null; width: number; height: number; fps: number }) {
   const rows = support === null
     ? [{ label: 'Checking encoders…', status: 'pending' as const, note: '' }]
     : support === 'failed'
       ? [{ label: 'Encoder check failed', status: 'fail' as const, note: 'export unavailable' }]
       : [
         { label: 'WebCodecs', status: support.webCodecs ? 'ok' as const : 'fail' as const, note: support.webCodecs ? 'available' : 'not available' },
-        { label: 'H.264 video encoder', status: support.h264 ? 'ok' as const : 'fail' as const, note: support.h264 ? `${width}×${height} · ${FPS} fps` : `not at ${width}×${height}` },
+        { label: 'H.264 video encoder', status: support.h264 ? 'ok' as const : 'fail' as const, note: support.h264 ? `${width}×${height} · ${fps} fps` : `not at ${width}×${height}` },
         {
           label: 'AAC audio encoder', status: support.aac ? 'ok' as const : 'fail' as const,
           note: support.aac === 'native' ? 'built in · 48 kHz stereo' : support.aac === 'wasm' ? 'bundled fallback · 48 kHz stereo' : 'not available',

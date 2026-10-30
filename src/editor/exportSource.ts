@@ -1,31 +1,26 @@
 /*
  * Feeds the current timeline to the MP4 export. The mixdown is real (clip timing, trims, volume, mute, fades
- * and their curves, hidden tracks), but there is no decoded media or shared compositor yet, so sources are
+ * and their curves, muted tracks), but there is no decoded media or shared compositor yet, so sources are
  * stand-ins: each clip renders as its tone colour with a source timecode, and sounds as a steady sine tone.
  * Swap `placeholderFrames` and `placeholderAudio` for the compositor and decoded audio once they exist.
  */
 
 import type { ExportSource } from '../components/ExportDialog';
-import { MAIN_IDS, SOURCES, fmtTime } from './model';
-import type { ClipId, ClipLayout, ProjectState } from './model';
+import { MISSING_MEDIA, audioTracks, fmtTime, videoTracks } from './model';
+import type { Media, Project, TimelineLayout } from './model';
 
-type Layout = { lay: Record<ClipId, ClipLayout>; seqEnd: number };
-
-/** Clips on each audio track, in timeline order. */
-const AUDIO_TRACKS: { key: 'A1' | 'A2'; ids: ClipId[] }[] = [
-  { key: 'A1', ids: MAIN_IDS },
-  { key: 'A2', ids: ['e'] },
-];
-
-export function exportSource(st: ProjectState, layout: Layout): ExportSource {
+export function exportSource(p: Project, layout: TimelineLayout): ExportSource {
   return {
-    duration: layout.seqEnd,
-    frames: (width, height) => placeholderFrames(st, layout, width, height),
-    mixAudio: (sampleRate) => mixdown(st, layout, sampleRate),
+    duration: layout.end,
+    fps: p.output.fps,
+    frames: (width, height) => placeholderFrames(p, layout, width, height),
+    mixAudio: (sampleRate) => mixdown(p, layout, sampleRate),
   };
 }
 
-function placeholderFrames(st: ProjectState, { lay }: Layout, width: number, height: number) {
+/** Draws only the bottom (main) video track: overlays need the real compositor's transforms. */
+function placeholderFrames(p: Project, layout: TimelineLayout, width: number, height: number) {
+  const main = videoTracks(p).at(-1);
   const canvas = new OffscreenCanvas(width, height);
   const g = canvas.getContext('2d')!;
   const k = height / 1080;
@@ -34,39 +29,44 @@ function placeholderFrames(st: ProjectState, { lay }: Layout, width: number, hei
     const time = t + 1e-6;
     g.fillStyle = '#000';
     g.fillRect(0, 0, width, height);
-    const id = st.hidden.V1 ? undefined : MAIN_IDS.find((i) => time >= lay[i].vs && time < lay[i].ve);
-    if (id) {
-      g.fillStyle = SOURCES[id].tone;
+    const clip = main && !main.hidden
+      ? main.clips.find((c) => time >= layout.clips[c.id].vs && time < layout.clips[c.id].ve)
+      : undefined;
+    if (clip) {
+      const l = layout.clips[clip.id];
+      g.fillStyle = (p.media[clip.mediaId] ?? MISSING_MEDIA).tone;
       g.fillRect(0, 0, width, height);
       g.fillStyle = 'rgba(255,255,255,0.85)';
       g.font = `500 ${Math.round(40 * k)}px ui-monospace, monospace`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.fillText(`${SOURCES[id].name} @ ${fmtTime(st.clips[id].inS + time - lay[id].start)}`, width / 2, height / 2);
+      g.fillText(`${l.name} @ ${fmtTime(clip.inS + time - l.start)}`, width / 2, height / 2);
     }
     return canvas;
   };
 }
 
 /** Mixes every audible clip into one stereo buffer covering the whole sequence. */
-async function mixdown(st: ProjectState, { lay, seqEnd }: Layout, sampleRate: number) {
-  const ctx = new OfflineAudioContext(2, Math.ceil(seqEnd * sampleRate), sampleRate);
+async function mixdown(p: Project, layout: TimelineLayout, sampleRate: number) {
+  const ctx = new OfflineAudioContext(2, Math.ceil(layout.end * sampleRate), sampleRate);
+  const buffers = new Map<string, AudioBuffer>();
   let audible = 0;
-  for (const track of AUDIO_TRACKS) {
-    if (st.hidden[track.key]) continue;
-    for (const id of track.ids) {
-      const cs = st.clips[id];
-      const l = lay[id];
+  for (const track of audioTracks(p)) {
+    if (track.muted) continue;
+    for (const clip of track.clips) {
+      const media = p.media[clip.mediaId];
+      const l = layout.clips[clip.id];
       // Audio clips span the clip's visible range on the timeline, same as the video.
       const dur = l.ve - l.vs;
-      if (cs.muted || cs.vol <= 0 || dur <= 0) continue;
+      if (!media?.audio || clip.muted || clip.vol <= 0 || dur <= 0) continue;
       audible++;
+      if (!buffers.has(media.id)) buffers.set(media.id, placeholderAudio(ctx, media));
       const src = ctx.createBufferSource();
-      src.buffer = placeholderAudio(ctx, id);
+      src.buffer = buffers.get(media.id)!;
       const gain = ctx.createGain();
-      scheduleEnvelope(gain.gain, l.vs, dur, cs.vol / 100, cs.fadeIn, cs.curveIn, cs.fadeOut, cs.curveOut);
+      scheduleEnvelope(gain.gain, l.vs, dur, clip.vol / 100, clip.fadeIn, clip.curveIn, clip.fadeOut, clip.curveOut);
       src.connect(gain).connect(ctx.destination);
-      src.start(l.vs, cs.inS + l.vs - l.start, dur);
+      src.start(l.vs, clip.inS + l.vs - l.start, dur);
     }
   }
   return audible ? ctx.startRendering() : null;
@@ -100,10 +100,9 @@ function fadeCurve(c: number, vol: number, out: boolean, n = 128) {
   return curve;
 }
 
-/** Stand-in for the clip's decoded audio: a sine tone per source, as long as the source. */
-function placeholderAudio(ctx: BaseAudioContext, id: ClipId) {
-  const { src, seed } = SOURCES[id];
-  const buf = ctx.createBuffer(2, Math.ceil(src * ctx.sampleRate), ctx.sampleRate);
+/** Stand-in for a source's decoded audio: a sine tone per source, as long as the source. */
+function placeholderAudio(ctx: BaseAudioContext, { duration, seed }: Media) {
+  const buf = ctx.createBuffer(2, Math.ceil(duration * ctx.sampleRate), ctx.sampleRate);
   const freq = 220 * (1 + seed * 0.25);
   const data = buf.getChannelData(0);
   for (let i = 0; i < data.length; i++) data[i] = 0.25 * Math.sin(2 * Math.PI * freq * i / ctx.sampleRate);

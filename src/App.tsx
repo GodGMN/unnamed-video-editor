@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { MAIN_IDS, MEDIA, fmtTime } from './editor/model';
-import type { ClipId, MediaItem } from './editor/model';
+import { fmtTime, videoTracks } from './editor/model';
+import type { Media } from './editor/model';
 import { exportSource } from './editor/exportSource';
 import { useProject } from './editor/useProject';
 import { ConvertDialog } from './components/ConvertDialog';
@@ -13,7 +13,6 @@ import { Timeline } from './components/Timeline';
 import { TopBar } from './components/TopBar';
 
 const MIN_WIDTH = 1280;
-const PROJECT_NAME = 'Weekend trip';
 
 function useWindowWidth() {
   const [width, setWidth] = useState(window.innerWidth);
@@ -27,28 +26,29 @@ function useWindowWidth() {
 
 export function App() {
   const width = useWindowWidth();
-  const project = useProject();
+  const editor = useProject();
   const [exporting, setExporting] = useState(false);
-  const [converting, setConverting] = useState<MediaItem | null>(null);
+  const [converting, setConverting] = useState<Media | null>(null);
 
   if (width < MIN_WIDTH) return <DesktopOnly width={width} />;
+  // The saved project loads from IndexedDB in a few milliseconds.
+  if (!editor) return null;
 
-  const { sel } = project.state;
-  // Clip and audio selections share the trim scrubber and clip panels; other selections keep the last clip.
-  const clipId: ClipId = sel.kind === 'clip' || sel.kind === 'audio' ? sel.id : 'b';
-  const totalTime = fmtTime(project.layout.seqEnd);
+  const { project } = editor;
+  const totalTime = fmtTime(editor.layout.end);
+  const clipCount = videoTracks(project).reduce((n, t) => n + t.clips.length, 0);
 
   return (
     <div className="editor">
-      <TopBar projectName={PROJECT_NAME} clipCount={MAIN_IDS.length} totalTime={totalTime} onExport={() => setExporting(true)} />
+      <TopBar projectName={project.name} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)} />
       <div className="workspace">
-        <MediaPanel media={MEDIA} onConvert={setConverting} />
-        <PreviewPanel project={project} clipId={clipId} totalTime={totalTime} />
-        <PropertiesPanel project={project} clipId={clipId} />
+        <MediaPanel project={project} onConvert={setConverting} />
+        <PreviewPanel editor={editor} totalTime={totalTime} />
+        <PropertiesPanel editor={editor} />
       </div>
-      <Timeline project={project} />
+      <Timeline editor={editor} />
       {exporting && (
-        <ExportDialog projectSlug={PROJECT_NAME.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project.state, project.layout)}
+        <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project, editor.layout)}
           onClose={() => setExporting(false)} />
       )}
       {converting && <ConvertDialog fileName={converting.name} onClose={() => setConverting(null)} />}
