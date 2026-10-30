@@ -740,7 +740,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
       <button className={'vol-line' + (cs.muted ? ' muted' : '')} style={{ top: volY - 6 }}
         aria-label={`Volume ${level}, drag up or down to adjust`} title={`Volume ${level} · drag to adjust`}
         onPointerDown={volDown} onKeyDown={volKey} />
-      {/* Drawn apart from the line's hit area so the clip's rounded corners can clip it at 0% and 200%. */}
+      {/* Drawn apart from the line's hit area so the clip's rounded corners can clip it at −∞ and +12 dB. */}
       <div className="vol-clip" aria-hidden="true">
         <span className="vol-headroom" style={{ height: volY }} />
         <FadeRamps clip={cs} width={width} height={H} />
