@@ -3,8 +3,8 @@ import { useSourcePlayer } from '../playback/useSourcePlayer';
 import { PreviewStrip } from '../media/PreviewStrip';
 import { useState } from 'react';
 import type { PointerEvent } from 'react';
-import { findClip, fmtTime } from '../editor/model';
-import type { Clip, Media } from '../editor/model';
+import { findMediaClip, fmtTime } from '../editor/model';
+import type { Media, MediaClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { ChevronLeft, ChevronRight, Close, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
@@ -25,7 +25,7 @@ export function PreviewPanel({ editor, totalTime }: Props) {
   const sourcePlayer = useSourcePlayer(source, silent ? 0 : volume / 100);
   const { height: oh } = project.output;
 
-  const focus = findClip(project, ui.focusClip);
+  const focus = findMediaClip(project, ui.focusClip);
   const focusMedia = focus && project.media[focus.clip.mediaId];
 
   // The transport drives whichever is showing: a Media item on its own, or the timeline.
@@ -131,7 +131,7 @@ function SourceScrub({ src, time, seek }: { src: Media; time: number; seek: (tim
 }
 
 /** Trim scrubber for the focused clip. */
-function Trim({ editor, clip: cs, src }: { editor: Editor; clip: Clip; src: Media }) {
+function Trim({ editor, clip: cs, src }: { editor: Editor; clip: MediaClip; src: Media }) {
   const { ui, trimClip, setScrub, setPlayhead } = editor;
   const startDrag = useDrag();
   const accent = 'var(--accent)';
