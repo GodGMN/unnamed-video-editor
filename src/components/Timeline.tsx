@@ -337,7 +337,7 @@ export function Timeline({ editor }: { editor: Editor }) {
           <span className="tool-separator" role="separator" aria-orientation="vertical" />
           <button aria-label="Snap clips" aria-pressed={snapping} title="Snap clips" onClick={() => setSnapping(v => !v)}><Magnet size={16} /></button>
         </div>
-        <span className="hint">{splitting ? 'Click a clip to cut it · Cuts snap to the playhead · Esc to stop splitting' : focused ? 'Playhead locked to a clip · Double-click the time bar to release' : 'Double-click a clip to lock the playhead to it · Drag a transition onto an overlap'}</span>
+        {(splitting || focused) && <span className="hint">{splitting ? 'Click a clip to cut it · Cuts snap to the playhead · Esc to stop splitting' : 'Playhead locked to a clip · Double-click the time bar to release'}</span>}
         <div className="spacer" />
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Video track</button>
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Audio track</button>
