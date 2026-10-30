@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fmtTime, videoTracks } from './editor/model';
 import type { Media } from './editor/model';
+import { exportSource } from './editor/exportSource';
 import { useProject } from './editor/useProject';
 import { ConvertDialog } from './components/ConvertDialog';
 import { DesktopOnly } from './components/DesktopOnly';
@@ -47,7 +48,8 @@ export function App() {
       </div>
       <Timeline editor={editor} />
       {exporting && (
-        <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} duration={totalTime} onClose={() => setExporting(false)} />
+        <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project, editor.layout)}
+          onClose={() => setExporting(false)} />
       )}
       {converting && <ConvertDialog fileName={converting.name} onClose={() => setConverting(null)} />}
     </div>
