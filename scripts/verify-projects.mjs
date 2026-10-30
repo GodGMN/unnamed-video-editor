@@ -113,6 +113,20 @@ try {
   });
   assert.ok(cache.used > 0 && cache.used <= cache.budget); assert.equal(cache.cleared, 0); checks.push('Preview cache evicts within 128 MiB and clears');
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  const documentDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download project', exact: true }).click();
+  const projectFile = await documentDownload;
+  const documentPath = join(dir, projectFile.suggestedFilename()); await projectFile.saveAs(documentPath);
+  const document = JSON.parse(readFileSync(documentPath, 'utf8'));
+  assert.equal(document.format, 'unnamed-video-editor'); assert.equal(document.version, 1);
+  assert.ok(readFileSync(documentPath).length < bytes.length);
+  const documentImport = await page.evaluate(async doc => {
+    const { openProjectFile } = await import('/src/projects/portable.ts');
+    const p = await openProjectFile({ file: new File([JSON.stringify(doc)], 'project.uve.json') });
+    return { name: p.name, count: Object.keys(p.media).length };
+  }, document);
+  assert.equal(documentImport.name, document.project.name); assert.equal(documentImport.count, 1);
+  checks.push('Small project download opens as a validated document without embedded media');
   const evidence = process.env.SCREENSHOT_PATH ?? join(dir, 'project-library.png'); mkdirSync(join(evidence, '..'), { recursive: true });
   await page.screenshot({ path: evidence });
   // Seed a version-one database in a separate browser profile to verify the real upgrade path.
@@ -131,6 +145,16 @@ try {
   await migrationPage.getByRole('button', { name: 'Rename project Legacy project' }).waitFor();
   assert.equal(await migrationPage.evaluate(async () => (await (await import('/src/editor/storage.ts')).listProjects()).length), 1);
   checks.push('Migrates single-project v1 save without losing edits');
+  await migrationPage.evaluate(async () => { await (await import('/src/editor/storage.ts')).clearProject(); });
+  await migrationPage.getByRole('button', { name: 'Rename project Legacy project' }).click();
+  await migrationPage.getByRole('textbox', { name: 'Project name' }).fill('Unsaved edit');
+  await migrationPage.getByRole('textbox', { name: 'Project name' }).press('Enter');
+  await migrationPage.getByRole('status').filter({ hasText: /^Save failed:/ }).waitFor();
+  await migrationPage.getByRole('button', { name: 'Projects', exact: true }).click();
+  await migrationPage.getByRole('button', { name: 'New project', exact: true }).click();
+  await migrationPage.getByRole('alert').filter({ hasText: 'Project no longer exists' }).waitFor();
+  assert.equal(await migrationPage.evaluate(async () => (await (await import('/src/editor/storage.ts')).listProjects()).length), 0);
+  checks.push('Failed save stays visible and prevents switching away from unsaved edits');
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ result: 'PASS', checks, cache, evidence, packagePath }, null, 2));
 } finally { await browser.close(); }
