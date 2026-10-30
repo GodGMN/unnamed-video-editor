@@ -20,6 +20,10 @@ export function usePlayback(editor: Editor, volume: number) {
     engine.current?.update({ project: editor.project, time: editor.ui.playhead, playing, volume });
   }, [editor.project, editor.ui.playhead, playing, volume]);
 
+  // A source previewing from the Media panel takes over the player and its Space key.
+  const source = editor.ui.source;
+  useEffect(() => { if (source) setPlaying(false); }, [source]);
+
   useEffect(() => {
     if (!playing) return;
     let last = performance.now();
@@ -47,6 +51,7 @@ export function usePlayback(editor: Editor, volume: number) {
   }, []);
 
   useEffect(() => {
+    if (source) return;
     const key = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
       if (event.code !== 'Space' || event.repeat || target.closest('input, textarea, select, button, [contenteditable=true]')) return;
@@ -54,7 +59,7 @@ export function usePlayback(editor: Editor, volume: number) {
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [toggle]);
+  }, [source, toggle]);
 
   const seek = (time: number) => {
     setPlaying(false);
