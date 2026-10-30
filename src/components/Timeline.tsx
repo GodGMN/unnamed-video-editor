@@ -29,6 +29,15 @@ export function Timeline({ editor }: { editor: Editor }) {
   const [pps, setPps] = useState(PPS);
   const scaleRef = useRef(PPS);
   const pendingScroll = useRef<number | null>(null);
+  const [viewW, setViewW] = useState(0);
+
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    const ro = new ResizeObserver(() => setViewW(scroll.clientWidth));
+    ro.observe(scroll);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const onWheel = (event: WheelEvent) => {
@@ -58,6 +67,8 @@ export function Timeline({ editor }: { editor: Editor }) {
   }, [pps]);
 
   const startDrag = useDrag();
+  // Ticks run past the content and on to the right edge of the viewport when zoomed out.
+  const lastTick = Math.max(Math.ceil(layout.end) + 2, Math.ceil(viewW / pps));
   const tlWidth = (Math.ceil(layout.end) + 2) * pps + 20;
 
   const onContextMenu = (kind: 'clip' | 'audio', id: string) => (e: MouseEvent) => {
@@ -82,7 +93,7 @@ export function Timeline({ editor }: { editor: Editor }) {
   };
 
   const ticks = [];
-  for (let s = 0; s <= Math.ceil(layout.end) + 2; s++) {
+  for (let s = 0; s <= lastTick; s++) {
     const major = s % (pps < 16 ? 10 : pps < 40 ? 5 : pps < 100 ? 2 : 1) === 0;
     ticks.push(
       <div key={s}>
