@@ -198,9 +198,7 @@ function TransitionProps({ editor, clip }: { editor: Editor; clip: VideoClip }) 
         ))}
       </div>
       <span className="hint" style={{ fontSize: 12 }}>{TRANSITION_HELP[tr.type]}</span>
-      {tr.type !== 'cut' && (
-        <Slider label="Duration" value={tr.duration} unit=" s" min={0.1} max={2} step={0.1} onChange={(v) => set({ duration: v })} />
-      )}
+      <span className="hint">Overlap: {l.nextId ? Math.max(0, Math.min(l.end, layout.clips[l.nextId].end) - layout.clips[l.nextId].start).toFixed(2) : '0.00'} s. Drag the clips to adjust.</span>
     </div>
   );
 }

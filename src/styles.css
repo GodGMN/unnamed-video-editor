@@ -318,3 +318,8 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 
 .tool-separator { width: 1px; background: var(--control); margin: 4px 5px; }
 .clip, .audio-wave { touch-action: none; }
+
+.transition-palette { display: flex; gap: 4px; }
+.transition-palette button { display: flex; align-items: center; gap: 5px; border: 1px solid var(--control); border-radius: 6px; background: var(--inset); padding: 6px 8px; color: var(--text-soft); font-size: 11px; cursor: grab; }
+.trans-chip.overlap-zone { border-style: dashed; border-radius: 5px; min-width: 3px; background: rgba(30, 45, 32, .88); overflow: hidden; }
+.trans-chip.overlap-zone:hover { background: var(--selected); border-color: var(--accent); }
