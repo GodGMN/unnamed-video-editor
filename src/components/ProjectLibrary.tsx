@@ -2,7 +2,7 @@ import { useT } from '../i18n';
 import { t as translate } from '../i18n/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project } from '../editor/model';
-import { fmtShortDuration, layoutTimeline } from '../editor/model';
+import { fmtShortDuration, layoutTimeline, newId } from '../editor/model';
 import { seedProject } from '../editor/seed';
 import { clearProject, createProject, listProjects, loadProject, selectProject, updateProjectDetails } from '../editor/storage';
 import type { ProjectEntry } from '../editor/storage';
@@ -40,7 +40,7 @@ function blankProject(): Project {
   return { ...project, name: 'Untitled project', media: {}, tracks: project.tracks.map(t => ({ ...t, clips: [] })) };
 }
 
-export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string; onOpen: (id: string, project: Project) => void }) {
+export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string; onOpen: (id: string, project: Project, draft?: boolean) => void }) {
   useT();
   const [entries, setEntries] = useState<ProjectEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,7 +130,7 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
     </aside>
     <main className="home-main">
       <div className="home-content">
-        <header className="home-heading"><div><h1>{translate('projectHomeWelcomeBack')}<span>.</span></h1><p>{translate('projectHomePickUpYourEditOrStartSomethingNew')}</p></div><div className="home-create"><button className="home-primary" disabled={!!busy || loading} onClick={() => void run('Creating project…', () => create(blankProject()))}><Plus size={17} />{translate('projectHomeNewProject')}</button><ActionMenu label={translate('projectHomeMoreCreationOptions')} disabled={!!busy || loading} actions={[{ label: translate('projectHomeImportProjectFile'), run: importProject }]}><ChevronDown size={17} /></ActionMenu></div></header>
+        <header className="home-heading"><div><h1>{translate('projectHomeWelcomeBack')}<span>.</span></h1><p>{translate('projectHomePickUpYourEditOrStartSomethingNew')}</p></div><div className="home-create"><button className="home-primary" disabled={!!busy || loading} onClick={() => onOpen(newId(), blankProject(), true)}><Plus size={17} />{translate('projectHomeNewProject')}</button><ActionMenu label={translate('projectHomeMoreCreationOptions')} disabled={!!busy || loading} actions={[{ label: translate('projectHomeImportProjectFile'), run: importProject }]}><ChevronDown size={17} /></ActionMenu></div></header>
         {last && <section className="home-resume" aria-label={translate('projectHomeLastOpenedProject')}>
           <ProjectArtwork project={last.project} hero />
           <div className="resume-details"><span className="home-eyebrow">{translate('projectHomeLastOpened')}</span><h2 title={last.project.name}>{last.project.name}</h2><p>{durations.get(last.id) ? `${fmtShortDuration(durations.get(last.id)!)} · ` : ''}{translate('projectHomeEdited')}{' '}{dateLabel(last.updatedAt).toLocaleLowerCase()}</p><button className="home-primary" disabled={!!busy} onClick={() => void run('Opening project…', () => open(last.id))}><Play size={15} />{translate('projectHomeContinueEditing')}</button></div>

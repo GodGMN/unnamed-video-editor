@@ -56,9 +56,9 @@ function useConvertedMedia(editor: Editor | null) {
   return { pending, error };
 }
 
-function EditorApp({ id, initial, onHome }: { id: string; initial: Project; onHome: (project: Project) => void }) {
+function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Project; draft: boolean; onHome: (project: Project) => void }) {
   const width = useWindowWidth();
-  const editor = useProject(id, initial);
+  const editor = useProject(id, initial, draft);
   const [navigationError, setNavigationError] = useState('');
   const [pendingImports, setPendingImports] = useState(false);
   const [mediaRevision, setMediaRevision] = useState(0);
@@ -113,7 +113,7 @@ async function initialize() {
   return null;
 }
 export function App() {
-  const [active, setActive] = useState<{ id: string; project: Project } | null>(null);
+  const [active, setActive] = useState<{ id: string; project: Project; draft?: boolean } | null>(null);
   const [error, setError] = useState('');
   const [initialized, setInitialized] = useState(false);
   const [screen, setScreen] = useState<'home' | 'editor'>('home');
@@ -128,6 +128,6 @@ export function App() {
   if (width < MIN_WIDTH) return <DesktopOnly width={width} />;
   if (!initialized) return <p role="status">{translate('projectHomeOpeningProjects')}</p>;
   return screen === 'home' || !active
-    ? <ProjectLibrary lastOpenedId={active?.id ?? ''} onOpen={(id, project) => { setActive({ id, project }); setScreen('editor'); }} />
-    : <EditorApp key={active.id} id={active.id} initial={active.project} onHome={project => { setActive({ id: active.id, project }); setScreen('home'); }} />;
+    ? <ProjectLibrary lastOpenedId={active?.id ?? ''} onOpen={(id, project, draft) => { setActive({ id, project, draft }); setScreen('editor'); }} />
+    : <EditorApp key={active.id} id={active.id} initial={active.project} draft={!!active.draft} onHome={project => { setActive({ id: active.id, project }); setScreen('home'); }} />;
 }
