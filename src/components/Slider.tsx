@@ -1,7 +1,8 @@
 import { useT } from '../i18n';
 import { t as translate } from '../i18n/core';
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { ResetButton } from './ResetButton';
+import { useFieldDraft } from './useFieldDraft';
 
 interface Props {
   label: string;
@@ -24,15 +25,16 @@ interface Props {
 // The value readout sits above it and turns into a text box on click, so a number can be typed in.
 export function Slider({ label, value, unit, min, max, step = 1, defaultValue, hideLabel, className, taper, format, onChange }: Props) {
   useT();
-  const [draft, setDraft] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
+  const { draft, setDraft, commit } = useFieldDraft((text) => {
+    const v = Number(text.replace(',', '.'));
+    if (text.trim() && Number.isFinite(v)) {
+      const next = Math.min(max, Math.max(min, v));
+      if (next !== value) onChange(next);
+    }
+  });
   const pos = taper ? taper.toPos(value) : (value - min) / (max - min);
   const shown = draft ?? (format ? format(value) : String(value));
-  const commit = (text: string) => {
-    const v = Number(text.replace(',', '.'));
-    setDraft(null);
-    if (text.trim() && Number.isFinite(v) && v !== value) onChange(Math.min(max, Math.max(min, v)));
-  };
   return (
     <label className={className ? `slider ${className}` : 'slider'}>
       {taper
@@ -48,10 +50,10 @@ export function Slider({ label, value, unit, min, max, step = 1, defaultValue, h
           style={{ width: `${Math.max(1, shown.length)}ch` }}
           onFocus={(e) => { setDraft(String(value)); e.target.select(); }}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={(e) => commit(e.target.value)}
+          onBlur={commit}
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.currentTarget.blur();
-            else if (e.key === 'Escape') { e.currentTarget.value = String(value); setDraft(null); e.currentTarget.blur(); }
+            else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
           }} />
         <span aria-hidden="true">{unit}</span>
       </span>
