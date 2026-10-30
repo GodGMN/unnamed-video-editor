@@ -300,7 +300,6 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .audio-wave:hover { filter: brightness(1.08); }
 .audio-wave > span { width: 2px; flex: none; border-radius: 1px; }
 .audio-badge { position: absolute; right: 8px; bottom: 4px; display: flex; align-items: center; gap: 4px; font: 500 10px var(--mono); color: var(--text-soft); pointer-events: none; }
-.audio-badge .unlinked { font-family: var(--sans); color: var(--warn); }
 /* The selected media clip's fade handles, in a box over the clip; above its trim edges so the top corners grab the fade. */
 .fade-layer { position: absolute; top: 6px; pointer-events: none; z-index: 4; }
 .fade-layer > * { pointer-events: auto; }
