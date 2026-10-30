@@ -18,6 +18,12 @@ const SPLIT_SNAP_PX = 8;
 
 const TRACK_H = { text: TEXT_TRACK_H, video: VIDEO_TRACK_H, audio: AUDIO_TRACK_H };
 
+/** Clips cancel pointerdown for dragging, so a properties field would keep focus (and eat Delete) without this. */
+const blurField = () => {
+  const el = document.activeElement;
+  if (el instanceof HTMLElement && el.matches('input, textarea, select, [contenteditable=true]')) el.blur();
+};
+
 const isOff = (t: Track) => (t.kind === 'audio' ? t.muted : t.hidden);
 
 interface Overlap { from: VideoClip | AudioClip; to: VideoClip | AudioClip; start: number; end: number }
@@ -61,7 +67,7 @@ function transitionTargetAt(project: Project, track: Track, time: number, slop: 
 }
 
 export function Timeline({ editor }: { editor: Editor }) {
-  const { project, ui, layout, select, setTool, setPlayhead, unlock, toggleTrack, openMenu, closeMenu } = editor;
+  const { project, ui, layout, select, setTool, setPlayhead, unlock, toggleTrack, openMenu, closeMenu, deleteSelection } = editor;
   const focus = ui.lockClip ? layout.clips[ui.lockClip] : undefined;
   const focused = !!focus;
   const rootRef = useRef<HTMLElement>(null);
@@ -106,6 +112,20 @@ export function Timeline({ editor }: { editor: Editor }) {
       pendingScroll.current = null;
     }
   }, [pps]);
+
+  // Delete or Backspace removes the selection, unless the key is meant for a text field or a dialog.
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const target = event.target as HTMLElement;
+      if (target.closest('input, textarea, select, [contenteditable=true]') || document.querySelector('[role=dialog]')) return;
+      event.preventDefault();
+      closeMenu();
+      deleteSelection();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeMenu, deleteSelection]);
 
   const startDrag = useDrag();
   const [snapping, setSnapping] = useState(true);
@@ -329,7 +349,7 @@ export function Timeline({ editor }: { editor: Editor }) {
   }
 
   return (
-    <section ref={rootRef} className={'panel timeline' + (splitting ? ' splitting' : '')} onClick={closeMenu}>
+    <section ref={rootRef} className={'panel timeline' + (splitting ? ' splitting' : '')} onClick={closeMenu} onPointerDownCapture={blurField}>
       <div className="tl-tools">
         <div className="toolbar" role="toolbar" aria-label="Timeline tools">
           <button aria-pressed={splitting} title="Split · S · click clips to cut them" onClick={() => setTool(splitting ? 'select' : 'split')}>
@@ -565,12 +585,16 @@ function TrimHandles({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
   // Trims the clip's source in/out points, clamped to the media like the trim scrubber.
   const edgeDown = (which: 'in' | 'out') => (e: PointerEvent<HTMLSpanElement>) => {
     if (e.button !== 0) return;
-    const { id, inS, outS } = cs;
+    const { id, start, inS, outS } = cs;
     const minDuration = Math.min(0.5, src.duration);
     const round = (x: number) => Math.round(x * 100) / 100;
+    const round6 = (x: number) => Math.round(x * 1e6) / 1e6;
     startDrag(e, (dx) => {
-      if (which === 'in') trimClip(id, { inS: round(Math.max(0, Math.min(outS - minDuration, inS + dx / pps))) });
-      else trimClip(id, { outS: round(Math.min(src.duration, Math.max(inS + minDuration, outS + dx / pps))) });
+      // The start edge moves the clip's start along with its in point, so the end stays put.
+      if (which === 'in') {
+        const d = round(Math.max(-inS, -start, Math.min(outS - minDuration - inS, dx / pps)));
+        trimClip(id, { inS: round6(inS + d), start: round6(start + d) });
+      } else trimClip(id, { outS: round(Math.min(src.duration, Math.max(inS + minDuration, outS + dx / pps))) });
     });
   };
 
@@ -773,7 +797,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
 }
 
 function ClipMenu({ editor }: { editor: Editor }) {
-  const { project, ui, updateVideoClip, updateAudioClip, linkClips, closeMenu } = editor;
+  const { project, ui, updateVideoClip, updateAudioClip, linkClips, closeMenu, deleteSelection } = editor;
   const m = ui.menu!;
   const found = findClip(project, m.id);
   if (!found) return null;
@@ -818,7 +842,7 @@ function ClipMenu({ editor }: { editor: Editor }) {
         </button>
       )}
       <div className="menu-sep" />
-      <button role="menuitem" className="ib danger" onClick={act()}>
+      <button role="menuitem" className="ib danger" onClick={act(deleteSelection)}>
         <Trash size={14} /><span>Delete</span><span className="kbd">Del</span>
       </button>
     </div>

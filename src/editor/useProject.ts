@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, linkClips, addTextItem, duplicateClip, splitClip, splitTextItem, DEFAULT_TRANSITION, clipEnd, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, trimTextItem, videoTracks } from './model';
+import { newId, placeMedia, linkClips, addTextItem, deleteItems, duplicateClip, splitClip, splitTextItem, DEFAULT_TRANSITION, clipEnd, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, trimTextItem, videoTracks } from './model';
 import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
@@ -26,7 +26,7 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   const focusClip = findClip(p, ui.focusClip) ? ui.focusClip : first;
   const s = ui.sel;
   const valid = !!s && (s.kind === 'text' ? !!findTextItem(p, s.id) : !!findClip(p, s.id));
-  const sel: Selection | null = valid ? s : focusClip ? { kind: 'clip', id: focusClip } : null;
+  const sel: Selection | null = !s ? null : valid ? s : focusClip ? { kind: 'clip', id: focusClip } : null;
   const picked = ui.picked.filter((x) => findClip(p, x.id));
   if (!picked.length && sel && (sel.kind === 'clip' || sel.kind === 'audio')) picked.push(sel);
   const lockClip = findClip(p, ui.lockClip) ? ui.lockClip : null;
@@ -90,6 +90,8 @@ export function useProject() {
   const [project, setProject] = usePersistentProject(onLoad);
   const projectRef = useRef(project);
   projectRef.current = project;
+  const uiRef = useRef(ui);
+  uiRef.current = ui;
   const layout = useMemo(() => (project ? layoutTimeline(project) : null), [project]);
   const range = useMemo(() => (project && layout ? playRange(project, layout.end, ui.lockClip) : null), [project, layout, ui.lockClip]);
   const rangeRef = useRef(range);
@@ -112,6 +114,16 @@ export function useProject() {
         setProject(next);
         setUi((u) => reconcileUi(next, u));
         removeMediaFiles(mediaId).catch(() => undefined);
+      },
+      /** Deletes the selected clips (with their linked partners) or text item. */
+      deleteSelection: () => {
+        const p = projectRef.current;
+        const { sel, picked } = uiRef.current;
+        const ids = [...picked.map((x) => x.id), ...(sel?.kind === 'text' ? [sel.id] : [])];
+        if (!p || !ids.length) return;
+        const next = deleteItems(p, ids);
+        setProject(next);
+        setUi((u) => reconcileUi(next, { ...u, sel: null, picked: [] }));
       },
       placeMedia: (mediaId: string, trackId: string, time: number) => {
         const id = newId();
@@ -158,7 +170,7 @@ export function useProject() {
       closeMenu: () => setUi((u) => (u.menu ? { ...u, menu: null } : u)),
 
       /** Moves a clip's in/out points; linked partners follow. */
-      trimClip: (id: string, patch: Partial<Pick<VideoClip | AudioClip, 'inS' | 'outS'>>) => edit((p) => patchClip(p, id, patch)),
+      trimClip: (id: string, patch: Partial<Pick<VideoClip | AudioClip, 'start' | 'inS' | 'outS'>>) => edit((p) => patchClip(p, id, patch)),
       updateVideoClip: (id: string, patch: Partial<VideoClip>) => edit((p) => patchClip(p, id, patch)),
       updateAudioClip: (id: string, patch: Partial<AudioClip>) => edit((p) => patchClip(p, id, patch)),
       /** Updates the transition after video clip `id`, creating it from the default cut if needed. */
