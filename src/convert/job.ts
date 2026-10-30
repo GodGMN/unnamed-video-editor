@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { OutOfMemoryError, convertToMp4, outputSpec } from './convert';
 import type { ConvertOptions, ConvertProgress, OutputSpec } from './convert';
-import { addConvertedMedia } from './library';
 import type { SourceInfo } from './probe';
 
 export type JobState =
@@ -14,6 +13,8 @@ export interface Job {
   sourceName: string;
   source: SourceInfo;
   options: ConvertOptions;
+  /** Whether the finished copy also goes at the end of V1 once it is in the Media library. */
+  addToTimeline: boolean;
   out: OutputSpec;
   state: JobState;
 }
@@ -34,7 +35,7 @@ function set(next: Job | null) {
 export function startConversion(file: File, source: SourceInfo, options: ConvertOptions, addToTimeline: boolean) {
   controller?.abort();
   const ctrl = controller = new AbortController();
-  const base = { file, sourceName: file.name, source, options, out: outputSpec(source, options) };
+  const base = { file, sourceName: file.name, source, options, addToTimeline, out: outputSpec(source, options) };
   const update = (state: JobState) => { if (controller === ctrl) set({ ...base, state }); };
   const t0 = performance.now();
   update({ status: 'running', progress: { stage: 'load', mediaTime: 0, speed: 0 } });
@@ -43,7 +44,6 @@ export function startConversion(file: File, source: SourceInfo, options: Convert
     (blob) => {
       const output = new File([blob], file.name.replace(/\.[^.]+$/, '') + '.mp4', { type: 'video/mp4' });
       update({ status: 'done', output, elapsed: (performance.now() - t0) / 1000 });
-      if (controller === ctrl) addConvertedMedia({ file: output, addToTimeline });
     },
     (e: unknown) => {
       if (ctrl.signal.aborted) return;
