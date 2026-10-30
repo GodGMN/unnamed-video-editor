@@ -237,7 +237,7 @@ export function Timeline({ editor }: { editor: Editor }) {
   };
 
   // Drag on empty timeline space to draw a box; every clip it touches is picked.
-  // Ctrl, Cmd or Shift adds the boxed clips to the current selection.
+  // Ctrl, Cmd or Shift adds the boxed clips to the current selection; a plain click without a drag clears it.
   const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const onMarqueeDown = (e: PointerEvent<HTMLDivElement>) => {
     const content = contentRef.current;
@@ -277,7 +277,9 @@ export function Timeline({ editor }: { editor: Editor }) {
       const key = picked.map((x) => x.id).join();
       if (key !== lastKey) { lastKey = key; editor.pickClips(picked); }
     };
-    const end = () => {
+    const end = (ev: globalThis.PointerEvent) => {
+      // A plain click on empty space (no box drawn) deselects everything.
+      if (!dragging && ev.type === 'pointerup' && !base.length) editor.pickClips([]);
       setMarquee(null);
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', end);
