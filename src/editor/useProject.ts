@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, DEFAULT_TRANSITION, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, settle, videoTracks } from './model';
+import { newId, placeMedia, DEFAULT_TRANSITION, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, videoTracks } from './model';
 import type { AudioClip, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
+import { removeMediaFiles } from '../media/files';
 
 const SAVE_DELAY_MS = 250;
 
@@ -63,11 +64,22 @@ export function useProject() {
   const [ui, setUi] = useState<EditorUi>(initialUi);
   const onLoad = useCallback((p: Project) => setUi((u) => reconcileUi(p, u)), []);
   const [project, setProject] = usePersistentProject(onLoad);
+  const projectRef = useRef(project);
+  projectRef.current = project;
 
   const actions = useMemo(() => {
     const edit = (fn: (p: Project) => Project) => setProject((p) => (p ? settle(fn(p)) : p));
     return {
       addMedia: (media: Media) => edit((p) => ({ ...p, media: { ...p.media, [media.id]: media } })),
+      /** Deletes a source, its clips on the timeline, and its stored files. */
+      removeMedia: (mediaId: string) => {
+        const p = projectRef.current;
+        if (!p) return;
+        const next = removeMedia(p, mediaId);
+        setProject(next);
+        setUi((u) => reconcileUi(next, u));
+        removeMediaFiles(mediaId).catch(() => undefined);
+      },
       placeMedia: (mediaId: string, trackId: string, time: number) => {
         const id = newId();
         edit((p) => placeMedia(p, mediaId, trackId, time, id));
