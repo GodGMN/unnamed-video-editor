@@ -1,6 +1,6 @@
 import { useT } from '../i18n';
 import { t as translate } from '../i18n/core';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Brand } from './Brand';
 import { Cog, Download, LibraryGrid, Maximize, Minimize, Pencil, Redo, Undo } from './icons';
 import { useFullscreen } from './useFullscreen';
@@ -47,24 +47,11 @@ function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
 function ProjectName({ name, onRename }: { name: string; onRename: Props['onRename'] }) {
   useT();
   const [draft, setDraft] = useState<string | null>(null);
-  const field = useRef<HTMLInputElement>(null);
   const commit = () => {
     const next = draft?.trim();
     if (next && next !== name) onRename(next);
     setDraft(null);
   };
-  const commitRef = useRef(commit);
-  commitRef.current = commit;
-  const editing = draft !== null;
-  // Buttons never take focus in this app, so clicking one wouldn't blur the field.
-  useEffect(() => {
-    if (!editing) return;
-    const press = (event: PointerEvent) => {
-      if (event.target !== field.current) commitRef.current();
-    };
-    document.addEventListener('pointerdown', press, { capture: true });
-    return () => document.removeEventListener('pointerdown', press, { capture: true });
-  }, [editing]);
   if (draft === null) {
     return (
       <button className="ib project-name" onClick={() => setDraft(name)} aria-label={translate('renameProject', { value1: name })} title={translate('renameProject2')}>
@@ -74,7 +61,7 @@ function ProjectName({ name, onRename }: { name: string; onRename: Props['onRena
     );
   }
   return (
-    <input ref={field} className="fld project-name-field" type="text" aria-label={translate('projectName')} spellCheck={false} maxLength={80}
+    <input className="fld project-name-field" type="text" aria-label={translate('projectName')} spellCheck={false} maxLength={80}
       autoFocus onFocus={(e) => e.target.select()}
       value={draft} size={Math.max(draft.length, 8)} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
       onKeyDown={(e) => {
