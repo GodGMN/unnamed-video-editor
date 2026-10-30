@@ -1,3 +1,4 @@
+import { openEditor } from './browser-helpers.mjs';
 // Start Vite, then run with PLAYWRIGHT_MODULE and optional TEST_URL.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -14,6 +15,7 @@ try {
  const errors = [];
  page.on('pageerror', (error) => errors.push(error.message));
  await page.addInitScript(() => {
+   window.showOpenFilePicker = undefined;
    window.testGains = [];
    const original = AudioContext.prototype.createGain;
    AudioContext.prototype.createGain = function () {
@@ -22,7 +24,8 @@ try {
    };
  });
  await page.goto(process.env.TEST_URL ?? 'http://127.0.0.1:5213');
- await page.locator('input[type=file]').setInputFiles(file);
+  await openEditor(page);
+ await page.locator('input[aria-label="Import media files"]').setInputFiles(file);
  await page.locator('.media-item').filter({ hasText: 'playback.mp4' }).waitFor();
  await page.evaluate(async () => {
    const { loadProject, saveProject } = await import('/src/editor/storage.ts');
@@ -40,6 +43,9 @@ try {
    await saveProject(p);
  });
  await page.reload();
+  await openEditor(page);
+ await page.locator('input[aria-label="Reconnect playback.mp4"]').setInputFiles(file);
+ await page.locator('.media-item').filter({ hasText: 'playback.mp4' }).getByRole('button', { name: 'Rebuild previews' }).waitFor();
  await page.getByRole('button', { name: 'Go to start', exact: true }).click();
  await page.waitForFunction(() => {
    const c = document.querySelector('canvas');
@@ -167,6 +173,9 @@ try {
    await saveProject(p);
  });
  await page.reload();
+  await openEditor(page);
+ await page.locator('input[aria-label="Reconnect playback.mp4"]').setInputFiles(file);
+ await page.locator('.media-item').filter({ hasText: 'playback.mp4' }).getByRole('button', { name: 'Rebuild previews' }).waitFor();
  await page.getByRole('button', { name: 'Go to start', exact: true }).click();
  // Seeks in real 1080p footage outlast a frame. Delay them so that holds for this tiny test file too.
  await page.evaluate(() => {

@@ -318,6 +318,7 @@ function TimeField({ value, onChange }: { value: number; onChange: (v: number) =
 function TextProps({ editor, item: tx }: { editor: Editor; item: TextClip }) {
   useT();
   const updateText = (patch: Partial<TextClip>) => editor.updateText(tx.id, patch);
+  const out = editor.project.output;
   const custom = !SWATCHES().some(([, hex]) => hex === tx.color.toUpperCase());
   const pickerAnchor = useRef<HTMLButtonElement>(null);
   const [picking, setPicking] = useState(false);
@@ -349,7 +350,7 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextClip }) {
             onClick={() => updateText({ x: 0, y: 0 })} disabled={!tx.x && !tx.y}>
             {translate('resetOffset')}</button>
         </div>
-        <div className="anchor-grid" style={{ alignSelf: 'center' }} role="group" aria-label={translate('textPosition')}>
+        <div className="anchor-grid" style={{ alignSelf: 'center', width: Math.min(192, 144 * out.width / out.height), aspectRatio: `${out.width} / ${out.height}` }} role="group" aria-label={translate('textPosition')}>
           {(['t', 'c', 'b'] as const).flatMap((v) => (['l', 'c', 'r'] as const).map((h) => {
             const k: TextAnchor = `${v}${h}`;
             return (
