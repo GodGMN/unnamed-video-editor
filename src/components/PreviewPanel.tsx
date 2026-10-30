@@ -1,45 +1,26 @@
+import { usePlayback } from '../playback/usePlayback';
 import { PreviewStrip } from '../media/PreviewStrip';
 import { useState } from 'react';
-import type { CSSProperties, PointerEvent } from 'react';
-import { findClip, fmtTime, textTracks, videoTracks } from '../editor/model';
-import type { Clip, Media, Project, TimelineLayout, VideoClip } from '../editor/model';
+import type { PointerEvent } from 'react';
+import { findClip, fmtTime } from '../editor/model';
+import type { Clip, Media } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { ChevronLeft, ChevronRight, Mute, Play, SkipEnd, SkipStart, Volume } from './icons';
 import { Slider } from './Slider';
-
-const ALIGN: Record<string, CSSProperties['alignItems']> = { t: 'flex-start', c: 'center', b: 'flex-end', l: 'flex-start', r: 'flex-end' };
 
 interface Props {
   editor: Editor;
   totalTime: string;
 }
 
-/** The topmost visible video clip under the playhead. */
-function clipAt(project: Project, layout: TimelineLayout, t: number): VideoClip | null {
-  for (const track of videoTracks(project)) {
-    if (track.hidden) continue;
-    const c = track.clips.find((x) => layout.clips[x.id].vs <= t && t < layout.clips[x.id].ve);
-    if (c) return c;
-  }
-  return null;
-}
-
 export function PreviewPanel({ editor, totalTime }: Props) {
-  const { project, ui, layout } = editor;
+  const { project, ui } = editor;
   const [volume, setVolume] = useState(70);
   const [muted, setMuted] = useState(false);
   const silent = muted || volume === 0;
-  const accent = 'var(--accent)';
-  const { width: ow, height: oh } = project.output;
-
-  // Stage
-  const pb = clipAt(project, layout, ui.playhead);
-  const pm = pb && project.media[pb.mediaId];
-  const pct = (v: number, of: number) => (v / of * 100).toFixed(1) + '%';
-  const stageSelected = !!pb && ui.sel?.kind === 'clip' && ui.sel.id === pb.id;
-  const texts = textTracks(project).filter((t) => !t.hidden)
-    .flatMap((t) => t.items.filter((x) => x.start <= ui.playhead && ui.playhead < x.start + x.duration));
+  const playback = usePlayback(editor, silent ? 0 : volume / 100);
+  const { height: oh } = project.output;
 
   const focus = findClip(project, ui.focusClip);
   const focusMedia = focus && project.media[focus.clip.mediaId];
@@ -56,39 +37,13 @@ export function PreviewPanel({ editor, totalTime }: Props) {
 
       <div className="stage-wrap">
         <div className="stage-fit">
-          <div className="stage">
-            {pb && pm?.video && (() => {
-              const transform = `translate(${pct(pb.x, ow)}, ${pct(pb.y, oh)}) scale(${pb.scale / 100}) rotate(${pb.rot}deg)`;
-              const { width: sw, height: sh } = pm.video;
-              const crop = { top: pct(pb.cropT, sh), right: pct(pb.cropR, sw), bottom: pct(pb.cropB, sh), left: pct(pb.cropL, sw) };
-              const sourceTime = pb.inS + ui.playhead - pb.start;
-              return (
-                <>
-                  <div className="layer" style={{ transform, clipPath: `inset(${crop.top} ${crop.right} ${crop.bottom} ${crop.left})` }}>
-                    <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '58%', background: '#4B6470' }} />
-                    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '42%', background: '#2F4A44' }} />
-                  </div>
-                  <div className="layer" style={{ transform, pointerEvents: 'none' }} aria-hidden="true">
-                    <div style={{ position: 'absolute', ...crop, outline: `1px dashed ${stageSelected ? accent : 'transparent'}` }} />
-                  </div>
-                  <div className="frame-label">[frame] {pm.name} @ {fmtTime(sourceTime)}</div>
-                </>
-              );
-            })()}
-            {texts.map((text) => (
-              <div key={text.id} className="overlay-box" style={{ alignItems: ALIGN[text.pos[0]], justifyContent: ALIGN[text.pos[1]] }}>
-                <div className="overlay-text" style={{
-                  fontSize: Math.round(text.size * 0.4), color: text.color,
-                  outline: `1px dashed ${ui.sel?.kind === 'text' && ui.sel.id === text.id ? accent : 'transparent'}`,
-                }}>
-                  {text.content}
-                </div>
-              </div>
-            ))}
+          <div className="stage" style={{ aspectRatio: `${project.output.width} / ${oh}` }}>
+            <canvas ref={playback.canvas} width={960} height={Math.round(960 * oh / project.output.width)} aria-label="Timeline preview" style={{ width: '100%', height: '100%', display: 'block' }} />
           </div>
         </div>
       </div>
 
+      {playback.status && <div role="status" className="hint" style={{ padding: '4px 20px' }}>{playback.status}</div>}
       {focus && focusMedia ? <Trim editor={editor} clip={focus.clip} src={focusMedia} /> : <div className="trim" />}
 
       <div className="transport-bar">
@@ -96,11 +51,11 @@ export function PreviewPanel({ editor, totalTime }: Props) {
           {fmtTime(ui.playhead)}<span style={{ color: 'var(--text-muted)' }}> / {totalTime}</span>
         </span>
         <div style={{ flex: '1 1 auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
-          <button className="ib transport" aria-label="Go to start"><SkipStart fill="#C8CEC9" /></button>
-          <button className="ib transport" aria-label="Back one frame"><ChevronLeft stroke="#C8CEC9" strokeWidth={2.2} /></button>
-          <button className="play-btn" aria-label="Play (Space)" title="Play · Space"><Play fill="var(--bg)" /></button>
-          <button className="ib transport" aria-label="Forward one frame"><ChevronRight stroke="#C8CEC9" strokeWidth={2.2} /></button>
-          <button className="ib transport" aria-label="Go to end"><SkipEnd fill="#C8CEC9" /></button>
+          <button className="ib transport" onClick={() => playback.seek(0)} aria-label="Go to start"><SkipStart fill="#C8CEC9" /></button>
+          <button className="ib transport" onClick={() => playback.seek(ui.playhead - 1 / project.output.fps)} aria-label="Back one frame"><ChevronLeft stroke="#C8CEC9" strokeWidth={2.2} /></button>
+          <button className="play-btn" onClick={() => void playback.toggle()} aria-label={playback.playing ? 'Pause (Space)' : 'Play (Space)'} title="Play / pause · Space">{playback.playing ? <span aria-hidden="true">Ⅱ</span> : <Play fill="var(--bg)" />}</button>
+          <button className="ib transport" onClick={() => playback.seek(ui.playhead + 1 / project.output.fps)} aria-label="Forward one frame"><ChevronRight stroke="#C8CEC9" strokeWidth={2.2} /></button>
+          <button className="ib transport" onClick={() => playback.seek(editor.layout.end)} aria-label="Go to end"><SkipEnd fill="#C8CEC9" /></button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, justifyContent: 'flex-end' }}>
           <button className="ib transport" aria-label={silent ? 'Unmute preview' : 'Mute preview'} aria-pressed={silent}
@@ -119,11 +74,11 @@ export function PreviewPanel({ editor, totalTime }: Props) {
 
 /** Trim scrubber for the focused clip. */
 function Trim({ editor, clip: cs, src }: { editor: Editor; clip: Clip; src: Media }) {
-  const { ui, trimClip, setScrub } = editor;
+  const { ui, trimClip, setScrub, setPlayhead } = editor;
   const startDrag = useDrag();
   const accent = 'var(--accent)';
   const clipId = cs.id;
-  const scrub = Math.max(cs.inS, Math.min(cs.outS, ui.scrub));
+  const scrub = Math.max(cs.inS, Math.min(cs.outS, cs.inS + ui.playhead - cs.start));
   const p = (s: number) => (s / src.duration * 100).toFixed(2) + '%';
   const usePct = p(cs.outS - cs.inS);
   const round = (x: number) => Math.round(x * 100) / 100;
@@ -133,10 +88,11 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: Clip; src: Medi
     const pps = bar.width / src.duration;
     const v0 = which === 'in' ? cs.inS : cs.outS;
     const { inS, outS } = cs;
+    const minDuration = Math.min(0.5, src.duration);
     startDrag(e, (dx) => {
       const v = v0 + dx / pps;
-      if (which === 'in') trimClip(clipId, { inS: round(Math.max(0, Math.min(outS - 0.5, v))) });
-      else trimClip(clipId, { outS: round(Math.min(src.duration, Math.max(inS + 0.5, v))) });
+      if (which === 'in') trimClip(clipId, { inS: round(Math.max(0, Math.min(outS - minDuration, v))) });
+      else trimClip(clipId, { outS: round(Math.min(src.duration, Math.max(inS + minDuration, v))) });
     });
   };
 
@@ -160,7 +116,7 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: Clip; src: Medi
           <div style={{ position: 'absolute', top: 0, bottom: 0, left: p(cs.inS), width: usePct, borderTop: `2px solid ${accent}`, borderBottom: `2px solid ${accent}`, pointerEvents: 'none' }} aria-hidden="true" />
           <input
             type="range" min={cs.inS} max={cs.outS} step={0.01} value={scrub}
-            onChange={(e) => setScrub(Number(e.target.value))}
+            onChange={(e) => { const time = Number(e.target.value); setScrub(time); setPlayhead(cs.start + time - cs.inS); }}
             aria-label="Playhead within the trimmed clip"
             style={{ position: 'absolute', top: 0, height: '100%', left: p(cs.inS), width: usePct, opacity: 0, cursor: 'pointer', zIndex: 2 }}
           />
