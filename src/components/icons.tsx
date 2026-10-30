@@ -56,6 +56,7 @@ export const Maximize = (p: IconProps) => <Stroke {...p}><path d="M4 9V4h5M20 9V
 export const Minimize = (p: IconProps) => <Stroke {...p}><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></Stroke>;
 export const Reset = (p: IconProps) => <Stroke {...p}><path d="M4 12a8 8 0 102.3-5.7L4 8.6" /><path d="M4 4v4.6h4.6" /></Stroke>;
 
+export const Checker = (p: IconProps) => <Stroke {...p}><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 12h16M12 4v16" /><path d="M4.5 4.5h7.5v7.5H4.5zM12 12h7.5v7.5H12z" fill="currentColor" stroke="none" /></Stroke>;
 export const Dropper = (p: IconProps) => <Stroke {...p}><path d="M14.5 5.5l4 4" /><path d="M17 3a2.1 2.1 0 013 3l-2.5 2.5-3-3z" /><path d="M15.5 7.5L6 17l-1 3 3-1 9.5-9.5" /></Stroke>;
 export const Magnet = (p: IconProps) => <Stroke {...p}><path d="M4 3h5v10a3 3 0 006 0V3h5v10a8 8 0 01-16 0zM4 7h5M15 7h5" /></Stroke>;
 export const Cog = (p: IconProps) => <Stroke {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" /></Stroke>;

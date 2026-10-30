@@ -1,10 +1,10 @@
 import type { CSSProperties } from 'react';
 import { useRef, useState } from 'react';
-import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, dbToFader, faderToDb, fmtDb, MISSING_MEDIA, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
-import type { AudioClip, Fades, FitMode, TextAnchor, TextClip, TransitionType, VideoClip } from '../editor/model';
+import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, dbToFader, faderToDb, fmtDb, MISSING_MEDIA, NO_KEY, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
+import type { AudioClip, ChromaKey, Fades, FitMode, TextAnchor, TextClip, TransitionType, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { Dropper, Mute, Waveform } from './icons';
-import { ColorPopover } from './ColorPicker';
+import { ColorPopover, HexField } from './ColorPicker';
 import { NumberField } from './NumberField';
 import { Slider } from './Slider';
 
@@ -131,6 +131,8 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
         </div>
       </div>
 
+      <KeySection editor={editor} clip={cs} />
+
       <FadesSection clip={cs} what="video" />
 
       <div className="props-section" style={{ gap: 10 }}>
@@ -155,6 +157,42 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
           ))}
         </dl>
       </div>
+    </div>
+  );
+}
+
+/** Chroma key: removes one colour so the tracks underneath show through. */
+function KeySection({ editor, clip: cs }: { editor: Editor; clip: VideoClip }) {
+  const { ui, pickKey, updateVideoClip } = editor;
+  const key = cs.key;
+  const set = (patch: Partial<ChromaKey>) => updateVideoClip(cs.id, { key: { ...key, ...patch } });
+  const swatch = useRef<HTMLButtonElement>(null);
+  const [editing, setEditing] = useState(false);
+  const picking = ui.keyPick === cs.id;
+  return (
+    <div className="props-section">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="eyebrow">Key</span>
+        <button className="ib outlined" style={{ height: 26, padding: '0 9px', fontSize: 11, color: key.enabled ? 'var(--accent)' : 'var(--text-dim)' }}
+          aria-pressed={key.enabled} onClick={() => set({ enabled: !key.enabled })}>
+          {key.enabled ? 'On' : 'Off'}
+        </button>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button ref={swatch} className="swatch" style={{ background: key.color, flex: 'none' }} aria-label="Key color" title="Edit the key color"
+          aria-expanded={editing} onClick={() => setEditing((v) => !v)} />
+        <HexField value={key.color} onChange={(color) => set({ color, enabled: true })} style={{ flex: '1 1 0', minWidth: 0 }} />
+        <button className="ib outlined" style={{ height: 30, padding: '0 10px', fontSize: 12, flex: 'none', color: picking ? 'var(--accent)' : 'var(--text-soft)' }}
+          aria-pressed={picking} onClick={() => pickKey(picking ? null : cs.id)} title="Click a colour on this clip in the preview">
+          <Dropper size={13} />
+          {picking ? 'Picking…' : 'Pick'}
+        </button>
+      </div>
+      {editing && <ColorPopover anchor={swatch} value={key.color} onChange={(color) => set({ color, enabled: true })} onClose={() => setEditing(false)} />}
+      <Slider label="Tolerance" value={key.tolerance} unit="%" defaultValue={NO_KEY.tolerance} min={0} max={100} onChange={(v) => set({ tolerance: v })} />
+      <Slider label="Softness" value={key.softness} unit="%" defaultValue={NO_KEY.softness} min={0} max={100} onChange={(v) => set({ softness: v })} />
+      <Slider label="Spill" value={key.spill} unit="%" defaultValue={NO_KEY.spill} min={0} max={100} onChange={(v) => set({ spill: v })} />
+      <span className="hint">Pick a colour from the preview to make it transparent; the tracks below show through. Spill takes its tint out of the edges that stay. MP4 exports have no transparency, so anything left uncovered is black.</span>
     </div>
   );
 }

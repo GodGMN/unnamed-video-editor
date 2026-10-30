@@ -3,13 +3,13 @@ import type { Editor } from '../editor/useProject';
 import { PlaybackEngine } from './engine';
 
 /** `resolution` is the canvas height; decoders follow it. */
-export function usePlayback(editor: Editor, volume: number, resolution: number) {
+export function usePlayback(editor: Editor, volume: number, transparent: boolean, resolution: number) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const engine = useRef<PlaybackEngine | null>(null);
   const [playing, setPlaying] = useState(false);
   const [status, setStatus] = useState('');
-  const current = useRef({ editor, playing, volume });
-  current.current = { editor, playing, volume };
+  const current = useRef({ editor, playing, volume, transparent });
+  current.current = { editor, playing, volume, transparent };
 
   useEffect(() => {
     const instance = new PlaybackEngine(canvas.current!, setStatus);
@@ -34,8 +34,8 @@ export function usePlayback(editor: Editor, volume: number, resolution: number) 
       position.current = editor.ui.playhead;
       clock.current = { time: editor.ui.playhead, started: performance.now() };
     }
-    engine.current?.update({ project: editor.project, time: position.current, playing, volume });
-  }, [editor.project, editor.ui.playhead, playing, volume]);
+    engine.current?.update({ project: editor.project, time: position.current, playing, volume, transparent });
+  }, [editor.project, editor.ui.playhead, playing, volume, transparent]);
 
   // A source previewing from the Media panel takes over the player and its Space key.
   const source = editor.ui.source;
@@ -47,10 +47,10 @@ export function usePlayback(editor: Editor, volume: number, resolution: number) 
     let lastPublished = 0;
     let frame = 0;
     const tick = (now: number) => {
-      const { editor, volume } = current.current;
+      const { editor, volume, transparent } = current.current;
       const next = Math.max(editor.range.start, Math.min(editor.range.end, clock.current.time + (now - clock.current.started) / 1000));
       position.current = next;
-      engine.current?.update({ project: editor.project, time: next, playing: next < editor.range.end, volume });
+      engine.current?.update({ project: editor.project, time: next, playing: next < editor.range.end, volume, transparent });
       if (now - lastPublished >= 100 || next >= editor.range.end) {
         lastPublished = now;
         published.current = next;
@@ -88,5 +88,6 @@ export function usePlayback(editor: Editor, volume: number, resolution: number) 
     setPlaying(false);
     editor.setPlayhead(time);
   };
-  return { canvas, playing, status, toggle, seek };
+  const sample = useCallback((clipId: string, x: number, y: number) => engine.current?.sample(clipId, x, y) ?? null, []);
+  return { canvas, playing, status, toggle, seek, sample };
 }
