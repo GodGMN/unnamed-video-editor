@@ -61,14 +61,14 @@ const main = [
   pair({ id: 'intro', mediaId: 'intro', inS: 2.0, outS: 10.4, audio: { fadeIn: 1.2, curveIn: 0.6 },
     transitionOut: { type: 'crossfade', duration: 0.8 } }),
   pair({ id: 'drone', start: 7.6, mediaId: 'drone', inS: 3.2, outS: 14.0,
-    video: { fit: 'custom', scale: 110, y: -20, cropB: 120 }, audio: { vol: 80, fadeOut: 1.5, curveOut: -0.5 },
+    video: { fit: 'custom', scale: 110, y: -20, cropB: 120 }, audio: { gainDb: -1.9, fadeOut: 1.5, curveOut: -0.5 },
     transitionOut: { type: 'cut', duration: 0.5 } }),
   pair({ id: 'toast1', start: 18.4, mediaId: 'toast', inS: 0, outS: 7.4, transitionOut: { type: 'fade', duration: 0.5 } }),
   pair({ id: 'toast2', start: 25.8, mediaId: 'toast', inS: 9.8, outS: 19.0, linked: false, audio: { muted: true, fadeOut: 1 } }),
 ];
 const overlay = [
   pair({ id: 'sunset', mediaId: 'sunset', start: 27, inS: 4.0, outS: 10.0,
-    video: { fit: 'custom', scale: 35, x: 560, y: -280 }, audio: { vol: 60, fadeIn: 0.6, fadeOut: 0.6 } }),
+    video: { fit: 'custom', scale: 35, x: 560, y: -280 }, audio: { gainDb: -4.4, fadeIn: 0.6, fadeOut: 0.6 } }),
 ];
 
 export function seedProject(): Project {
