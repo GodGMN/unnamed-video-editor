@@ -1,4 +1,4 @@
-import type { MouseEvent, PointerEvent, ReactNode } from 'react';
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useRef } from 'react';
 import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, filmstrip, findClip, partnersOf } from '../editor/model';
 import type { AudioClip, Tool, Track, VideoClip } from '../editor/model';
@@ -255,6 +255,21 @@ function AudioClipView({ editor, clip: cs, onMenu }: ClipProps<AudioClip>) {
     });
   };
 
+  // Gain line: the clip's height spans 0–200%, the line sits at the level and follows the pointer.
+  const volY = Math.round(H * (1 - Math.min(200, cs.vol) / 200));
+  const volDown = (e: PointerEvent<HTMLButtonElement>) => {
+    select({ kind: 'audio', id });
+    const v0 = cs.vol;
+    startDrag(e, (_dx, dy) => updateClip(id, { vol: Math.round(Math.max(0, Math.min(200, v0 - dy * 200 / H))) }));
+  };
+  const volKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const step = e.shiftKey ? 10 : 1;
+    const d = e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0;
+    if (!d) return;
+    e.preventDefault();
+    updateClip(id, { vol: Math.max(0, Math.min(200, cs.vol + d)) });
+  };
+
   return (
     <div className={'audio-clip' + (selected ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked')}
       style={{ left: l.vs * PPS + 1, width }}>
@@ -267,6 +282,7 @@ function AudioClipView({ editor, clip: cs, onMenu }: ClipProps<AudioClip>) {
           <span key={i} style={{ height: h, background: cs.muted ? 'rgba(241,244,240,0.22)' : 'rgba(198,240,191,0.7)' }} />
         ))}
       </button>
+      <span className="vol-headroom" style={{ height: volY }} aria-hidden="true" />
       <svg width={f1(fiW)} height={H} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', borderRadius: '8px 0 0 8px' }} aria-hidden="true">
         <path d={`M0,0 L${f1(fiW)},0 Q${f1(ci.cx)},${f1(ci.cy)} 0,${H} Z`} fill="rgba(12,14,13,0.62)" />
         <path d={`M0,${H} Q${f1(ci.cx)},${f1(ci.cy)} ${f1(fiW)},0`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
@@ -275,6 +291,9 @@ function AudioClipView({ editor, clip: cs, onMenu }: ClipProps<AudioClip>) {
         <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H} L${f1(foW)},0 Z`} fill="rgba(12,14,13,0.62)" />
         <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H}`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
       </svg>
+      <button className={'vol-line' + (cs.muted ? ' muted' : '')} style={{ top: volY - 6 }}
+        aria-label={`Volume ${cs.vol}%, drag up or down to adjust`} title={`Volume ${cs.vol}% · drag to adjust`}
+        onPointerDown={volDown} onKeyDown={volKey} />
       {selected && fiW >= 14 && (
         <button className="curve-handle" style={{ left: ciM.x - 9, top: ciM.y - 9 }}
           aria-label={`Fade-in curve ${curveName(cs.curveIn)}, drag up or down to adjust`}
