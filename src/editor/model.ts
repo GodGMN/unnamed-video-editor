@@ -392,7 +392,16 @@ export function patchTrack(p: Project, id: string, patch: Partial<{ hidden: bool
   return { ...p, tracks: p.tracks.map((t) => (t.id === id ? { ...t, ...patch } as Track : t)) };
 }
 
-export const newId = () => crypto.randomUUID();
+export function newId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+
+  // getRandomValues is also available on HTTP origins.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 /* ---------- Formatting ---------- */
 
