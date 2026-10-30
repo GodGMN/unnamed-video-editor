@@ -8,15 +8,16 @@ import type { ConvertOptions } from '../convert/convert';
 import { cancelConversion, startConversion, useConversionJob } from '../convert/job';
 import type { Job } from '../convert/job';
 import type { SourceInfo } from '../convert/probe';
+import { readMediaFile } from '../media/files';
 
 type Res = 'keep' | '1080' | '720';
 const SHORT_SIDE: Record<Res, number | null> = { keep: null, '1080': 1080, '720': 720 };
 const PROJECT_FPS = 30;
 
 interface Props {
+  /** The Media library item to convert; its source is read from local storage. */
+  mediaId: string;
   fileName: string;
-  /** The source file. Until the Media library holds real files (#2), the dialog asks the user to pick it. */
-  file?: File;
   onClose: () => void;
 }
 
@@ -28,17 +29,28 @@ const mb = (bytes: number) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} MB`
 const fpsLabel = (fps: number) => `${Math.round(fps * 100) / 100} fps`;
 const outName = (name: string) => name.replace(/\.[^.]+$/, '') + '.mp4';
 
-export function ConvertDialog({ fileName, file: initialFile, onClose }: Props) {
+export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
   const job = useConversionJob();
   // Reopened during a background job: cancelling should land back on the same file and settings.
-  const [file, setFile] = useState<File | null>(initialFile ?? job?.file ?? null);
+  const [file, setFile] = useState<File | null>(job?.file ?? null);
+  // The library keeps imported sources; only media without a stored copy (the demo project) needs picking.
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    if (file) return;
+    let live = true;
+    readMediaFile(mediaId).then(
+      (stored) => { if (live) { if (stored) setFile(new File([stored], fileName, { type: stored.type })); else setMissing(true); } },
+      () => { if (live) setMissing(true); },
+    );
+    return () => { live = false; };
+  }, [mediaId, fileName, file]);
   const [probe, setProbe] = useState<{ file: File; info?: SourceInfo; error?: string } | null>(null);
   const [res, setRes] = useState<Res>(() => {
     const short = job?.options.shortSide;
     return short === undefined ? '1080' : short === null ? 'keep' : short === 720 ? '720' : '1080';
   });
   const [matchFps, setMatchFps] = useState(job ? job.options.fps !== null : true);
-  const [addToTimeline, setAddToTimeline] = useState(false);
+  const [addToTimeline, setAddToTimeline] = useState(job?.addToTimeline ?? false);
 
   useEffect(() => {
     if (!file) return;
@@ -69,7 +81,7 @@ export function ConvertDialog({ fileName, file: initialFile, onClose }: Props) {
   const finish = () => { cancelConversion(); onClose(); };
 
   if (job) {
-    const retry = () => start(job.file, job.source, { ...job.options, shortSide: 720 });
+    const retry = () => startConversion(job.file, job.source, { ...job.options, shortSide: 720 }, job.addToTimeline);
     return <JobView job={job} onClose={onClose} onCancel={cancel} onFinish={finish} onRetry720={retry} />;
   }
 
@@ -82,9 +94,11 @@ export function ConvertDialog({ fileName, file: initialFile, onClose }: Props) {
   return (
     <Dialog id="cv-title" title={`Convert ${name}`} subtitle={subtitle} warn={!!error} width={560} onClose={onClose}>
       <div className="dialog-body">
-        {!file && (
+        {!file && !missing && <Note>Reading {fileName}…</Note>}
+
+        {!file && missing && (
           <>
-            <Note>Choose <strong>{fileName}</strong> on this computer to convert it. It is read in place and never uploaded.</Note>
+            <Note>This project has no stored copy of <strong>{fileName}</strong>. Choose it on this computer to convert it. It is read in place and never uploaded.</Note>
             <FilePicker onPick={setFile} label="Choose file…" />
           </>
         )}

@@ -509,12 +509,53 @@ export const filmstrip = (width: number, seed: number) => {
 };
 
 /** Places a source on a compatible track, keeping its audio linked on a separate track. */
+/** Whether `media` can be dropped on `track`: video tracks need a picture, audio tracks need sound. */
+export function acceptsMedia(track: Track, media: Media | undefined): media is Media {
+  return !!media?.decodable && track.kind !== 'text' && !!(track.kind === 'video' ? media.video : media.audio);
+}
+
+/**
+ * Where media dropped at `time` on a magnetic track goes: the cut nearest `time` (the start of
+ * clip `index`, or the end of the track). It starts once every earlier clip has ended.
+ */
+export function magneticCut(clips: Clip[], time: number): { index: number; start: number } {
+  const sorted = [...clips].sort((a, b) => a.start - b.start);
+  const cutAt = (i: number) => (i < sorted.length ? sorted[i].start : Math.max(0, ...sorted.map(clipEnd)));
+  let index = 0;
+  for (let i = 1; i <= sorted.length; i++) if (Math.abs(cutAt(i) - time) < Math.abs(cutAt(index) - time)) index = i;
+  return { index, start: Math.max(0, ...sorted.slice(0, index).map(clipEnd)) };
+}
+
+/** Where media dropped at `time` on `track` starts. */
+export function mediaDropStart(track: VideoTrack | AudioTrack, time: number): number {
+  return track.kind === 'video' && track.magnetic ? magneticCut(track.clips, time).start : Math.max(0, time);
+}
+
+/**
+ * Pushes clip `index` and every later clip on a track right by `delta` seconds. Partners move too,
+ * even unlinked ones, so an insert never knocks audio out of sync.
+ */
+function ripple(p: Project, track: VideoTrack | AudioTrack, index: number, delta: number): Project {
+  if (delta <= 0) return p;
+  const later = [...track.clips].sort((a, b) => a.start - b.start).slice(index) as Clip[];
+  const ids = new Set(later.flatMap((c) => [c.id, ...partnersOf(p, c).map((x) => x.id)]));
+  return { ...p, tracks: p.tracks.map((t) => t.kind === 'text' ? t
+    : { ...t, clips: (t.clips as Clip[]).map((c) => ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c) } as Track) };
+}
+
+/** Adds a clip of `mediaId` at `time`. Magnetic tracks insert it at the nearest cut and push later clips right. */
 export function placeMedia(p: Project, mediaId: string, trackId: string, time: number, id: string): Project {
   const media = p.media[mediaId];
-  const track = p.tracks.find((t) => t.id === trackId);
-  if (!media?.decodable || !track || track.kind === 'text' || (track.kind === 'video' ? !media.video : !media.audio)) return p;
-  const start = track.kind === 'video' && track.magnetic
-    ? Math.max(0, ...track.clips.map(clipEnd)) : Math.max(0, time);
+  let track = p.tracks.find((t) => t.id === trackId);
+  if (!track || !acceptsMedia(track, media) || track.kind === 'text') return p;
+  let start = Math.max(0, time);
+  if (track.kind === 'video' && track.magnetic) {
+    const cut = magneticCut(track.clips, time);
+    const next = [...track.clips].sort((a, b) => a.start - b.start)[cut.index];
+    start = cut.start;
+    if (next) p = ripple(p, track, cut.index, start + media.duration - next.start);
+    track = p.tracks.find((t) => t.id === trackId) as VideoTrack;
+  }
   const base = { id, mediaId, start, inS: 0, outS: media.duration, linkId: null, linked: false };
   if (track.kind === 'audio') return { ...p, tracks: p.tracks.map((t) => t.id === trackId ? { ...track, clips: [...track.clips, { ...AUDIO_CLIP_DEFAULTS, ...base }].sort((a, b) => a.start - b.start) } : t) };
   const audioTrack = media.audio ? p.tracks.find((t): t is AudioTrack => t.kind === 'audio' && t.clips.every((c) => clipEnd(c) <= start || c.start >= start + media.duration)) : undefined;
