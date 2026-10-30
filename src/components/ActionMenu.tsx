@@ -1,22 +1,36 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { More } from './icons';
 import type { ReactNode } from 'react';
 
 export interface MenuAction { label: string; run: () => void; danger?: boolean; separator?: boolean }
-export function ActionMenu({ label, actions, disabled, children }: {
-  label: string; actions: MenuAction[]; disabled?: boolean; children?: ReactNode;
+export function ActionMenu({ label, actions, disabled, children, contextMenuOnParent = false }: {
+  label: string; actions: MenuAction[]; disabled?: boolean; children?: ReactNode; contextMenuOnParent?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
   const anchor = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  useEffect(() => {
+    if (!contextMenuOnParent) return;
+    const target = anchor.current!.parentElement!;
+    const show = (e: MouseEvent) => {
+      if (disabled) return;
+      e.preventDefault();
+      setPoint({ x: e.clientX, y: e.clientY });
+      setOpen(true);
+    };
+    target.addEventListener('contextmenu', show);
+    return () => target.removeEventListener('contextmenu', show);
+  }, [contextMenuOnParent, disabled]);
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   useLayoutEffect(() => {
     if (!open) return;
     const box = anchor.current!.getBoundingClientRect();
-    const height = menu.current!.getBoundingClientRect().height;
-    setPosition({ top: Math.max(8, box.bottom + height + 8 > window.innerHeight ? box.top - height - 8 : box.bottom + 8), left: Math.max(8, Math.min(window.innerWidth - 236, box.right - 228)) });
+    const { height, width } = menu.current!.getBoundingClientRect();
+    setPosition(point ? { top: Math.max(8, Math.min(point.y, window.innerHeight - height - 8)), left: Math.max(8, Math.min(point.x, window.innerWidth - width - 8)) } : { top: Math.max(8, box.bottom + height + 8 > window.innerHeight ? box.top - height - 8 : box.bottom + 8), left: Math.max(8, Math.min(window.innerWidth - 236, box.right - 228)) });
     menu.current?.querySelector('button')?.focus();
     const close = (e: PointerEvent) => { if (!anchor.current?.contains(e.target as Node) && !menu.current?.contains(e.target as Node)) setOpen(false); };
     const escape = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); trigger.current?.focus(); } };
@@ -26,9 +40,9 @@ export function ActionMenu({ label, actions, disabled, children }: {
     window.addEventListener('resize', scrolled);
     window.addEventListener('scroll', scrolled, true);
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); window.removeEventListener('resize', scrolled); window.removeEventListener('scroll', scrolled, true); };
-  }, [open, actions.length]);
+  }, [open, actions.length, point]);
   return <div className="action-menu" ref={anchor}>
-    <button ref={trigger} className={children ? 'home-new-more' : 'project-more'} aria-label={label} aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={() => setOpen(v => !v)}>{children ?? <More size={20} />}</button>
+    <button ref={trigger} className={children ? 'home-new-more' : 'project-more'} aria-label={label} aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={() => { setPoint(null); setOpen(v => !v); }}>{children ?? <More size={20} />}</button>
     {open && createPortal(<div ref={menu} role="menu" aria-label={label} className="project-actions" style={position} onKeyDown={e => {
       const buttons = [...e.currentTarget.querySelectorAll('button')];
       const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
