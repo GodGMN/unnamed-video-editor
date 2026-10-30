@@ -323,6 +323,15 @@ export function layoutTimeline(p: Project): TimelineLayout {
 
 const round6 = (x: number) => Math.round(x * 1e6) / 1e6;
 
+/** Removes a source from the project along with every clip that uses it. */
+export function removeMedia(p: Project, mediaId: string): Project {
+  const media = { ...p.media };
+  delete media[mediaId];
+  return { ...p, media, tracks: p.tracks.map(t => t.kind === 'text' ? t : {
+    ...t, clips: t.clips.filter(c => c.mediaId !== mediaId),
+  } as Track) };
+}
+
 /** Keep track order deterministic without changing user-authored positions. */
 export function settle(p: Project): Project {
   return { ...p, tracks: p.tracks.map(t => t.kind === 'text' ? t : {
