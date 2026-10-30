@@ -35,6 +35,6 @@ export function ActionMenu({ label, actions, disabled, children }: {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); buttons[(index + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }
       if (e.key === 'Tab') setOpen(false);
       if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); buttons[e.key === 'Home' ? 0 : buttons.length - 1]?.focus(); }
-    }}>{actions.map(a => <button key={a.label} role="menuitem" className={`${a.danger ? 'danger' : ''} ${a.separator ? 'separated' : ''}`} onClick={() => { setOpen(false); trigger.current?.focus(); a.run(); }}>{a.label}</button>)}</div>, document.body)}
+    }}>{actions.map(a => <button key={a.label} role="menuitem" className={`${a.danger ? 'danger' : ''} ${a.separator ? 'separated' : ''}`} onClick={() => { setOpen(false); trigger.current?.focus(); a.run(); }}>{a.label}</button>)}</div>, anchor.current?.closest('dialog') ?? document.body)}
   </div>;
 }

@@ -11,10 +11,6 @@ import './styles.css';
 import { App } from './App';
 
 document.addEventListener('contextmenu', (event) => event.preventDefault(), { capture: true });
-document.addEventListener('keydown', (event) => { if (event.key === 'Tab') event.preventDefault(); }, { capture: true });
-document.addEventListener('mousedown', (event) => {
-  if ((event.target as Element).closest('button')) event.preventDefault();
-}, { capture: true });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
