@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { previewSize, updateSettings, useSettings } from '../settings';
 import type { PreviewResolution } from '../settings';
 import { Choice, Dialog, Note } from './Dialog';
@@ -22,7 +23,14 @@ export function SettingsDialog({ output, onClose }: { output: { width: number; h
         <Note>Lower resolutions keep playback smooth on slower machines. Export always renders at the full output size.</Note>
       </div>
       <footer className="dialog-foot">
-        <span>Made by <a href="https://gimeno.dev" target="_blank" rel="noreferrer">gimeno.dev</a></span>
+        <span className="made-by">
+          Made by
+          <a className="gimeno" href="https://gimeno.dev" target="_blank" rel="noreferrer" aria-label="gimeno.dev">
+            {[...'GIMENO.DEV'].map((ch, i) => (
+              <span key={i} className={i >= 6 ? 'tld' : undefined} style={{ '--i': i } as CSSProperties} aria-hidden="true">{ch}</span>
+            ))}
+          </a>
+        </span>
         <a className="ib square" href="https://github.com/GodGMN/unnamed-video-editor" target="_blank" rel="noreferrer"
           aria-label="Source code on GitHub" title="Source code on GitHub">
           <GitHub fill="#C8CEC9" />
