@@ -29,6 +29,30 @@ function Stat({ label, value }: { label: string; value: string }) {
   return <div className="stat"><span>{label}</span><span>{value}</span></div>;
 }
 
+/** Fade readout: length up top, curve shape underneath with a glyph matching the ramp drawn on the clip. */
+function FadeStat({ label, dir, len, curve }: { label: string; dir: 'in' | 'out'; len: number; curve: number }) {
+  const [shape, amount] = curveName(curve).split(' ');
+  // Same quadratic as the timeline ramps, in a 28×14 box.
+  const w = 28, h = 14;
+  const cx = w / 2 + (dir === 'in' ? -1 : 1) * curve * w / 2, cy = h / 2 - curve * h / 2;
+  const d = dir === 'in' ? `M0 ${h} Q${cx} ${cy} ${w} 0` : `M0 0 Q${cx} ${cy} ${w} ${h}`;
+  return (
+    <div className="stat fade-stat">
+      <div className="fade-stat-head">
+        <span>{label}</span>
+        <svg width={w} height={h} viewBox={`-1 -1 ${w + 2} ${h + 2}`} aria-hidden="true">
+          <path d={d} fill="none" stroke={len > 0 ? 'var(--accent)' : 'var(--text-muted)'} strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </div>
+      <span className="fade-stat-len">{len > 0 ? `${len.toFixed(1)} s` : 'Off'}</span>
+      <span className="fade-stat-curve">
+        <span style={{ textTransform: 'capitalize' }}>{shape}</span>
+        {amount && <span className="mono">{amount}</span>}
+      </span>
+    </div>
+  );
+}
+
 function VideoClipProps({ project, id }: { project: Project; id: ClipId }) {
   const { state, layout, updateClip } = project;
   const src = SOURCES[id];
@@ -152,8 +176,8 @@ function AudioClipProps({ project, id }: { project: Project; id: ClipId }) {
       <div className="props-section" style={{ borderTop: 0, gap: 10, paddingTop: 14 }}>
         <span className="eyebrow">Fades</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-          <Stat label="Fade in" value={`${cs.fadeIn.toFixed(1)} s · ${curveName(cs.curveIn)}`} />
-          <Stat label="Fade out" value={`${cs.fadeOut.toFixed(1)} s · ${curveName(cs.curveOut)}`} />
+          <FadeStat label="Fade in" dir="in" len={cs.fadeIn} curve={cs.curveIn} />
+          <FadeStat label="Fade out" dir="out" len={cs.fadeOut} curve={cs.curveOut} />
         </div>
         <span className="hint">Drag the corner handles on the audio clip to set length, and the round handle on each ramp up or down to shape its curve.</span>
       </div>
