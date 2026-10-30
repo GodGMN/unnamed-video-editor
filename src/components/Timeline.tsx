@@ -1,8 +1,8 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, findClip, partnersOf, clipDuration, clipEnd, snapClipStart } from '../editor/model';
-import type { AudioClip, TextItem, TransitionType, Tool, Track, VideoClip } from '../editor/model';
+import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, findClip, partnersOf, pickedPair, clipDuration, clipEnd, snapClipStart } from '../editor/model';
+import type { AudioClip, ClipSelection, TextItem, TransitionType, Tool, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { CutLine, Crossfade, Cursor, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
@@ -255,10 +255,19 @@ export function Timeline({ editor }: { editor: Editor }) {
   );
 }
 
+/** Ctrl (or Cmd) adds a clip to the selection instead of replacing it. */
+const additive = (e: { ctrlKey: boolean; metaKey: boolean }) => e.ctrlKey || e.metaKey;
+
+/** Click handler for a clip: plain clicks select it alone, Ctrl-clicks toggle it in the selection. */
+const clickClip = (editor: Editor, clip: ClipSelection) => (e: MouseEvent) =>
+  additive(e) ? editor.togglePick(clip) : editor.select(clip);
+
+const isPicked = ({ ui }: Editor, id: string) => ui.picked.some((x) => x.id === id);
+
 function useClipMove(editor: Editor, clip: VideoClip | AudioClip, snapping: boolean) {
   const startDrag = useDrag();
   return (e: PointerEvent<HTMLElement>) => {
-    if (e.button !== 0 || editor.ui.tool !== 'select') return;
+    if (e.button !== 0 || editor.ui.tool !== 'select' || additive(e)) return;
     const snapshot = editor.project;
     const moving = new Set([clip.id, ...(clip.linked ? partnersOf(snapshot, clip).map(c => c.id) : [])]);
     const targets = [0];
@@ -297,13 +306,13 @@ function partnerSelected({ project, ui }: Editor, clip: VideoClip | AudioClip, k
 }
 
 function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<VideoClip>) {
-  const { project, ui, select } = editor;
+  const { project, ui } = editor;
   const dragClip = useClipMove(editor, cs, snapping);
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const width = clipDuration(cs) * pps - 3;
   const dur = cs.outS - cs.inS;
-  const selected = ui.sel?.kind === 'clip' && ui.sel.id === id;
+  const selected = isPicked(editor, id);
   const partner = partnerSelected(editor, cs, 'audio');
 
   return (
@@ -312,7 +321,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
       aria-label={`Video: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
       aria-pressed={selected}
       onPointerDown={dragClip}
-      onClick={() => select({ kind: 'clip', id })}
+      onClick={clickClip(editor, { kind: 'clip', id })}
       onContextMenu={onMenu}>
       <PreviewStrip media={src} width={width} inS={cs.inS} outS={cs.outS} />
       <span className="clip-label" style={inset && { paddingLeft: 12 + inset.head * pps, paddingRight: 12 + inset.tail * pps }}>
@@ -406,7 +415,7 @@ function Transitions({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
 const f1 = (x: number) => x.toFixed(1);
 
 function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<AudioClip>) {
-  const { project, ui, select, updateAudioClip: updateClip } = editor;
+  const { project, ui, select, togglePick, updateAudioClip: updateClip } = editor;
   const startDrag = useDrag();
   const dragClip = useClipMove(editor, cs, snapping);
   const id = cs.id;
@@ -414,6 +423,8 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   const span = clipDuration(cs) || 1;
   const width = clipDuration(cs) * pps - 3;
   const pxs = width / span;
+  const picked = isPicked(editor, id);
+  // Fade and curve handles only show on the primary selection.
   const selected = ui.sel?.kind === 'audio' && ui.sel.id === id;
   const partner = partnerSelected(editor, cs, 'clip');
   const half = (cs.outS - cs.inS) / 2;
@@ -456,6 +467,8 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   // Gain line: the clip's height spans 0–200%, the line sits at the level and follows the pointer.
   const volY = Math.round(H * (1 - Math.min(200, cs.vol) / 200));
   const volDown = (e: PointerEvent<HTMLButtonElement>) => {
+    // The gain line spans the clip, so Ctrl-clicks on it pick the clip too.
+    if (additive(e)) { e.preventDefault(); togglePick({ kind: 'audio', id }); return; }
     select({ kind: 'audio', id });
     const v0 = cs.vol;
     startDrag(e, (_dx, dy) => updateClip(id, { vol: Math.round(Math.max(0, Math.min(200, v0 - dy * 200 / H))) }));
@@ -469,13 +482,13 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   };
 
   return (
-    <div className={'audio-clip' + (selected ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked')}
+    <div className={'audio-clip' + (picked ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked')}
       style={{ left: cs.start * pps + 1, width }}>
       <button className="audio-wave" style={{ cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
         aria-label={`Audio: ${src.name}, volume ${cs.vol}%${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
-        aria-pressed={selected}
+        aria-pressed={picked}
         onPointerDown={dragClip}
-        onClick={() => select({ kind: 'audio', id })}
+        onClick={clickClip(editor, { kind: 'audio', id })}
         onContextMenu={onMenu}>
         {bars.map((h, i) => (
           <span key={i} style={{ height: h, background: cs.muted ? 'rgba(241,244,240,0.22)' : 'rgba(198,240,191,0.7)' }} />
@@ -531,15 +544,21 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
 }
 
 function ClipMenu({ editor }: { editor: Editor }) {
-  const { project, ui, updateVideoClip, updateAudioClip, closeMenu } = editor;
+  const { project, ui, updateVideoClip, updateAudioClip, linkClips, closeMenu } = editor;
   const m = ui.menu!;
   const found = findClip(project, m.id);
   if (!found) return null;
   const cs = found.clip;
   const audio = audioFor(project, m.id);
-  const label = `${m.kind === 'audio' ? 'Audio' : 'Video'} · ${(project.media[cs.mediaId] ?? MISSING_MEDIA).name}`;
-  const canLink = cs.linkId !== null && partnersOf(project, cs).length > 0;
-  const updateClip = m.kind === 'audio' ? updateAudioClip : updateVideoClip;
+  const label = ui.picked.length > 1
+    ? `${ui.picked.length} clips selected`
+    : `${m.kind === 'audio' ? 'Audio' : 'Video'} · ${(project.media[cs.mediaId] ?? MISSING_MEDIA).name}`;
+  // Linking needs exactly one video and one audio clip selected; unlinking works from either side of a linked pair.
+  const pair = pickedPair(project, ui.picked);
+  const pairLinked = !!pair && pair.video.linked && pair.video.linkId !== null && pair.video.linkId === pair.audio.linkId;
+  const unlinkId = pair ? (pairLinked ? pair.video.id : null)
+    : ui.picked.length === 1 && cs.linked && partnersOf(project, cs).length > 0 ? cs.id : null;
+  const updateClip = findClip(project, unlinkId)?.track.kind === 'audio' ? updateAudioClip : updateVideoClip;
   const act = (fn?: () => void) => (e: MouseEvent) => { e.stopPropagation(); fn?.(); closeMenu(); };
 
   return (
@@ -552,10 +571,13 @@ function ClipMenu({ editor }: { editor: Editor }) {
         <Duplicate size={14} stroke="#C8CEC9" /><span>Duplicate</span><span className="kbd">Ctrl D</span>
       </button>
       <div className="menu-sep" />
-      {canLink && (
-        <button role="menuitem" className="ib" onClick={act(() => updateClip(m.id, { linked: !cs.linked }))}>
-          {cs.linked ? <Unlink size={14} stroke="var(--warn)" /> : <Link size={14} stroke="var(--accent)" />}
-          <span>{cs.linked ? 'Unlink audio and video' : 'Link audio and video'}</span><span className="kbd">Ctrl L</span>
+      {unlinkId ? (
+        <button role="menuitem" className="ib" onClick={act(() => updateClip(unlinkId, { linked: false }))}>
+          <Unlink size={14} stroke="var(--warn)" /><span>Unlink audio and video</span><span className="kbd">Ctrl L</span>
+        </button>
+      ) : pair && (
+        <button role="menuitem" className="ib" onClick={act(() => linkClips(pair.video.id, pair.audio.id))}>
+          <Link size={14} stroke="var(--accent)" /><span>Link audio and video</span><span className="kbd">Ctrl L</span>
         </button>
       )}
       {audio && (
