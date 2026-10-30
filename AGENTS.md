@@ -17,6 +17,18 @@ Workflow:
    `.worktrees/` in this repo (gitignored), e.g.
    `git worktree add .worktrees/<taskId>-<slug> -b <taskId>-<slug> main`.
    Do all work in that worktree, never directly on main.
+   The Runewire MCP configs are gitignored, so they are not in a new
+   worktree. Symlink them from the main checkout (the first entry of
+   `git worktree list`) into every worktree, including ones a tool
+   created for you outside `.worktrees/`:
+   ```sh
+   main=$(git worktree list --porcelain | awk 'NR==1{print $2}')
+   mkdir -p .codex
+   for f in .mcp.json opencode.json .codex/config.toml; do
+     [ -e "$f" ] || ln -s "$main/$f" "$f"
+   done
+   ```
+   The symlinks stay gitignored. Never copy the key into tracked files.
 4. Implement and verify the change.
 5. Merge the latest main into your branch, then open a PR against main
    referencing the task (Refs #<taskId>) with manual test notes, or post

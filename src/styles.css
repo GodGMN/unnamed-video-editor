@@ -24,7 +24,8 @@
   --sans: Figtree, system-ui, sans-serif;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+input, textarea, [contenteditable]:not([contenteditable='false']), [contenteditable]:not([contenteditable='false']) * { -webkit-user-select: text; user-select: text; }
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 var(--sans); }
 a { color: var(--accent); }
@@ -80,6 +81,10 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .stat { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: var(--inset); border: 1px solid var(--control); border-radius: 8px; }
 .stat > :first-child { font-size: 11px; color: var(--text-dim); }
 .stat > :last-child { font: 500 12px var(--mono); }
+.fade-stat { gap: 6px; }
+.fade-stat-len { font: 500 15px var(--mono); color: var(--text); }
+.stat.fade-stat > .fade-stat-curve { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 400; font-family: inherit; color: var(--text-soft); }
+.fade-stat-curve .mono { color: var(--text-dim); }
 
 /* Number field (jog ruler) */
 .nf { position: relative; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; background: var(--inset); border: 1px solid var(--control); border-radius: 8px; font-size: 11px; color: var(--text-muted); overflow: hidden; cursor: ew-resize; user-select: none; touch-action: none; }
@@ -92,6 +97,8 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .nf-ticks { position: absolute; left: 6px; right: 6px; bottom: 3px; height: 4px; pointer-events: none; background: repeating-linear-gradient(90deg, var(--control-hover) 0 1px, transparent 1px 5px) var(--jog, 0px) 0; mask: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); }
 .nf:hover .nf-ticks, .nf.drag .nf-ticks { background-image: repeating-linear-gradient(90deg, var(--accent) 0 1px, transparent 1px 5px); }
 .nf-ticks::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: 0; width: 1px; background: var(--text-bright); }
+.reset-btn { position: relative; z-index: 2; flex: none; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin: 0 -4px; padding: 0; background: transparent; border: 0; border-radius: 5px; color: var(--text-muted); cursor: pointer; }
+.reset-btn:hover { background: var(--hover); color: var(--accent); }
 .scrub-cursor { position: fixed; left: -12px; top: -12px; z-index: 1000; width: 24px; height: 24px; pointer-events: none; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M2 12l5-5v3h10V7l5 5-5 5v-3H7v3z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; }
 
 /* Segmented control */
@@ -234,6 +241,11 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .audio-badge .unlinked { font-family: var(--sans); color: var(--warn); }
 .fade-handle { position: absolute; top: -6px; width: 20px; height: 20px; padding: 0; border: 0; background: transparent; cursor: ew-resize; touch-action: none; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .fade-handle > span { width: 10px; height: 10px; border-radius: 3px; background: var(--text-bright); border: 2px solid var(--accent); }
+.vol-headroom { position: absolute; left: 0; right: 0; top: 0; border-radius: 8px 8px 0 0; background: rgba(12, 14, 13, 0.45); backdrop-filter: grayscale(1) brightness(0.55); pointer-events: none; }
+.vol-line { position: absolute; left: 0; right: 0; height: 12px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 1; }
+.vol-line::after { content: ''; position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: var(--accent); box-shadow: 0 0 0 1px rgba(12, 14, 13, 0.5); }
+.vol-line.muted::after { background: var(--warn); }
+.vol-line:hover::after, .vol-line:active::after, .vol-line:focus-visible::after { top: 4px; height: 4px; background: var(--text-bright); }
 .curve-handle { position: absolute; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .curve-handle > span { width: 9px; height: 9px; border-radius: 999px; background: var(--accent); border: 2px solid var(--bg); box-sizing: content-box; }
 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-bright); z-index: 3; pointer-events: none; }

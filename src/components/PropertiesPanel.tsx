@@ -1,4 +1,4 @@
-import { MAIN_IDS, SOURCES, TRANSITION_BETWEEN, TRANSITION_HELP, TRANSITION_NAMES, curveName, fmtTime } from '../editor/model';
+import { CLIP_DEFAULTS, MAIN_IDS, SOURCES, TRANSITION_BETWEEN, TRANSITION_HELP, TRANSITION_NAMES, curveName, fmtTime } from '../editor/model';
 import type { ClipId, ClipState, FitMode, TextAnchor, TransitionType } from '../editor/model';
 import type { Project } from '../editor/useProject';
 import { Mute, Waveform } from './icons';
@@ -27,6 +27,21 @@ export function PropertiesPanel({ project, clipId }: Props) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return <div className="stat"><span>{label}</span><span>{value}</span></div>;
+}
+
+/** Fade readout: length up top, curve shape underneath. */
+function FadeStat({ label, len, curve }: { label: string; len: number; curve: number }) {
+  const [shape, amount] = curveName(curve).split(' ');
+  return (
+    <div className="stat fade-stat">
+      <span>{label}</span>
+      <span className="fade-stat-len">{len > 0 ? `${len.toFixed(1)} s` : 'Off'}</span>
+      <span className="fade-stat-curve">
+        <span style={{ textTransform: 'capitalize' }}>{shape}</span>
+        {amount && <span className="mono">{amount}</span>}
+      </span>
+    </div>
+  );
 }
 
 function VideoClipProps({ project, id }: { project: Project; id: ClipId }) {
@@ -68,11 +83,11 @@ function VideoClipProps({ project, id }: { project: Project; id: ClipId }) {
           ))}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-          <NumberField lead="X" unit="px" aria-label="X position" value={cs.x} onChange={num('x')} />
-          <NumberField lead="Y" unit="px" aria-label="Y position" value={cs.y} onChange={num('y')} />
+          <NumberField lead="X" unit="px" aria-label="X position" value={cs.x} defaultValue={CLIP_DEFAULTS.x} onChange={num('x')} />
+          <NumberField lead="Y" unit="px" aria-label="Y position" value={cs.y} defaultValue={CLIP_DEFAULTS.y} onChange={num('y')} />
         </div>
-        <Slider label="Scale" value={cs.scale} unit="%" min={25} max={300} onChange={(v) => upd({ scale: v, fit: 'custom' })} />
-        <Slider label="Rotation" value={cs.rot} unit="°" min={-180} max={180} onChange={(v) => upd({ rot: v, fit: 'custom' })} />
+        <Slider label="Scale" value={cs.scale} unit="%" defaultValue={CLIP_DEFAULTS.scale} min={25} max={300} onChange={(v) => upd({ scale: v, fit: 'custom' })} />
+        <Slider label="Rotation" value={cs.rot} unit="°" defaultValue={CLIP_DEFAULTS.rot} min={-180} max={180} onChange={(v) => upd({ rot: v, fit: 'custom' })} />
       </div>
 
       <div className="props-section">
@@ -82,9 +97,9 @@ function VideoClipProps({ project, id }: { project: Project; id: ClipId }) {
         </div>
         <div className="crop-grid">
           <span />
-          <label>Top<NumberField min={0} step={2} value={cs.cropT} onChange={crop('cropT')} /></label>
+          <label>Top<NumberField min={0} step={2} value={cs.cropT} defaultValue={CLIP_DEFAULTS.cropT} onChange={crop('cropT')} /></label>
           <span />
-          <label>Left<NumberField min={0} step={2} value={cs.cropL} onChange={crop('cropL')} /></label>
+          <label>Left<NumberField min={0} step={2} value={cs.cropL} defaultValue={CLIP_DEFAULTS.cropL} onChange={crop('cropL')} /></label>
           <div style={{ position: 'relative', width: '100%', maxWidth: 112, aspectRatio: '16 / 9', background: src.tone, borderRadius: 4, overflow: 'hidden' }} aria-hidden="true">
             <div style={{ position: 'absolute', inset: 0, background: 'rgba(12,14,13,0.7)' }} />
             <div style={{
@@ -92,9 +107,9 @@ function VideoClipProps({ project, id }: { project: Project; id: ClipId }) {
               top: cropPct(cs.cropT, inf.h), right: cropPct(cs.cropR, inf.w), bottom: cropPct(cs.cropB, inf.h), left: cropPct(cs.cropL, inf.w),
             }} />
           </div>
-          <label>Right<NumberField min={0} step={2} value={cs.cropR} onChange={crop('cropR')} /></label>
+          <label>Right<NumberField min={0} step={2} value={cs.cropR} defaultValue={CLIP_DEFAULTS.cropR} onChange={crop('cropR')} /></label>
           <span />
-          <label>Bottom<NumberField min={0} step={2} value={cs.cropB} onChange={crop('cropB')} /></label>
+          <label>Bottom<NumberField min={0} step={2} value={cs.cropB} defaultValue={CLIP_DEFAULTS.cropB} onChange={crop('cropB')} /></label>
           <span />
         </div>
       </div>
@@ -147,13 +162,13 @@ function AudioClipProps({ project, id }: { project: Project; id: ClipId }) {
             {cs.muted ? 'Muted' : 'Mute'}
           </button>
         </div>
-        <Slider label="Volume" value={cs.vol} unit="%" min={0} max={200} onChange={(v) => updateClip(id, { vol: v })} />
+        <Slider label="Volume" value={cs.vol} unit="%" defaultValue={CLIP_DEFAULTS.vol} min={0} max={200} onChange={(v) => updateClip(id, { vol: v })} />
       </div>
       <div className="props-section" style={{ borderTop: 0, gap: 10, paddingTop: 14 }}>
         <span className="eyebrow">Fades</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-          <Stat label="Fade in" value={`${cs.fadeIn.toFixed(1)} s · ${curveName(cs.curveIn)}`} />
-          <Stat label="Fade out" value={`${cs.fadeOut.toFixed(1)} s · ${curveName(cs.curveOut)}`} />
+          <FadeStat label="Fade in" len={cs.fadeIn} curve={cs.curveIn} />
+          <FadeStat label="Fade out" len={cs.fadeOut} curve={cs.curveOut} />
         </div>
         <span className="hint">Drag the corner handles on the audio clip to set length, and the round handle on each ramp up or down to shape its curve.</span>
       </div>
