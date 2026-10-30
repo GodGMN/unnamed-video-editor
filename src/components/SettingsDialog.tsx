@@ -1,6 +1,7 @@
 import { previewSize, updateSettings, useSettings } from '../settings';
 import type { PreviewResolution } from '../settings';
 import { Choice, Dialog, Note } from './Dialog';
+import { GitHub } from './icons';
 
 type Key = `${PreviewResolution}`;
 
@@ -20,6 +21,13 @@ export function SettingsDialog({ output, onClose }: { output: { width: number; h
           onChange={(k) => updateSettings({ previewResolution: k === 'full' ? 'full' : Number(k) as PreviewResolution })} />
         <Note>Lower resolutions keep playback smooth on slower machines. Export always renders at the full output size.</Note>
       </div>
+      <footer className="dialog-foot">
+        <span>Made by <a href="https://gimeno.dev" target="_blank" rel="noreferrer">gimeno.dev</a></span>
+        <a className="ib square" href="https://github.com/GodGMN/unnamed-video-editor" target="_blank" rel="noreferrer"
+          aria-label="Source code on GitHub" title="Source code on GitHub">
+          <GitHub fill="#C8CEC9" />
+        </a>
+      </footer>
     </Dialog>
   );
 }
