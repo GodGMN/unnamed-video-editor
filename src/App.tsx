@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MAIN_IDS, MEDIA, fmtTime } from './editor/model';
 import type { ClipId, MediaItem } from './editor/model';
+import { exportSource } from './editor/exportSource';
 import { useProject } from './editor/useProject';
 import { ConvertDialog } from './components/ConvertDialog';
 import { DesktopOnly } from './components/DesktopOnly';
@@ -47,7 +48,8 @@ export function App() {
       </div>
       <Timeline project={project} />
       {exporting && (
-        <ExportDialog projectSlug={PROJECT_NAME.toLowerCase().replace(/\s+/g, '-')} duration={totalTime} onClose={() => setExporting(false)} />
+        <ExportDialog projectSlug={PROJECT_NAME.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project.state, project.layout)}
+          onClose={() => setExporting(false)} />
       )}
       {converting && <ConvertDialog fileName={converting.name} onClose={() => setConverting(null)} />}
     </div>
