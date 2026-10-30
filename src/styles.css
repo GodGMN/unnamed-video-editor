@@ -248,6 +248,8 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .vol-line:hover::after, .vol-line:active::after, .vol-line:focus-visible::after { top: 4px; height: 4px; background: var(--text-bright); }
 .curve-handle { position: absolute; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .curve-handle > span { width: 9px; height: 9px; border-radius: 999px; background: var(--accent); border: 2px solid var(--bg); box-sizing: content-box; }
+.focus-dim { position: absolute; top: 0; bottom: 0; background: rgba(12, 14, 13, 0.62); backdrop-filter: grayscale(0.8); pointer-events: none; z-index: 2; transition: left 120ms, width 120ms; }
+.focus-band { position: absolute; bottom: 0; height: 4px; background: var(--accent); border-radius: 2px 2px 0 0; pointer-events: none; }
 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-bright); z-index: 3; pointer-events: none; }
 .playhead::before { content: ''; position: absolute; top: 0; left: -5px; width: 12px; height: 12px; border-radius: 3px 3px 6px 6px; background: var(--text-bright); }
 

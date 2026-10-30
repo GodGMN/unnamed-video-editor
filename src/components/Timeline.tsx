@@ -23,7 +23,9 @@ const TRACK_H = { text: TEXT_TRACK_H, video: VIDEO_TRACK_H, audio: AUDIO_TRACK_H
 const isOff = (t: Track) => (t.kind === 'audio' ? t.muted : t.hidden);
 
 export function Timeline({ editor }: { editor: Editor }) {
-  const { project, ui, layout, select, setTool, setPlayhead, toggleTrack, openMenu, closeMenu } = editor;
+  const { project, ui, layout, select, setTool, setPlayhead, clearFocus, toggleTrack, openMenu, closeMenu } = editor;
+  const focus = ui.focusClip ? layout.clips[ui.focusClip] : undefined;
+  const focused = !!focus;
   const rootRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pps, setPps] = useState(PPS);
@@ -71,11 +73,12 @@ export function Timeline({ editor }: { editor: Editor }) {
     openMenu({ kind, id, left, top });
   };
 
-  // Press anywhere on the ruler to jump the playhead there, then drag to scrub.
+  // Press anywhere on the ruler to jump the playhead there, then drag to scrub. While a clip
+  // is focused the playhead stays inside it; double-click the ruler to release it.
   const onRulerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     const left = e.currentTarget.getBoundingClientRect().left;
-    const seek = (clientX: number) => setPlayhead(Math.max(0, Math.min(layout.end, (clientX - left) / pps)));
+    const seek = (clientX: number) => setPlayhead((clientX - left) / pps);
     const x0 = e.clientX;
     seek(x0);
     startDrag(e, (dx) => seek(x0 + dx));
@@ -103,7 +106,7 @@ export function Timeline({ editor }: { editor: Editor }) {
             </button>
           ))}
         </div>
-        <span className="hint">Ctrl + scroll to zoom · Right-click a clip for more</span>
+        <span className="hint">{focused ? 'Playhead locked to the selected clip · Double-click the time bar to release' : 'Ctrl + scroll to zoom · Right-click a clip for more'}</span>
         <div className="spacer" />
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Video track</button>
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Audio track</button>
@@ -132,7 +135,11 @@ export function Timeline({ editor }: { editor: Editor }) {
 
         <div ref={scrollRef} className="tl-scroll">
           <div style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
-            <div className="ruler" onPointerDown={onRulerDown}>{ticks}</div>
+            <div className="ruler" onPointerDown={onRulerDown} onDoubleClick={clearFocus}
+              title={focused ? 'Double-click to release the selected clip' : undefined}>
+              {ticks}
+              {focus && <div className="focus-band" style={{ left: focus.start * pps, width: (focus.end - focus.start) * pps }} aria-hidden="true" />}
+            </div>
 
             {project.tracks.map((t) => (
               <div key={t.id} className="track" onDragOver={(e) => { if (t.kind !== 'text' && e.dataTransfer.types.includes('application/x-editor-media')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
@@ -159,6 +166,12 @@ export function Timeline({ editor }: { editor: Editor }) {
               </div>
             ))}
 
+            {focus && (
+              <>
+                <div className="focus-dim" style={{ left: 0, width: focus.start * pps }} aria-hidden="true" />
+                <div className="focus-dim" style={{ left: focus.end * pps, right: 0 }} aria-hidden="true" />
+              </>
+            )}
             <div className="playhead" style={{ left: ui.playhead * pps }} />
           </div>
         </div>
