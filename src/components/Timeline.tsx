@@ -140,6 +140,7 @@ export function Timeline({ editor }: { editor: Editor }) {
   // is locked the playhead stays inside it; double-click the ruler to release it.
   const onRulerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    editor.closeSource();
     const left = e.currentTarget.getBoundingClientRect().left;
     const seek = (clientX: number) => setPlayhead((clientX - left) / pps);
     const x0 = e.clientX;

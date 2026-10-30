@@ -16,6 +16,10 @@ interface Props {
   project: Project;
   onConvert: (media: Media) => void;
   onImport: (media: Media) => void;
+  /** The source playing in the preview on its own, if any. */
+  previewing: string | null;
+  /** Plays a source in the preview on its own. */
+  onPreview: (mediaId: string) => void;
   onRemove: (mediaId: string) => void;
 }
 
@@ -46,7 +50,7 @@ function clipCount(project: Project, mediaId: string): number {
   return project.tracks.reduce((n, t) => n + (t.kind === 'text' ? 0 : t.clips.filter((c) => c.mediaId === mediaId).length), 0);
 }
 
-export function MediaPanel({ project, onConvert, onImport, onRemove }: Props) {
+export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, previewing }: Props) {
   const [menu, setMenu] = useState<MediaMenu | null>(null);
   useEffect(() => {
     if (!menu) return;
@@ -101,7 +105,9 @@ export function MediaPanel({ project, onConvert, onImport, onRemove }: Props) {
       <div role="status" aria-live="polite">{errors.map((error, i) => <p key={i} className="media-meta error">{error}</p>)}</div>
       <div className="media-list">
         {media.map((m) => (
-          <div key={m.id} className="media-item" draggable={m.decodable}
+          <div key={m.id} className={'media-item' + (m.decodable ? ' playable' : '') + (previewing === m.id ? ' active' : '')} draggable={m.decodable}
+            title={m.decodable ? 'Click to preview · drag onto the timeline' : undefined}
+            onClick={() => { if (m.decodable) onPreview(m.id); }}
             onDragStart={(e) => { e.dataTransfer.setData(MEDIA_MIME, m.id); e.dataTransfer.effectAllowed = 'copy'; mediaDrag.id = m.id; }}
             onDragEnd={() => { mediaDrag.id = null; }}
             onContextMenu={(e) => {

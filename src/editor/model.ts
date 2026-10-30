@@ -173,6 +173,8 @@ export interface EditorUi {
   focusClip: string | null;
   /** The clip the playhead is locked to (double-click a clip to set it), or null for the whole sequence. */
   lockClip: string | null;
+  /** The Media item playing in the preview on its own, or null when the preview shows the timeline. */
+  source: string | null;
   tool: Tool;
   menu: MenuState | null;
   /** Trim scrubber position, in source seconds. */

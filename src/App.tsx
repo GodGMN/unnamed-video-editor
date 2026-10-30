@@ -68,7 +68,7 @@ export function App() {
       <TopBar projectName={project.name} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onShowConversion={(id, name) => setConverting({ id, name })} />
       <div className="workspace">
-        <MediaPanel onImport={editor.addMedia} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
+        <MediaPanel onImport={editor.addMedia} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
         <PreviewPanel editor={editor} totalTime={totalTime} />
         <PropertiesPanel editor={editor} />
       </div>
