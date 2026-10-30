@@ -65,7 +65,16 @@ interface ClipBase {
   linked: boolean;
 }
 
-export interface VideoClip extends ClipBase {
+/** Fade lengths in seconds at each end of a clip, and the shape of each ramp. */
+export interface Fades {
+  fadeIn: number;
+  fadeOut: number;
+  /** -1 (exponential) … 0 (linear) … 1 (logarithmic). */
+  curveIn: number;
+  curveOut: number;
+}
+
+export interface VideoClip extends ClipBase, Fades {
   /** Output-pixel offset from centre. */
   x: number;
   y: number;
@@ -83,15 +92,10 @@ export interface VideoClip extends ClipBase {
   transitionOut: Transition | null;
 }
 
-export interface AudioClip extends ClipBase {
+export interface AudioClip extends ClipBase, Fades {
   /** Percent. */
   vol: number;
   muted: boolean;
-  fadeIn: number;
-  fadeOut: number;
-  /** -1 (exponential) … 0 (linear) … 1 (logarithmic). */
-  curveIn: number;
-  curveOut: number;
 }
 
 export interface TextClip {
@@ -200,11 +204,12 @@ export const DEFAULT_TRANSITION: Transition = { type: 'cut', duration: 0.5 };
 
 type ClipDefaults<C> = Omit<C, 'id' | 'mediaId' | 'start' | 'inS' | 'outS' | 'linkId'>;
 /** Property values of a fresh clip; also what the properties panel's reset buttons restore. */
+export const NO_FADES: Fades = { fadeIn: 0, fadeOut: 0, curveIn: 0, curveOut: 0 };
 export const VIDEO_CLIP_DEFAULTS: ClipDefaults<VideoClip> = {
-  linked: true, x: 0, y: 0, scale: 100, rot: 0, fit: 'fit', cropT: 0, cropR: 0, cropB: 0, cropL: 0, transitionOut: null,
+  linked: true, x: 0, y: 0, scale: 100, rot: 0, fit: 'fit', cropT: 0, cropR: 0, cropB: 0, cropL: 0, transitionOut: null, ...NO_FADES,
 };
 export const AUDIO_CLIP_DEFAULTS: ClipDefaults<AudioClip> = {
-  linked: true, vol: 100, muted: false, fadeIn: 0, fadeOut: 0, curveIn: 0, curveOut: 0,
+  linked: true, vol: 100, muted: false, ...NO_FADES,
 };
 
 export const TRANSITION_NAMES: Record<TransitionType, string> = { cut: 'Cut', fade: 'Fade', crossfade: 'Crossfade' };
@@ -526,11 +531,9 @@ export function splitClip(p: Project, id: string, time: number, rightId: string)
       const cut = round6(c.inS + time - c.start);
       const left = { ...c, outS: cut };
       const right = { ...c, id: newId, start: round6(time), inS: cut, linkId, linked: !!linkId && c.linked };
-      if (t.kind === 'video') return [{ ...left, transitionOut: null } as VideoClip, right];
-      const a = c as AudioClip;
       return [
-        { ...left, fadeIn: Math.min(a.fadeIn, cut - a.inS), fadeOut: 0 } as AudioClip,
-        { ...right, fadeIn: 0, fadeOut: Math.min(a.fadeOut, a.outS - cut) } as AudioClip,
+        { ...left, fadeIn: Math.min(c.fadeIn, cut - c.inS), fadeOut: 0, ...(t.kind === 'video' && { transitionOut: null }) },
+        { ...right, fadeIn: 0, fadeOut: Math.min(c.fadeOut, c.outS - cut) },
       ];
     });
   });

@@ -1,3 +1,4 @@
+import { NO_FADES } from './model';
 import type { Project } from './model';
 
 /*
@@ -39,15 +40,16 @@ function run<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequ
 /** The saved project, or null when there is none (or it's from an older schema). */
 export async function loadProject(): Promise<Project | null> {
   const saved = await run<Saved | undefined>('readonly', (s) => s.get(KEY));
-  return saved?.schema === SCHEMA ? migrateText(saved.project) : null;
+  return saved?.schema === SCHEMA ? upgrade(saved.project) : null;
 }
 
 /**
  * Older saves keep text tracks' clips in `items`, and the oldest have text without an x/y
- * offset; those get a zero offset.
+ * offset; those get a zero offset. Video clips from before video fades get none.
  */
-function migrateText(p: Project): Project {
+function upgrade(p: Project): Project {
   return { ...p, tracks: p.tracks.map((t) => {
+    if (t.kind === 'video') return { ...t, clips: t.clips.map((c) => ({ ...NO_FADES, ...c })) };
     if (t.kind !== 'text') return t;
     const { items, ...track } = t as typeof t & { items?: typeof t.clips };
     const clips = (track.clips ?? items ?? []).map((x) => ({ ...x, x: x.x ?? 0, y: x.y ?? 0 }));

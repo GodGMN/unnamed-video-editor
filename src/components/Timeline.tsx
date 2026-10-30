@@ -2,7 +2,7 @@ import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, clipKind, curveName, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, removeTrack as removeTrackModel, clipDuration, clipEnd, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
-import type { AudioClip, Clip, ClipKind, ClipSelection, MediaClip, Project, TextClip, TransitionType, Track, VideoClip } from '../editor/model';
+import type { AudioClip, Clip, ClipKind, Fades, ClipSelection, MediaClip, Project, TextClip, TransitionType, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
@@ -12,6 +12,7 @@ import { CutLine, Crossfade, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus
 const TEXT_TRACK_H = 44;
 const VIDEO_TRACK_H = 56;
 const AUDIO_TRACK_H = 64;
+const VIDEO_CLIP_H = 44;
 const AUDIO_CLIP_H = 52;
 
 /** Screen pixels within which a split snaps to the playhead, like the magnet's snap radius. */
@@ -561,6 +562,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         </span>
         <span className="mono">{dur.toFixed(1)}s</span>
       </span>
+      <FadeRamps clip={cs} width={width} height={VIDEO_CLIP_H} />
     </button>
   );
 }
@@ -597,11 +599,11 @@ function trimTargets(project: Project, clip: Clip) {
 }
 
 /**
- * Trim handles for the selected clip on a track. They sit in their own layer above every clip and
+ * Trim and fade handles for the selected clip on a track. They sit in their own layer above every clip and
  * transition chip, so where clips touch or overlap the active clip's handles win.
  */
 function TrimHandles({ editor, clips, pps, snapping, onGuide }: TrimProps & { clips: Clip[] }) {
-  const { project, ui, trimEdge } = editor;
+  const { project, ui, trimEdge, updateVideoClip } = editor;
   const startDrag = useDrag();
   const sel = ui.sel;
   const cs = sel && sel.kind !== 'trans' ? clips.find((c) => c.id === sel.id) : undefined;
@@ -628,6 +630,11 @@ function TrimHandles({ editor, clips, pps, snapping, onGuide }: TrimProps & { cl
     <>
       <span className="clip-edge in" style={{ left }} title="Drag to trim the start" onPointerDown={edgeDown('in')}><span /></span>
       <span className="clip-edge out" style={{ left: right - 8 }} title="Drag to trim the end" onPointerDown={edgeDown('out')}><span /></span>
+      {sel?.kind === 'clip' && (
+        <div className="fade-layer" style={{ left, width: right - left, height: VIDEO_CLIP_H }}>
+          <FadeHandles clip={cs as VideoClip} width={right - left} height={VIDEO_CLIP_H} update={(patch) => updateVideoClip(cs.id, patch)} />
+        </div>
+      )}
     </>
   );
 }
@@ -677,12 +684,11 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const span = clipDuration(cs) || 1;
   const width = clipDuration(cs) * pps - 3;
-  const pxs = width / span;
+  const H = AUDIO_CLIP_H;
   const picked = isPicked(editor, id);
   // Fade and curve handles only show on the primary selection.
   const selected = ui.sel?.kind === 'audio' && ui.sel.id === id;
   const partner = partnerSelected(editor, cs, 'clip');
-  const half = (cs.outS - cs.inS) / 2;
 
   const preview = useMediaPreview(src.id);
   const bars = [];
@@ -692,32 +698,6 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
     const v = preview?.peaks[Math.min(preview.peaks.length - 1, Math.floor(time / src.duration * preview.peaks.length))] ?? 0;
     bars.push(cs.muted ? 2 : Math.max(2, Math.min(40, Math.round((4 + v * 34) * Math.min(2, cs.vol / 100)))));
   }
-
-  // Fade ramps are quadratic curves; the control point slides along the diagonal with the curve amount.
-  const H = AUDIO_CLIP_H;
-  const fiW = Math.max(0, Math.min(width / 2, cs.fadeIn * pxs));
-  const foW = Math.max(0, Math.min(width / 2, cs.fadeOut * pxs));
-  const ci = { cx: fiW / 2 - cs.curveIn * fiW / 2, cy: H / 2 - cs.curveIn * H / 2 };
-  const ciM = { x: 0.5 * ci.cx + 0.25 * fiW, y: H / 4 + 0.5 * ci.cy };
-  const co = { cx: foW / 2 + cs.curveOut * foW / 2, cy: H / 2 - cs.curveOut * H / 2 };
-  const coM = { x: 0.5 * co.cx + 0.25 * foW, y: 0.5 * co.cy + H / 4 };
-
-  const fadeDown = (which: 'fadeIn' | 'fadeOut', sign: 1 | -1) => (e: PointerEvent<HTMLButtonElement>) => {
-    const pps = e.currentTarget.parentElement!.getBoundingClientRect().width / span;
-    const v0 = cs[which];
-    startDrag(e, (dx) => {
-      const v = v0 + sign * dx / pps;
-      updateClip(id, { [which]: Math.round(Math.max(0, Math.min(half, v)) * 10) / 10 });
-    });
-  };
-  const curveDown = (which: 'curveIn' | 'curveOut') => (e: PointerEvent<HTMLButtonElement>) => {
-    const ppy = e.currentTarget.parentElement!.getBoundingClientRect().height / 2;
-    const v0 = cs[which];
-    startDrag(e, (_dx, dy) => {
-      const c = Math.max(-1, Math.min(1, v0 - dy / ppy));
-      updateClip(id, { [which]: Math.round(c * 20) / 20 });
-    });
-  };
 
   // Gain line: the clip's height spans 0–200%, the line sits at the level and follows the pointer.
   const volY = Math.round(H * (1 - Math.min(200, cs.vol) / 200));
@@ -751,6 +731,42 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         ))}
       </button>
       <span className="vol-headroom" style={{ height: volY }} aria-hidden="true" />
+      <FadeRamps clip={cs} width={width} height={H} />
+      <button className={'vol-line' + (cs.muted ? ' muted' : '')} style={{ top: volY - 6 }}
+        aria-label={`Volume ${cs.vol}%, drag up or down to adjust`} title={`Volume ${cs.vol}% · drag to adjust`}
+        onPointerDown={volDown} onKeyDown={volKey} />
+      <span className="audio-badge" style={inset && { right: 8 + inset.tail * pps }}>
+        {!cs.linked && <span className="unlinked">unlinked</span>}
+        {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
+        {cs.vol}%
+      </span>
+      {selected && <FadeHandles clip={cs} width={width} height={H} update={(patch) => updateClip(id, patch)} />}
+    </div>
+  );
+}
+
+/**
+ * Where a clip's fade ramps sit in a box the clip's size. Ramps are quadratic curves; the control point slides
+ * along the diagonal with the curve amount.
+ */
+function fadeGeometry(clip: MediaClip, width: number, H: number) {
+  const pxs = width / (clipDuration(clip) || 1);
+  const fiW = Math.max(0, Math.min(width / 2, clip.fadeIn * pxs));
+  const foW = Math.max(0, Math.min(width / 2, clip.fadeOut * pxs));
+  const ci = { cx: fiW / 2 - clip.curveIn * fiW / 2, cy: H / 2 - clip.curveIn * H / 2 };
+  const co = { cx: foW / 2 + clip.curveOut * foW / 2, cy: H / 2 - clip.curveOut * H / 2 };
+  return {
+    fiW, foW, ci, co,
+    ciM: { x: 0.5 * ci.cx + 0.25 * fiW, y: H / 4 + 0.5 * ci.cy },
+    coM: { x: 0.5 * co.cx + 0.25 * foW, y: 0.5 * co.cy + H / 4 },
+  };
+}
+
+/** The darkened fade-in and fade-out ramps drawn over a clip. */
+function FadeRamps({ clip, width, height: H }: { clip: MediaClip; width: number; height: number }) {
+  const { fiW, foW, ci, co } = fadeGeometry(clip, width, H);
+  return (
+    <>
       <svg width={f1(fiW)} height={H} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', borderRadius: '8px 0 0 8px' }} aria-hidden="true">
         <path d={`M0,0 L${f1(fiW)},0 Q${f1(ci.cx)},${f1(ci.cy)} 0,${H} Z`} fill="rgba(12,14,13,0.62)" />
         <path d={`M0,${H} Q${f1(ci.cx)},${f1(ci.cy)} ${f1(fiW)},0`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
@@ -759,43 +775,61 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H} L${f1(foW)},0 Z`} fill="rgba(12,14,13,0.62)" />
         <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H}`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
       </svg>
-      <button className={'vol-line' + (cs.muted ? ' muted' : '')} style={{ top: volY - 6 }}
-        aria-label={`Volume ${cs.vol}%, drag up or down to adjust`} title={`Volume ${cs.vol}% · drag to adjust`}
-        onPointerDown={volDown} onKeyDown={volKey} />
-      {selected && fiW >= 14 && (
+    </>
+  );
+}
+
+/** Corner handles that set a clip's fade lengths, and round handles that shape each ramp. Placed in a box the clip's size. */
+function FadeHandles({ clip: cs, width, height: H, update }: { clip: MediaClip; width: number; height: number; update: (patch: Partial<Fades>) => void }) {
+  const startDrag = useDrag();
+  const span = clipDuration(cs) || 1;
+  const half = (cs.outS - cs.inS) / 2;
+  const { fiW, foW, ciM, coM } = fadeGeometry(cs, width, H);
+
+  const fadeDown = (which: 'fadeIn' | 'fadeOut', sign: 1 | -1) => (e: PointerEvent<HTMLButtonElement>) => {
+    const pps = e.currentTarget.parentElement!.getBoundingClientRect().width / span;
+    const v0 = cs[which];
+    startDrag(e, (dx) => {
+      const v = v0 + sign * dx / pps;
+      update({ [which]: Math.round(Math.max(0, Math.min(half, v)) * 10) / 10 });
+    });
+  };
+  const curveDown = (which: 'curveIn' | 'curveOut') => (e: PointerEvent<HTMLButtonElement>) => {
+    const ppy = e.currentTarget.parentElement!.getBoundingClientRect().height / 2;
+    const v0 = cs[which];
+    startDrag(e, (_dx, dy) => {
+      const c = Math.max(-1, Math.min(1, v0 - dy / ppy));
+      update({ [which]: Math.round(c * 20) / 20 });
+    });
+  };
+
+  return (
+    <>
+      {fiW >= 14 && (
         <button className="curve-handle" style={{ left: ciM.x - 9, top: ciM.y - 9 }}
           aria-label={`Fade-in curve ${curveName(cs.curveIn)}, drag up or down to adjust`}
           title="Drag up or down to shape the fade-in curve" onPointerDown={curveDown('curveIn')}>
           <span />
         </button>
       )}
-      {selected && foW >= 14 && (
+      {foW >= 14 && (
         <button className="curve-handle" style={{ left: width - foW + coM.x - 9, top: coM.y - 9 }}
           aria-label={`Fade-out curve ${curveName(cs.curveOut)}, drag up or down to adjust`}
           title="Drag up or down to shape the fade-out curve" onPointerDown={curveDown('curveOut')}>
           <span />
         </button>
       )}
-      <span className="audio-badge" style={inset && { right: 8 + inset.tail * pps }}>
-        {!cs.linked && <span className="unlinked">unlinked</span>}
-        {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
-        {cs.vol}%
-      </span>
-      {selected && (
-        <>
-          <button className="fade-handle" style={{ left: fiW - 10 }}
-            aria-label={`Fade in ${cs.fadeIn.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade in"
-            onPointerDown={fadeDown('fadeIn', 1)}>
-            <span />
-          </button>
-          <button className="fade-handle" style={{ right: foW - 10 }}
-            aria-label={`Fade out ${cs.fadeOut.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade out"
-            onPointerDown={fadeDown('fadeOut', -1)}>
-            <span />
-          </button>
-        </>
-      )}
-    </div>
+      <button className="fade-handle" style={{ left: fiW - 10 }}
+        aria-label={`Fade in ${cs.fadeIn.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade in"
+        onPointerDown={fadeDown('fadeIn', 1)}>
+        <span />
+      </button>
+      <button className="fade-handle" style={{ right: foW - 10 }}
+        aria-label={`Fade out ${cs.fadeOut.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade out"
+        onPointerDown={fadeDown('fadeOut', -1)}>
+        <span />
+      </button>
+    </>
   );
 }
 
