@@ -165,6 +165,7 @@ export function Timeline({ editor }: { editor: Editor }) {
                   <>
                     {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} onMenu={onContextMenu('clip', c.id)} />)}
                     <Transitions pps={pps} editor={editor} clips={t.clips} />
+                    <TrimHandles pps={pps} editor={editor} clips={t.clips} />
                   </>
                 )}
                 {t.kind === 'audio' && t.clips.map((c) => (
@@ -248,13 +249,40 @@ function VideoClipView({ editor, pps, snapping, clip: cs, onMenu }: ClipProps<Vi
         </span>
         <span className="mono">{dur.toFixed(1)}s</span>
       </span>
-      {selected && (
-        <>
-          <span className="clip-edge" style={{ left: 0 }}><span /></span>
-          <span className="clip-edge" style={{ right: 0 }}><span /></span>
-        </>
-      )}
     </button>
+  );
+}
+
+/**
+ * Trim handles for the selected clip on a track. They sit in their own layer above every clip and
+ * transition chip, so where clips touch or overlap the active clip's handles win.
+ */
+function TrimHandles({ editor, clips, pps }: { editor: Editor; clips: VideoClip[]; pps: number }) {
+  const { project, ui, trimClip } = editor;
+  const startDrag = useDrag();
+  const cs = ui.sel?.kind === 'clip' ? clips.find((c) => c.id === ui.sel!.id) : undefined;
+  if (!cs) return null;
+  const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
+  const left = cs.start * pps + 1;
+  const right = left + clipDuration(cs) * pps - 3;
+
+  // Trims the clip's source in/out points, clamped to the media like the trim scrubber.
+  const edgeDown = (which: 'in' | 'out') => (e: PointerEvent<HTMLSpanElement>) => {
+    if (e.button !== 0) return;
+    const { id, inS, outS } = cs;
+    const minDuration = Math.min(0.5, src.duration);
+    const round = (x: number) => Math.round(x * 100) / 100;
+    startDrag(e, (dx) => {
+      if (which === 'in') trimClip(id, { inS: round(Math.max(0, Math.min(outS - minDuration, inS + dx / pps))) });
+      else trimClip(id, { outS: round(Math.min(src.duration, Math.max(inS + minDuration, outS + dx / pps))) });
+    });
+  };
+
+  return (
+    <>
+      <span className="clip-edge in" style={{ left }} title="Drag to trim the start" onPointerDown={edgeDown('in')}><span /></span>
+      <span className="clip-edge out" style={{ left: right - 8 }} title="Drag to trim the end" onPointerDown={edgeDown('out')}><span /></span>
+    </>
   );
 }
 
