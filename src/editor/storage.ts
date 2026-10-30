@@ -43,12 +43,18 @@ export async function loadProject(): Promise<Project | null> {
   return saved?.schema === SCHEMA ? upgrade(saved.project) : null;
 }
 
-/** Saves from before text items had an x/y offset get a zero offset, and video clips from before video fades get none. */
+/**
+ * Older saves keep text tracks' clips in `items`, and the oldest have text without an x/y
+ * offset; those get a zero offset. Video clips from before video fades get none.
+ */
 function upgrade(p: Project): Project {
-  return { ...p, tracks: p.tracks.map((t) => t.kind === 'text'
-    ? { ...t, items: t.items.map((x) => ({ ...x, x: x.x ?? 0, y: x.y ?? 0 })) }
-    : t.kind === 'video' ? { ...t, clips: t.clips.map((c) => ({ ...NO_FADES, ...c })) }
-    : t) };
+  return { ...p, tracks: p.tracks.map((t) => {
+    if (t.kind === 'video') return { ...t, clips: t.clips.map((c) => ({ ...NO_FADES, ...c })) };
+    if (t.kind !== 'text') return t;
+    const { items, ...track } = t as typeof t & { items?: typeof t.clips };
+    const clips = (track.clips ?? items ?? []).map((x) => ({ ...x, x: x.x ?? 0, y: x.y ?? 0 }));
+    return { ...track, clips: clips.sort((a, b) => a.start - b.start) };
+  }) };
 }
 
 export function saveProject(project: Project): Promise<void> {

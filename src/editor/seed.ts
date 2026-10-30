@@ -78,7 +78,7 @@ export function seedProject(): Project {
     media: Object.fromEntries(media.map((m) => [m.id, m])),
     tracks: [
       {
-        kind: 'text', id: 'T1', name: 'Text', label: '', hidden: false, items: [
+        kind: 'text', id: 'T1', name: 'Text', label: '', hidden: false, clips: [
           { id: 'title', content: 'Summer ’26', size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start: 10, duration: 5 },
           { id: 'caption', content: 'Dinner on the terrace', size: 56, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start: 19, duration: 4 },
         ],

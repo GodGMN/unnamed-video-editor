@@ -1,5 +1,5 @@
 import { clipEnd, overlapAfter, findVideoClip, partnersOf, videoTracks } from '../editor/model';
-import type { AudioClip, Clip, Project, VideoClip } from '../editor/model';
+import type { AudioClip, MediaClip, Project, VideoClip } from '../editor/model';
 
 export type RenderContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 export type FrameSource = (clip: VideoClip, sourceTime: number) => CanvasImageSource | null;
@@ -21,7 +21,7 @@ export function fadeCurve(progress: number, curve: number): number {
 }
 
 /** A clip's level from its own fade in and fade out: opacity for video, a gain factor for audio. */
-export function fadeLevel(clip: Clip, time: number): number {
+export function fadeLevel(clip: MediaClip, time: number): number {
   let level = 1;
   if (clip.fadeIn > 0) level *= fadeCurve((time - clip.start) / clip.fadeIn, clip.curveIn);
   if (clip.fadeOut > 0) level *= fadeCurve((clipEnd(clip) - time) / clip.fadeOut, clip.curveOut);
@@ -79,7 +79,7 @@ export function renderFrame(p: Project, time: number, ctx: RenderContext, frameS
   for (const track of [...p.tracks].reverse()) {
     if (track.kind === 'audio' || track.hidden) continue;
     if (track.kind === 'text') {
-      for (const text of track.items) {
+      for (const text of track.clips) {
         if (time < text.start || time >= text.start + text.duration) continue;
         const horizontal = text.pos[1], vertical = text.pos[0];
         ctx.save();
