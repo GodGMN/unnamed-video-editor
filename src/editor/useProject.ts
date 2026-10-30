@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { newId, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, setAspect, settle, trimClipEdge, videoTracks } from './model';
@@ -52,7 +53,7 @@ function usePersistentProject(onLoad: (p: Project) => void) {
       history.replaceState(null, '', url);
     }
     (reset ? clearProject().then(() => null) : loadProject())
-      .catch((err) => { console.warn('Could not load the saved project', err); return null; })
+      .catch((err) => { console.warn(translate('couldNotLoadTheSavedProject'), err); return null; })
       .then((saved) => {
         if (cancelled) return;
         const p = saved ?? seedProject();
@@ -64,7 +65,7 @@ function usePersistentProject(onLoad: (p: Project) => void) {
 
   useEffect(() => {
     if (!project) return;
-    const t = setTimeout(() => saveProject(project).catch((err) => console.warn('Could not save the project', err)), SAVE_DELAY_MS);
+    const t = setTimeout(() => saveProject(project).catch((err) => console.warn(translate('couldNotSaveTheProject'), err)), SAVE_DELAY_MS);
     return () => clearTimeout(t);
   }, [project]);
 

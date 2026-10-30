@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import type { SourceInfo } from './probe';
 
 export interface ConvertOptions {
@@ -19,7 +20,7 @@ export interface OutputSpec { width: number; height: number; fps: number }
 
 export class OutOfMemoryError extends Error {
   /** Media time reached before the converter ran out of memory. */
-  constructor(readonly at: number) { super('The converter ran out of memory.'); }
+  constructor(readonly at: number) { super(translate('theConverterRanOutOfMemory')); }
 }
 
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
@@ -105,11 +106,11 @@ export async function convertToMp4(
       throw /memory|OOM|Aborted|out of bounds/i.test(String(e)) ? new OutOfMemoryError(mediaTime) : e;
     }
     if (/out of memory|Cannot allocate/i.test(log)) throw new OutOfMemoryError(mediaTime);
-    if (code !== 0) throw new Error(log.trim().split('\n').at(-1) || `ffmpeg exited with code ${code}`);
+    if (code !== 0) throw new Error(log.trim().split('\n').at(-1) || translate('ffmpegExitedWithCode', { value1: code }));
 
     onProgress({ stage: 'save', mediaTime: src.duration, speed: src.duration / ((performance.now() - t0) / 1000) });
     const data = await ffmpeg.readFile('/out.mp4');
-    if (typeof data === 'string') throw new Error('Unexpected text output from ffmpeg.');
+    if (typeof data === 'string') throw new Error(translate('unexpectedTextOutputFromFfmpeg'));
     return new Blob([data as Uint8Array<ArrayBuffer>], { type: 'video/mp4' });
   } finally {
     signal.removeEventListener('abort', abort);

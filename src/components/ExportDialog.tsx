@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+import { t as translate, formatNumber } from '../i18n/core';
 import { useEffect, useRef, useState } from 'react';
 import { exportSize, fmtTime } from '../editor/model';
 import { ExportError, exportMp4, probeExportSupport } from '../export';
@@ -27,19 +29,19 @@ const SAMPLE_RATE = 48000;
 const CHANNELS = 2;
 
 const COPY: Record<Step, [string, string]> = {
-  settings: ['Export video', 'Rendered on this device. Nothing is uploaded.'],
-  rendering: ['Rendering', 'Encoding frames and mixing audio locally.'],
-  done: ['Your video is ready', 'Saved in memory — download it before closing the tab.'],
-  error: ['Export stopped', 'Nothing was saved. Your timeline is unchanged.'],
+  get settings(): [string, string] { return [translate('exportVideo'), translate('renderedOnThisDeviceNothingIsUploaded')]; },
+  get rendering(): [string, string] { return [translate('rendering'), translate('encodingFramesAndMixingAudioLocally')]; },
+  get done(): [string, string] { return [translate('yourVideoIsReady'), translate('savedInMemoryDownloadItBeforeClosingTheTab')]; },
+  get error(): [string, string] { return [translate('exportStopped'), translate('nothingWasSavedYourTimelineIsUnchanged')]; },
 };
 
 const ERROR_TITLES: Record<ExportErrorCode | 'unknown', string> = {
-  'unsupported-video': 'This browser can’t encode H.264 video',
-  'unsupported-audio': 'This browser can’t encode AAC audio',
-  'invalid-options': 'These export settings aren’t valid',
-  'invalid-frame': 'A frame couldn’t be rendered',
-  'encode-failed': 'Encoding failed',
-  unknown: 'Export failed',
+  get 'unsupported-video'() { return translate('thisBrowserCanTEncodeH264Video'); },
+  get 'unsupported-audio'() { return translate('thisBrowserCanTEncodeAACAudio'); },
+  get 'invalid-options'() { return translate('theseExportSettingsArenTValid'); },
+  get 'invalid-frame'() { return translate('aFrameCouldnTBeRendered'); },
+  get 'encode-failed'() { return translate('encodingFailed'); },
+  get unknown() { return translate('exportFailed'); },
 };
 
 interface RenderState {
@@ -62,6 +64,7 @@ interface Props {
 }
 
 export function ExportDialog({ projectSlug, source, onClose }: Props) {
+  useT();
   const { fps, output } = source;
   /** Each resolution is the short side of the frame, so 1080p at 9:16 is 1080×1920. */
   const size = (r: Res) => exportSize(output, Number(r));
@@ -140,30 +143,30 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
     <Dialog id="exp-title" title={title} subtitle={subtitle} warn={step === 'error'} width={520} onClose={onClose}>
       {step === 'settings' && (
         <div className="dialog-body" style={{ paddingTop: 22 }}>
-          <Choice label="Resolution" value={res} onChange={setRes} options={[
+          <Choice label={translate('resolution')} value={res} onChange={setRes} options={[
             { key: '720', label: '720p', sub: dims(size('720')) },
             { key: '1080', label: '1080p', sub: dims(size('1080')) },
           ]} />
           <div className="rows">
-            <div><span className="k">Format</span><span className="v">MP4 · H.264 + AAC</span></div>
-            <div><span className="k">Frame rate</span><span className="v">{fps} fps</span></div>
-            <div><span className="k">Duration</span><span className="mono">{fmtTime(source.duration)}</span></div>
-            <div><span className="k">Frames</span><span className="mono">{totalFrames}</span></div>
+            <div><span className="k">{translate('format')}</span><span className="v">{"MP4 · H.264 + AAC"}</span></div>
+            <div><span className="k">{translate('frameRate')}</span><span className="v">{translate('fps2', { value1: fps })}</span></div>
+            <div><span className="k">{translate('duration')}</span><span className="mono">{fmtTime(source.duration)}</span></div>
+            <div><span className="k">{translate('frames')}</span><span className="mono">{totalFrames}</span></div>
           </div>
           <BrowserCheck support={support} width={width} height={height} fps={fps} />
           <div className="dialog-actions" style={{ paddingTop: 4 }}>
-            <button className="gb" onClick={onClose}>Cancel</button>
-            <button className="primary" onClick={start} disabled={!supported}>Start export</button>
+            <button className="gb" onClick={onClose}>{translate('cancel')}</button>
+            <button className="primary" onClick={start} disabled={!supported}>{translate('startExport')}</button>
           </div>
         </div>
       )}
 
       {step === 'rendering' && progress && (
         <div className="dialog-body" style={{ paddingTop: 24 }}>
-          <Progress pct={progress.fraction * 100} detail={`frame ${progress.framesDone} / ${totalFrames}`} label="Export progress"
-            stages={stages(progress, totalFrames)} note={`${timeLeft(progress)} Keep this tab open — rendering happens on your device.`} />
+          <Progress pct={progress.fraction * 100} detail={translate('frame', { value1: progress.framesDone, value2: totalFrames })} label={translate('exportProgress')}
+            stages={stages(progress, totalFrames)} note={translate('keepThisTabOpenRenderingHappensOnYourDevice', { value1: timeLeft(progress) })} />
           <div className="dialog-actions">
-            <button className="gb" onClick={cancel}>Cancel export</button>
+            <button className="gb" onClick={cancel}>{translate('cancelExport')}</button>
           </div>
         </div>
       )}
@@ -171,13 +174,13 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
       {step === 'done' && result && (
         <div className="dialog-body" style={{ paddingTop: 22 }}>
           <ResultCard tone="#35503F" name={`${projectSlug}-${result.res}p.mp4`}
-            meta={`${dims(size(result.res))} · ${fmtTime(result.out.frameCount / fps)} · ${fmtBytes(result.out.blob.size)} · H.264 + AAC`}
+            meta={translate('h264AAC', { value1: dims(size(result.res)), value2: fmtTime(result.out.frameCount / fps), value3: fmtBytes(result.out.blob.size) })}
             extra={<span className="mono" style={{ color: 'var(--text-muted)', fontSize: 11 }}>{codecLine(result.out)}</span>} />
           <div className="dialog-actions split">
-            <button className="link-btn" onClick={() => setStep('settings')}>Export again</button>
+            <button className="link-btn" onClick={() => setStep('settings')}>{translate('exportAgain')}</button>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="gb" onClick={onClose}>Back to editor</button>
-              <button className="primary" onClick={download}><Download size={15} strokeWidth={2.4} />Download</button>
+              <button className="gb" onClick={onClose}>{translate('backToEditor')}</button>
+              <button className="primary" onClick={download}><Download size={15} strokeWidth={2.4} />{translate('download')}</button>
             </div>
           </div>
         </div>
@@ -188,9 +191,9 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
           <Alert title={ERROR_TITLES[failure.code]}>{failure.message}</Alert>
           <div className="dialog-actions">
             {failure.code === 'unsupported-video' && res === '1080' && (
-              <button className="gb" onClick={() => { setRes('720'); setStep('settings'); }}>Try 720p</button>
+              <button className="gb" onClick={() => { setRes('720'); setStep('settings'); }}>{translate('try720p')}</button>
             )}
-            <button className="primary" onClick={() => setStep('settings')}>Back to settings</button>
+            <button className="primary" onClick={() => setStep('settings')}>{translate('backToSettings')}</button>
           </div>
         </div>
       )}
@@ -199,21 +202,22 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
 }
 
 function BrowserCheck({ support, width, height, fps }: { support: SupportReport | 'failed' | null; width: number; height: number; fps: number }) {
+  useT();
   const rows = support === null
-    ? [{ label: 'Checking encoders…', status: 'pending' as const, note: '' }]
+    ? [{ label: translate('checkingEncoders'), status: 'pending' as const, note: '' }]
     : support === 'failed'
-      ? [{ label: 'Encoder check failed', status: 'fail' as const, note: 'export unavailable' }]
+      ? [{ label: translate('encoderCheckFailed'), status: 'fail' as const, note: translate('exportUnavailable') }]
       : [
-        { label: 'WebCodecs', status: support.webCodecs ? 'ok' as const : 'fail' as const, note: support.webCodecs ? 'available' : 'not available' },
-        { label: 'H.264 video encoder', status: support.h264 ? 'ok' as const : 'fail' as const, note: support.h264 ? `${width}×${height} · ${fps} fps` : `not at ${width}×${height}` },
+        { label: 'WebCodecs', status: support.webCodecs ? 'ok' as const : 'fail' as const, note: support.webCodecs ? translate('uiAvailable') : translate('notAvailable') },
+        { label: translate('h264VideoEncoder'), status: support.h264 ? 'ok' as const : 'fail' as const, note: support.h264 ? translate('fps3', { value1: width, value2: height, value3: fps }) : translate('notAt', { value1: width, value2: height }) },
         {
-          label: 'AAC audio encoder', status: support.aac ? 'ok' as const : 'fail' as const,
-          note: support.aac === 'native' ? 'built in · 48 kHz stereo' : support.aac === 'wasm' ? 'bundled fallback · 48 kHz stereo' : 'not available',
+          label: translate('aacAudioEncoder'), status: support.aac ? 'ok' as const : 'fail' as const,
+          note: support.aac === 'native' ? translate('builtIn48KHzStereo') : support.aac === 'wasm' ? translate('bundledFallback48KHzStereo') : translate('notAvailable'),
         },
       ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Browser check</span>
+      <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{translate('browserCheck')}</span>
       {rows.map((r) => <CheckRow key={r.label} {...r} />)}
     </div>
   );
@@ -224,24 +228,24 @@ function stages(p: RenderState, totalFrames: number): { label: string; status: S
   const at = order.indexOf(p.phase);
   const status = (i: number): StageStatus => (i < at ? 'done' : i === at ? 'active' : 'wait');
   return [
-    { label: 'Mixing audio', status: status(0), note: '48 kHz stereo' },
-    { label: 'Composing and encoding frames', status: status(1), note: `${p.framesDone} / ${totalFrames}` },
-    { label: 'Writing MP4', status: status(2), note: p.phase === 'finalizing' ? 'finishing' : '—' },
+    { label: translate('mixingAudio'), status: status(0), note: '48 kHz stereo' },
+    { label: translate('composingAndEncodingFrames'), status: status(1), note: `${p.framesDone} / ${totalFrames}` },
+    { label: translate('writingMP4'), status: status(2), note: p.phase === 'finalizing' ? translate('uiFinishing') : '—' },
   ];
 }
 
 function timeLeft(p: RenderState) {
-  if (p.phase === 'mixing' || p.fraction < 0.02) return 'Estimating time left.';
-  if (p.phase === 'finalizing') return 'Almost done.';
+  if (p.phase === 'mixing' || p.fraction < 0.02) return translate('estimatingTimeLeft');
+  if (p.phase === 'finalizing') return translate('almostDone');
   const elapsed = (performance.now() - p.t0) / 1000;
-  return `About ${Math.max(1, Math.round(elapsed / p.fraction - elapsed))} s left.`;
+  return translate('aboutSLeft', { value1: Math.max(1, Math.round(elapsed / p.fraction - elapsed)) });
 }
 
 const dims = ({ width, height }: { width: number; height: number }) => `${width}×${height}`;
-const fmtBytes = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} kB`);
+const fmtBytes = (n: number) => (n >= 1e6 ? translate('mb', { value1: formatNumber((n / 1e6), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : translate('kb', { value1: Math.max(1, Math.round(n / 1e3)) }));
 
 /** e.g. `avc1.640028 · mp4a.40.2 (bundled encoder)`. */
 function codecLine({ mimeType, aacEncoder }: ExportResult) {
   const codecs = /codecs="([^"]+)"/.exec(mimeType)?.[1].split(/,\s*/).join(' · ') ?? mimeType;
-  return aacEncoder === 'wasm' ? `${codecs} (bundled AAC encoder)` : codecs;
+  return aacEncoder === 'wasm' ? translate('bundledAACEncoder', { value1: codecs }) : codecs;
 }

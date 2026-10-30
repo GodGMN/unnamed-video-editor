@@ -1,3 +1,4 @@
+import { I18nProvider } from './i18n';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource/figtree/400.css';
@@ -17,6 +18,6 @@ document.addEventListener('mousedown', (event) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <I18nProvider><App /></I18nProvider>
   </StrictMode>,
 );

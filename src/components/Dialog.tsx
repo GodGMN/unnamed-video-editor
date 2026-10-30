@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+import { t as translate } from '../i18n/core';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Check, Clock, Close, Info, Play, Warning } from './icons';
@@ -14,6 +16,7 @@ interface DialogProps {
 }
 
 export function Dialog({ id, title, subtitle, warn, width, onClose, children }: DialogProps) {
+  useT();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -28,7 +31,7 @@ export function Dialog({ id, title, subtitle, warn, width, onClose, children }: 
             <h2 id={id}>{title}<span style={{ color: warn ? 'var(--warn)' : 'var(--accent)' }}>.</span></h2>
             <span className="dialog-sub">{subtitle}</span>
           </div>
-          <button className="ib square" style={{ flex: 'none' }} aria-label="Close" onClick={onClose}>
+          <button className="ib square" style={{ flex: 'none' }} aria-label={translate('close')} onClick={onClose}>
             <Close stroke="#C8CEC9" />
           </button>
         </div>
@@ -44,6 +47,7 @@ export function Choice<K extends string>({ label, options, value, onChange }: {
   value: K;
   onChange: (k: K) => void;
 }) {
+  useT();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</span>
@@ -68,6 +72,7 @@ export function Progress({ pct, detail, label, stages, note }: {
   stages: { label: string; status: StageStatus; note: string }[];
   note: string;
 }) {
+  useT();
   const p = Math.round(pct);
   return (
     <>
@@ -93,13 +98,15 @@ export function Progress({ pct, detail, label, stages, note }: {
 }
 
 export function Note({ icon = <Info size={15} stroke="#C8CEC9" />, children }: { icon?: ReactNode; children: ReactNode }) {
+  useT();
   return <div className="note">{icon}<span>{children}</span></div>;
 }
 
 export function Alert({ title, children }: { title: string; children: ReactNode }) {
+  useT();
   return (
     <div className="alert">
-      <Warning size={18} stroke="var(--warn)" />
+      <Warning size={18} stroke='var(--warn)' />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <strong>{title}</strong>
         <p>{children}</p>
@@ -109,6 +116,7 @@ export function Alert({ title, children }: { title: string; children: ReactNode 
 }
 
 export function ResultCard({ tone, name, meta, extra }: { tone: string; name: string; meta: string; extra?: ReactNode }) {
+  useT();
   return (
     <div className="result">
       <div className="result-thumb" style={{ background: tone }}><Play size={18} fill="var(--text)" /></div>
@@ -122,6 +130,7 @@ export function ResultCard({ tone, name, meta, extra }: { tone: string; name: st
 }
 
 export function CheckRow({ label, note, status = 'ok' }: { label: string; note: string; status?: 'ok' | 'fail' | 'pending' }) {
+  useT();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <span className={'check-dot ' + status}>
