@@ -1,13 +1,13 @@
 import { usePlayback } from '../playback/usePlayback';
 import { useSourcePlayer } from '../playback/useSourcePlayer';
 import { PreviewStrip } from '../media/PreviewStrip';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { PointerEvent } from 'react';
-import { findMediaClip, fmtTime } from '../editor/model';
+import { clipEnd, findMediaClip, findVideoClip, fmtTime } from '../editor/model';
 import type { Media, MediaClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { ChevronLeft, ChevronRight, Close, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
+import { Checker, ChevronLeft, ChevronRight, Close, Dropper, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
 import { Slider } from './Slider';
 
 interface Props {
@@ -19,8 +19,9 @@ export function PreviewPanel({ editor, totalTime }: Props) {
   const { project, ui } = editor;
   const [volume, setVolume] = useState(70);
   const [muted, setMuted] = useState(false);
+  const [grid, setGrid] = useState(false);
   const silent = muted || volume === 0;
-  const playback = usePlayback(editor, silent ? 0 : volume / 100);
+  const playback = usePlayback(editor, silent ? 0 : volume / 100, grid);
   const source = ui.source ? project.media[ui.source] ?? null : null;
   const sourcePlayer = useSourcePlayer(source, silent ? 0 : volume / 100);
   const { height: oh } = project.output;
@@ -58,8 +59,9 @@ export function PreviewPanel({ editor, totalTime }: Props) {
 
       <div className="stage-wrap">
         <div className="stage-fit">
-          <div className="stage" style={{ aspectRatio: `${project.output.width} / ${oh}` }}>
+          <div className={grid && !source ? 'stage grid' : 'stage'} style={{ aspectRatio: `${project.output.width} / ${oh}` }}>
             <canvas ref={playback.canvas} width={960} height={Math.round(960 * oh / project.output.width)} aria-label="Timeline preview" style={{ width: '100%', height: '100%', display: 'block' }} />
+            {!source && ui.keyPick && <KeyPicker editor={editor} clipId={ui.keyPick} sample={playback.sample} />}
             <video ref={sourcePlayer.video} className="source-video" hidden={!source} playsInline preload="auto" aria-label={source ? `Source preview: ${source.name}` : undefined} />
             {transport.status && (
               <div role="alert" className="stage-alert">
@@ -86,6 +88,10 @@ export function PreviewPanel({ editor, totalTime }: Props) {
           <button className="ib transport" onClick={() => transport.seek(transport.end)} aria-label="Go to end"><SkipEnd fill="#C8CEC9" /></button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, justifyContent: 'flex-end' }}>
+          <button className="ib transport" aria-pressed={grid} disabled={!!source} onClick={() => setGrid(!grid)}
+            aria-label="Transparency grid" title={grid ? 'Show transparent areas as black, like the export' : 'Show transparent areas as a checkerboard'}>
+            <Checker stroke={grid ? 'var(--accent)' : '#C8CEC9'} />
+          </button>
           <button className="ib transport" aria-label={silent ? 'Unmute preview' : 'Mute preview'} aria-pressed={silent}
             onClick={() => { setMuted(!silent); if (silent && volume === 0) setVolume(70); }}>
             {silent ? <Mute stroke="var(--warn)" /> : <Volume stroke="#C8CEC9" />}
@@ -97,6 +103,51 @@ export function PreviewPanel({ editor, totalTime }: Props) {
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Eyedropper over the stage while a clip's key colour is being picked. It samples the clip's own
+ * unkeyed frame, so it works with the key already on and with other tracks drawn over the clip.
+ */
+function KeyPicker({ editor, clipId, sample }: { editor: Editor; clipId: string; sample: (clipId: string, x: number, y: number) => string | null }) {
+  const { project, ui, pickKey, updateVideoClip } = editor;
+  const clip = findVideoClip(project, clipId);
+  const [hover, setHover] = useState<{ left: number; top: number; color: string | null } | null>(null);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') pickKey(null); };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [pickKey]);
+  if (!clip) return null;
+  const onScreen = ui.playhead >= clip.start && ui.playhead < clipEnd(clip);
+  const at = (e: PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const left = e.clientX - r.left, top = e.clientY - r.top;
+    return { left, top, color: sample(clipId, left / r.width * project.output.width, top / r.height * project.output.height) };
+  };
+  const pick = (e: PointerEvent<HTMLDivElement>) => {
+    const { color } = at(e);
+    if (!color) return;
+    updateVideoClip(clipId, { key: { ...clip.key, enabled: true, color } });
+    pickKey(null);
+  };
+  const message = !onScreen ? 'Move the playhead over this clip to pick from it'
+    : hover && !hover.color ? 'Point at the selected clip' : 'Click the colour to remove';
+  return (
+    <div className="key-picker" onPointerMove={(e) => setHover(at(e))} onPointerLeave={() => setHover(null)} onPointerUp={pick}>
+      <div className="key-picker-banner" role="status">
+        <Dropper size={14} />
+        <span>{message}</span>
+        <span style={{ color: 'var(--text-muted)' }}>· Esc to cancel</span>
+      </div>
+      {hover?.color && (
+        <div className="key-loupe" style={{ left: hover.left, top: hover.top }} aria-hidden="true">
+          <span style={{ background: hover.color }} />
+          <span className="mono">{hover.color}</span>
+        </div>
+      )}
+    </div>
   );
 }
 
