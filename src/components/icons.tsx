@@ -53,3 +53,4 @@ export const Clock = (p: IconProps) => <Stroke {...p}><circle cx="12" cy="12" r=
 export const Check = (p: IconProps) => <Stroke {...p}><path d="M5 12l5 5 9-10" /></Stroke>;
 export const Maximize = (p: IconProps) => <Stroke {...p}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></Stroke>;
 export const Minimize = (p: IconProps) => <Stroke {...p}><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></Stroke>;
+export const Reset = (p: IconProps) => <Stroke {...p}><path d="M4 12a8 8 0 102.3-5.7L4 8.6" /><path d="M4 4v4.6h4.6" /></Stroke>;

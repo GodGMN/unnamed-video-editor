@@ -87,6 +87,8 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .nf-ticks { position: absolute; left: 6px; right: 6px; bottom: 3px; height: 4px; pointer-events: none; background: repeating-linear-gradient(90deg, var(--control-hover) 0 1px, transparent 1px 5px) var(--jog, 0px) 0; mask: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); }
 .nf:hover .nf-ticks, .nf.drag .nf-ticks { background-image: repeating-linear-gradient(90deg, var(--accent) 0 1px, transparent 1px 5px); }
 .nf-ticks::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: 0; width: 1px; background: var(--text-bright); }
+.reset-btn { position: relative; z-index: 2; flex: none; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin: 0 -4px; padding: 0; background: transparent; border: 0; border-radius: 5px; color: var(--text-muted); cursor: pointer; }
+.reset-btn:hover { background: var(--hover); color: var(--accent); }
 .scrub-cursor { position: fixed; left: -12px; top: -12px; z-index: 1000; width: 24px; height: 24px; pointer-events: none; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M2 12l5-5v3h10V7l5 5-5 5v-3H7v3z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; }
 
 /* Segmented control */
