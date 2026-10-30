@@ -12,6 +12,7 @@ const initialUi: EditorUi = {
   sel: { kind: 'clip', id: SEED_SELECTION },
   picked: [{ kind: 'clip', id: SEED_SELECTION }],
   focusClip: SEED_SELECTION,
+  lockClip: null,
   tool: 'select',
   menu: null,
   scrub: 7.6,
@@ -27,7 +28,8 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   const sel: Selection | null = valid ? s : focusClip ? { kind: 'clip', id: focusClip } : null;
   const picked = ui.picked.filter((x) => findClip(p, x.id));
   if (!picked.length && sel && (sel.kind === 'clip' || sel.kind === 'audio')) picked.push(sel);
-  return { ...ui, sel, picked, focusClip, menu: null };
+  const lockClip = findClip(p, ui.lockClip) ? ui.lockClip : null;
+  return { ...ui, sel, picked, focusClip, lockClip, menu: null };
 }
 
 /** Loads the saved project (or the seed) and saves it back after every change. */
@@ -71,11 +73,11 @@ export interface PlayRange {
 const clamp = (t: number, r: PlayRange) => Math.max(r.start, Math.min(r.end, t));
 
 /**
- * Where the playhead may go: the whole sequence, or only the focused clip while one is
- * focused. The range ends on the clip's last frame so the preview never shows its neighbour.
+ * Where the playhead may go: the whole sequence, or only the locked clip while one is
+ * locked. The range ends on the clip's last frame so the preview never shows its neighbour.
  */
-function playRange(p: Project, end: number, focusClip: string | null): PlayRange {
-  const clip = findClip(p, focusClip)?.clip;
+function playRange(p: Project, end: number, lockClip: string | null): PlayRange {
+  const clip = findClip(p, lockClip)?.clip;
   if (!clip) return { start: 0, end };
   return { start: clip.start, end: Math.max(clip.start, clipEnd(clip) - 1 / p.output.fps) };
 }
@@ -87,11 +89,11 @@ export function useProject() {
   const projectRef = useRef(project);
   projectRef.current = project;
   const layout = useMemo(() => (project ? layoutTimeline(project) : null), [project]);
-  const range = useMemo(() => (project && layout ? playRange(project, layout.end, ui.focusClip) : null), [project, layout, ui.focusClip]);
+  const range = useMemo(() => (project && layout ? playRange(project, layout.end, ui.lockClip) : null), [project, layout, ui.lockClip]);
   const rangeRef = useRef(range);
   rangeRef.current = range;
 
-  // Pull the playhead into range when the focus changes or the focused clip is trimmed.
+  // Pull the playhead into range when the lock changes or the locked clip is trimmed.
   useLayoutEffect(() => {
     if (range) setUi((u) => (u.playhead === clamp(u.playhead, range) ? u : { ...u, playhead: clamp(u.playhead, range) }));
   }, [range]);
@@ -130,8 +132,10 @@ export function useProject() {
       setTool: (tool: Tool) => setUi((u) => ({ ...u, tool })),
       setScrub: (scrub: number) => setUi((u) => ({ ...u, scrub })),
       setPlayhead: (playhead: number) => setUi((u) => ({ ...u, playhead: rangeRef.current ? clamp(playhead, rangeRef.current) : playhead })),
-      /** Releases the focused clip so the playhead can roam the whole sequence again. */
-      clearFocus: () => setUi((u) => ({ ...u, sel: null, picked: [], focusClip: null, menu: null })),
+      /** Double-click: locks the playhead to a clip's range. */
+      lockTo: (id: string) => setUi((u) => ({ ...u, lockClip: id, menu: null })),
+      /** Releases the locked clip so the playhead can roam the whole sequence again. */
+      unlock: () => setUi((u) => ({ ...u, lockClip: null, menu: null })),
       /** Right-clicking a clip outside the selection selects just that clip. */
       openMenu: (menu: MenuState) => setUi((u) => ({
         ...u, menu, sel: { kind: menu.kind, id: menu.id }, focusClip: menu.id,
