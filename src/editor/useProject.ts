@@ -143,6 +143,12 @@ export function useProject() {
         const last = picked.at(-1) ?? null;
         return { ...u, sel: last, picked, menu: null, focusClip: last?.id ?? u.focusClip };
       }),
+      /** Box selection: the picked clips become exactly `clips`, keeping the primary selection if it's among them. */
+      pickClips: (clips: ClipSelection[]) => setUi((u) => {
+        const kept = clips.find((x) => x.kind === u.sel?.kind && x.id === u.sel.id);
+        const sel = kept ?? clips.at(-1) ?? null;
+        return { ...u, sel, picked: clips, menu: null, focusClip: sel?.id ?? u.focusClip };
+      }),
       /** Moves clip `id` to `start`; `others` shift by the same amount. */
       moveClip: (snapshot: Project, id: string, start: number, others: string[] = []) => setProject(moveClip(snapshot, id, start, others)),
       setTool: (tool: Tool) => setUi((u) => ({ ...u, tool })),
