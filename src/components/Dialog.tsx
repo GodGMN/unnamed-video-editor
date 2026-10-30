@@ -121,10 +121,13 @@ export function ResultCard({ tone, name, meta, extra }: { tone: string; name: st
   );
 }
 
-export function CheckRow({ label, note }: { label: string; note: string }) {
+export function CheckRow({ label, note, status = 'ok' }: { label: string; note: string; status?: 'ok' | 'fail' | 'pending' }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span className="check-dot"><Check size={11} stroke="var(--bg)" strokeWidth={3.5} /></span>
+      <span className={'check-dot ' + status}>
+        {status === 'ok' && <Check size={11} stroke="var(--bg)" strokeWidth={3.5} />}
+        {status === 'fail' && <Close size={11} stroke="var(--bg)" strokeWidth={3.5} />}
+      </span>
       <span>{label}</span>
       <span style={{ color: 'var(--text-muted)', marginLeft: 'auto', fontSize: 12 }}>{note}</span>
     </div>
