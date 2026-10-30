@@ -4,7 +4,7 @@ import { SOURCES, filmstrip, fmtTime } from '../editor/model';
 import type { ClipId, TextOverlay } from '../editor/model';
 import type { Project } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { ChevronLeft, ChevronRight, Play, SkipEnd, SkipStart, Volume } from './icons';
+import { ChevronLeft, ChevronRight, Mute, Play, SkipEnd, SkipStart, Volume } from './icons';
 import { Slider } from './Slider';
 
 const ALIGN: Record<string, CSSProperties['alignItems']> = { t: 'flex-start', c: 'center', b: 'flex-end', l: 'flex-start', r: 'flex-end' };
@@ -21,6 +21,8 @@ interface Props {
 export function PreviewPanel({ project, clipId, totalTime }: Props) {
   const { state, updateClip, setScrub } = project;
   const [volume, setVolume] = useState(70);
+  const [muted, setMuted] = useState(false);
+  const silent = muted || volume === 0;
   const startDrag = useDrag();
   const accent = 'var(--accent)';
 
@@ -140,9 +142,13 @@ export function PreviewPanel({ project, clipId, totalTime }: Props) {
           <button className="ib transport" aria-label="Go to end"><SkipEnd fill="#C8CEC9" /></button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, justifyContent: 'flex-end' }}>
-          <Volume stroke="#C8CEC9" />
+          <button className="ib transport" aria-label={silent ? 'Unmute preview' : 'Mute preview'} aria-pressed={silent}
+            onClick={() => { setMuted(!silent); if (silent && volume === 0) setVolume(70); }}>
+            {silent ? <Mute stroke="var(--warn)" /> : <Volume stroke="#C8CEC9" />}
+          </button>
           <div style={{ width: 110 }}>
-            <Slider label="Preview volume" hideLabel className="compact" value={volume} unit="%" min={0} max={100} onChange={setVolume} />
+            <Slider label="Preview volume" hideLabel className="compact" value={muted ? 0 : volume} unit="%" min={0} max={100}
+              onChange={(v) => { setVolume(v); setMuted(false); }} />
           </div>
         </div>
       </div>
