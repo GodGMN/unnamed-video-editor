@@ -79,8 +79,8 @@ export function seedProject(): Project {
     tracks: [
       {
         kind: 'text', id: 'T1', name: 'Text', label: '', hidden: false, items: [
-          { id: 'title', content: 'Summer ’26', size: 72, color: '#FFFFFF', pos: 'bc', start: 10, duration: 5 },
-          { id: 'caption', content: 'Dinner on the terrace', size: 56, color: '#FFFFFF', pos: 'bc', start: 19, duration: 4 },
+          { id: 'title', content: 'Summer ’26', size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start: 10, duration: 5 },
+          { id: 'caption', content: 'Dinner on the terrace', size: 56, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start: 19, duration: 4 },
         ],
       },
       { kind: 'video', id: 'V2', name: 'V2', label: 'Overlay', hidden: false, magnetic: false, clips: overlay.map(([v]) => v) },

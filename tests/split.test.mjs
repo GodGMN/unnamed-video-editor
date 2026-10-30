@@ -5,7 +5,7 @@ import { AUDIO_CLIP_DEFAULTS, VIDEO_CLIP_DEFAULTS, addTextItem, duplicateClip, s
 const video = (id, start, extra = {}) => ({ ...VIDEO_CLIP_DEFAULTS, id, start, mediaId: 'm', inS: 1, outS: 6, linkId: 'L', linked: true, ...extra });
 const audio = (id, start, extra = {}) => ({ ...AUDIO_CLIP_DEFAULTS, id, start, mediaId: 'm', inS: 1, outS: 6, linkId: 'L', linked: true, fadeIn: 1, fadeOut: 2, ...extra });
 const project = (v = [video('v', 10)], a = [audio('a', 10)]) => ({ name: 'Test', media: {}, output: { width: 1920, height: 1080, fps: 30 }, tracks: [
-  { kind: 'text', id: 't', name: 'Text', label: '', hidden: false, items: [{ id: 'x', content: 'Hi', size: 72, color: '#FFFFFF', pos: 'bc', start: 2, duration: 4 }] },
+  { kind: 'text', id: 't', name: 'Text', label: '', hidden: false, items: [{ id: 'x', content: 'Hi', size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start: 2, duration: 4 }] },
   { kind: 'video', id: 'V1', name: 'V1', label: '', hidden: false, magnetic: false, clips: v },
   { kind: 'audio', id: 'A1', name: 'A1', label: '', muted: false, clips: a },
 ] });

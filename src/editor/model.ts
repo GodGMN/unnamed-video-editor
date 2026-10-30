@@ -101,6 +101,9 @@ export interface TextItem {
   size: number;
   color: string;
   pos: TextAnchor;
+  /** Output-pixel offset from the anchor point. */
+  x: number;
+  y: number;
   start: number;
   duration: number;
 }
@@ -386,11 +389,25 @@ export function pickedPair(p: Project, picked: ClipSelection[]): { video: VideoC
   return video && audio ? { video, audio } : null;
 }
 
-/** Move linked clips by a common delta without packing away the user's placement. */
-export function moveClip(p: Project, id: string, start: number): Project {
+/** Clips that move with these: the clips themselves plus their linked partners. */
+export function movingGroup(p: Project, ids: string[]): Clip[] {
+  const group = new Map<string, Clip>();
+  for (const id of ids) {
+    const found = findClip(p, id);
+    if (!found) continue;
+    for (const c of [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])]) group.set(c.id, c);
+  }
+  return [...group.values()];
+}
+
+/**
+ * Moves clip `id` to `start` and shifts `others` (plus everyone's linked partners) by the same
+ * delta, without packing away the user's placement. No clip goes before 0.
+ */
+export function moveClip(p: Project, id: string, start: number, others: string[] = []): Project {
   const found = findClip(p, id);
   if (!found) return p;
-  const group = [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])];
+  const group = movingGroup(p, [id, ...others]);
   const ids = new Set(group.map(c => c.id));
   const delta = Math.max(start - found.clip.start, -Math.min(...group.map(c => c.start)));
   return { ...p, tracks: p.tracks.map(t => {
@@ -472,7 +489,7 @@ export function splitTextItem(p: Project, id: string, time: number, rightId: str
 }
 
 /** Property values of a text item added from the timeline toolbar. */
-export const TEXT_ITEM_DEFAULTS: Omit<TextItem, 'id' | 'start'> = { content: 'Title', size: 72, color: '#FFFFFF', pos: 'bc', duration: 3 };
+export const TEXT_ITEM_DEFAULTS: Omit<TextItem, 'id' | 'start'> = { content: 'Title', size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, duration: 3 };
 
 /** Adds a default text item at `time` to the top text track with room for it, or to a new text track on top. */
 export function addTextItem(p: Project, time: number, id: string): Project {
@@ -511,6 +528,18 @@ export function duplicateClip(p: Project, id: string, copyId: string): Project {
     }));
     return copies.length ? { ...t, clips: [...t.clips, ...copies] } as Track : t;
   }) });
+}
+
+export const MIN_TEXT_DURATION = 0.5;
+
+/** Moves one edge of a text item to `time`, keeping the other edge where it is. */
+export function trimTextItem(p: Project, id: string, edge: 'in' | 'out', time: number): Project {
+  const item = findTextItem(p, id);
+  if (!item) return p;
+  const end = item.start + item.duration;
+  if (edge === 'out') return patchTextItem(p, id, { duration: round6(Math.max(MIN_TEXT_DURATION, time - item.start)) });
+  const start = round6(Math.max(0, Math.min(end - MIN_TEXT_DURATION, time)));
+  return patchTextItem(p, id, { start, duration: round6(end - start) });
 }
 
 export function patchTrack(p: Project, id: string, patch: Partial<{ hidden: boolean; muted: boolean }>): Project {

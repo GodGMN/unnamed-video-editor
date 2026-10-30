@@ -1,7 +1,7 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, curveName, findClip, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
+import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, curveName, findClip, movingGroup, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
 import type { AudioClip, ClipSelection, Project, TextItem, TransitionType, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
@@ -339,16 +339,21 @@ export function Timeline({ editor }: { editor: Editor }) {
                 onPointerMove={splitting ? (e) => onSplitMove(e, t) : undefined}
                 onPointerLeave={splitting ? () => setCut(null) : undefined}
                 data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
-                {t.kind === 'text' && t.items.map((x) => (
-                  <button key={x.id} className="text-clip" style={{ left: x.start * pps + 1, width: x.duration * pps - 2 }}
-                    aria-label={`Text overlay: ${x.content}`}
-                    aria-pressed={ui.sel?.kind === 'text' && ui.sel.id === x.id}
-                    onPointerDown={onTextDown(x)}
-                    onClick={() => select({ kind: 'text', id: x.id })}>
-                    <TextT size={12} strokeWidth={2.2} />
-                    <span>{x.content}</span>
-                  </button>
-                ))}
+                {t.kind === 'text' && (
+                  <>
+                    {t.items.map((x) => (
+                      <button key={x.id} className="text-clip" style={{ left: x.start * pps + 1, width: x.duration * pps - 3 }}
+                        aria-label={`Text overlay: ${x.content}, ${x.duration.toFixed(1)} seconds`}
+                        aria-pressed={ui.sel?.kind === 'text' && ui.sel.id === x.id}
+                        onPointerDown={onTextDown(x)}
+                        onClick={() => select({ kind: 'text', id: x.id })}>
+                        <span className="text-clip-name"><TextT size={12} strokeWidth={2.2} /><span>{x.content}</span></span>
+                        <span className="mono">{x.duration.toFixed(1)}s</span>
+                      </button>
+                    ))}
+                    <TextTrimHandles editor={editor} items={t.items} pps={pps} />
+                  </>
+                )}
                 {t.kind === 'video' && (
                   <>
                     {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} inset={insets!.get(c.id)} onMenu={onContextMenu('clip', c.id)} />)}
@@ -407,12 +412,19 @@ const lockClip = (editor: Editor, id: string) => (e: MouseEvent) => {
 
 const isPicked = ({ ui }: Editor, id: string) => ui.picked.some((x) => x.id === id);
 
-function useClipMove(editor: Editor, clip: VideoClip | AudioClip, snapping: boolean) {
+/**
+ * Dragging a clip moves it with its linked partners. Dragging one of several picked clips moves
+ * the whole selection; a plain click on it (no drag) still selects it alone.
+ */
+function useClipMove(editor: Editor, clip: VideoClip | AudioClip, kind: 'clip' | 'audio', snapping: boolean) {
   const startDrag = useDrag();
-  return (e: PointerEvent<HTMLElement>) => {
+  const dragged = useRef(false);
+  const onPointerDown = (e: PointerEvent<HTMLElement>) => {
+    dragged.current = false;
     if (e.button !== 0 || editor.ui.tool !== 'select' || additive(e)) return;
     const snapshot = editor.project;
-    const moving = new Set([clip.id, ...(clip.linked ? partnersOf(snapshot, clip).map(c => c.id) : [])]);
+    const others = isPicked(editor, clip.id) ? editor.ui.picked.map(x => x.id).filter(id => id !== clip.id) : [];
+    const moving = new Set(movingGroup(snapshot, [clip.id, ...others]).map(c => c.id));
     const targets = [0];
     for (const track of snapshot.tracks) {
       if (track.kind === 'text') {
@@ -421,15 +433,19 @@ function useClipMove(editor: Editor, clip: VideoClip | AudioClip, snapping: bool
     }
     const element = e.currentTarget;
     const pps = ((element.closest('.audio-clip') ?? element).getBoundingClientRect().width + 3) / clipDuration(clip);
-    editor.select({ kind: findClip(snapshot, clip.id)!.track.kind === 'video' ? 'clip' : 'audio', id: clip.id });
-    let dragging = false;
+    if (!others.length) editor.select({ kind, id: clip.id });
     startDrag(e, dx => {
-      if (!dragging && Math.abs(dx) < 3) return;
-      dragging = true;
+      if (!dragged.current && Math.abs(dx) < 3) return;
+      dragged.current = true;
       const start = Math.max(0, clip.start + dx / pps);
-      editor.moveClip(snapshot, clip.id, snapping ? snapClipStart(start, clipDuration(clip), targets, pps) : start);
+      editor.moveClip(snapshot, clip.id, snapping ? snapClipStart(start, clipDuration(clip), targets, pps) : start, others);
     });
   };
+  // The click that ends a drag keeps the selection as it is.
+  const onClick = (e: MouseEvent) => {
+    if (!dragged.current) clickClip(editor, { kind, id: clip.id })(e);
+  };
+  return { onPointerDown, onClick };
 }
 
 interface ClipProps<C> {
@@ -450,7 +466,7 @@ function partnerSelected({ project, ui }: Editor, clip: VideoClip | AudioClip, k
 
 function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<VideoClip>) {
   const { project } = editor;
-  const dragClip = useClipMove(editor, cs, snapping);
+  const move = useClipMove(editor, cs, 'clip', snapping);
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const width = clipDuration(cs) * pps - 3;
@@ -463,8 +479,8 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
       style={{ left: cs.start * pps + 1, width, background: src.tone }}
       aria-label={`Video: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
       aria-pressed={selected}
-      onPointerDown={dragClip}
-      onClick={clickClip(editor, { kind: 'clip', id })}
+      onPointerDown={move.onPointerDown}
+      onClick={move.onClick}
       onDoubleClick={lockClip(editor, id)}
       onContextMenu={onMenu}>
       <PreviewStrip media={src} width={width} inS={cs.inS} outS={cs.outS} />
@@ -512,6 +528,29 @@ function TrimHandles({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
   );
 }
 
+/** Edge handles for the selected text item: drag either end to change when it starts or ends. */
+function TextTrimHandles({ editor, items, pps }: { editor: Editor; items: TextItem[]; pps: number }) {
+  const { ui, trimText } = editor;
+  const startDrag = useDrag();
+  const item = ui.sel?.kind === 'text' ? items.find((x) => x.id === ui.sel!.id) : undefined;
+  if (!item) return null;
+  const left = item.start * pps + 1;
+  const right = left + item.duration * pps - 3;
+
+  const edgeDown = (which: 'in' | 'out') => (e: PointerEvent<HTMLSpanElement>) => {
+    if (e.button !== 0) return;
+    const t0 = which === 'in' ? item.start : item.start + item.duration;
+    startDrag(e, (dx) => trimText(item.id, which, Math.round((t0 + dx / pps) * 100) / 100));
+  };
+
+  return (
+    <>
+      <span className="clip-edge in" style={{ left }} title="Drag to change the start" onPointerDown={edgeDown('in')}><span /></span>
+      <span className="clip-edge out" style={{ left: right - 8 }} title="Drag to change the end" onPointerDown={edgeDown('out')}><span /></span>
+    </>
+  );
+}
+
 /** A chip on every boundary between adjacent clips; a full-height band where they overlap. */
 function Transitions({ editor, clips, pps, dropTarget }: { editor: Editor; clips: VideoClip[]; pps: number; dropTarget: string | null }) {
   const { ui, layout, select } = editor;
@@ -552,7 +591,7 @@ const f1 = (x: number) => x.toFixed(1);
 function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<AudioClip>) {
   const { project, ui, select, togglePick, updateAudioClip: updateClip } = editor;
   const startDrag = useDrag();
-  const dragClip = useClipMove(editor, cs, snapping);
+  const move = useClipMove(editor, cs, 'audio', snapping);
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const span = clipDuration(cs) || 1;
@@ -622,8 +661,8 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
       <button className="audio-wave"
         aria-label={`Audio: ${src.name}, volume ${cs.vol}%${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
         aria-pressed={picked}
-        onPointerDown={dragClip}
-        onClick={clickClip(editor, { kind: 'audio', id })}
+        onPointerDown={move.onPointerDown}
+        onClick={move.onClick}
         onDoubleClick={lockClip(editor, id)}
         onContextMenu={onMenu}>
         {bars.map((h, i) => (

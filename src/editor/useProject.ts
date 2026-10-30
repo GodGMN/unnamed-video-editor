@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, linkClips, addTextItem, duplicateClip, splitClip, splitTextItem, DEFAULT_TRANSITION, clipEnd, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, videoTracks } from './model';
+import { newId, placeMedia, linkClips, addTextItem, duplicateClip, splitClip, splitTextItem, DEFAULT_TRANSITION, clipEnd, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, trimTextItem, videoTracks } from './model';
 import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
@@ -131,7 +131,8 @@ export function useProject() {
         const last = picked.at(-1) ?? null;
         return { ...u, sel: last, picked, menu: null, focusClip: last?.id ?? u.focusClip };
       }),
-      moveClip: (snapshot: Project, id: string, start: number) => setProject(moveClip(snapshot, id, start)),
+      /** Moves clip `id` to `start`; `others` shift by the same amount. */
+      moveClip: (snapshot: Project, id: string, start: number, others: string[] = []) => setProject(moveClip(snapshot, id, start, others)),
       setTool: (tool: Tool) => setUi((u) => ({ ...u, tool })),
       setScrub: (scrub: number) => setUi((u) => ({ ...u, scrub })),
       setPlayhead: (playhead: number) => setUi((u) => ({ ...u, playhead: rangeRef.current ? clamp(playhead, rangeRef.current) : playhead })),
@@ -178,6 +179,8 @@ export function useProject() {
         edit((p) => duplicateClip(p, id, copyId));
         setUi((u) => ({ ...u, sel: { kind, id: copyId }, picked: [{ kind, id: copyId }], focusClip: copyId, menu: null }));
       },
+      /** Moves a text item's start or end edge to `time`; the other edge stays put. */
+      trimText: (id: string, edge: 'in' | 'out', time: number) => edit((p) => trimTextItem(p, id, edge, time)),
       toggleTrack: (id: string) => edit((p) => {
         const t = p.tracks.find((x) => x.id === id);
         if (!t) return p;
