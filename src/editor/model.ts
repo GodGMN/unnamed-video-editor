@@ -804,3 +804,48 @@ export function placeMedia(p: Project, mediaId: string, trackId: string, time: n
   if (media.audio && !audioTrack) tracks.push({ id: `${id}-track`, name: `A${p.tracks.filter((t) => t.kind === 'audio').length + 1}`, label: 'Audio', kind: 'audio', muted: false, clips: [audioClip] });
   return settle({ ...p, tracks });
 }
+
+/* ---------- Output frame ---------- */
+
+export interface Aspect { key: string; w: number; h: number; use: string }
+export const ASPECTS: Aspect[] = [
+  { key: '16:9', w: 16, h: 9, use: 'Landscape · YouTube' },
+  { key: '9:16', w: 9, h: 16, use: 'Vertical · Shorts, Reels, TikTok' },
+  { key: '1:1', w: 1, h: 1, use: 'Square' },
+  { key: '4:5', w: 4, h: 5, use: 'Portrait · feed posts' },
+  { key: '4:3', w: 4, h: 3, use: 'Classic' },
+  { key: '21:9', w: 21, h: 9, use: 'Cinema widescreen' },
+];
+
+/** H.264 needs even dimensions. */
+const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
+
+/** A `w`:`h` frame whose short side is `short` pixels. */
+export function frameSize(w: number, h: number, short: number): { width: number; height: number } {
+  return w >= h ? { width: even(short * w / h), height: even(short) } : { width: even(short), height: even(short * h / w) };
+}
+
+/** The output frame resized so its short side is `short` pixels, keeping its ratio. */
+export const exportSize = (output: { width: number; height: number }, short: number) => frameSize(output.width, output.height, short);
+
+/** The preset the output matches, if any. */
+export function aspectOf(output: { width: number; height: number }): Aspect | null {
+  const r = output.width / output.height;
+  return ASPECTS.find((a) => Math.abs(a.w / a.h - r) < 0.01) ?? null;
+}
+
+/**
+ * Switches the output to `aspect`, keeping its short side. Clip and text offsets are pixels from
+ * the centre or an edge, so they scale with the frame and stay in the same relative place.
+ */
+export function setAspect(p: Project, aspect: Aspect): Project {
+  const { width, height } = frameSize(aspect.w, aspect.h, Math.min(p.output.width, p.output.height));
+  if (width === p.output.width && height === p.output.height) return p;
+  const sx = width / p.output.width, sy = height / p.output.height;
+  const move = <C extends { x: number; y: number }>(c: C): C => ({ ...c, x: Math.round(c.x * sx), y: Math.round(c.y * sy) });
+  return {
+    ...p,
+    output: { ...p.output, width, height },
+    tracks: p.tracks.map((t) => t.kind === 'video' ? { ...t, clips: t.clips.map(move) } : t.kind === 'text' ? { ...t, clips: t.clips.map(move) } : t),
+  };
+}

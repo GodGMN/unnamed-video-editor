@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fmtTime } from '../editor/model';
+import { exportSize, fmtTime } from '../editor/model';
 import { ExportError, exportMp4, probeExportSupport } from '../export';
 import type { ExportErrorCode, ExportOptions, ExportResult, SupportReport } from '../export';
 import { Download } from './icons';
@@ -14,6 +14,8 @@ export interface ExportSource {
   /** Sequence length in seconds. */
   duration: number;
   fps: number;
+  /** The project's frame; export sizes keep its ratio. */
+  output: { width: number; height: number };
   prepare: (width: number, height: number, sampleRate: number, signal: AbortSignal) => Promise<{
     renderFrame: ExportOptions['renderFrame'];
     audio: AudioBuffer | null;
@@ -23,7 +25,6 @@ export interface ExportSource {
 
 const SAMPLE_RATE = 48000;
 const CHANNELS = 2;
-const SIZES: Record<Res, [number, number]> = { '720': [1280, 720], '1080': [1920, 1080] };
 
 const COPY: Record<Step, [string, string]> = {
   settings: ['Export video', 'Rendered on this device. Nothing is uploaded.'],
@@ -61,7 +62,9 @@ interface Props {
 }
 
 export function ExportDialog({ projectSlug, source, onClose }: Props) {
-  const { fps } = source;
+  const { fps, output } = source;
+  /** Each resolution is the short side of the frame, so 1080p at 9:16 is 1080×1920. */
+  const size = (r: Res) => exportSize(output, Number(r));
   const [step, setStep] = useState<Step>('settings');
   const [res, setRes] = useState<Res>('1080');
   const [support, setSupport] = useState<SupportReport | 'failed' | null>(null);
@@ -70,7 +73,7 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
   const [failure, setFailure] = useState<Failure | null>(null);
   const controller = useRef<AbortController | null>(null);
   const [title, subtitle] = COPY[step];
-  const [width, height] = SIZES[res];
+  const { width, height } = size(res);
   const totalFrames = Math.max(1, Math.round(source.duration * fps));
 
   useEffect(() => {
@@ -138,8 +141,8 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
       {step === 'settings' && (
         <div className="dialog-body" style={{ paddingTop: 22 }}>
           <Choice label="Resolution" value={res} onChange={setRes} options={[
-            { key: '720', label: '720p', sub: '1280×720' },
-            { key: '1080', label: '1080p', sub: '1920×1080' },
+            { key: '720', label: '720p', sub: dims(size('720')) },
+            { key: '1080', label: '1080p', sub: dims(size('1080')) },
           ]} />
           <div className="rows">
             <div><span className="k">Format</span><span className="v">MP4 · H.264 + AAC</span></div>
@@ -168,7 +171,7 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
       {step === 'done' && result && (
         <div className="dialog-body" style={{ paddingTop: 22 }}>
           <ResultCard tone="#35503F" name={`${projectSlug}-${result.res}p.mp4`}
-            meta={`${SIZES[result.res].join('×')} · ${fmtTime(result.out.frameCount / fps)} · ${fmtBytes(result.out.blob.size)} · H.264 + AAC`}
+            meta={`${dims(size(result.res))} · ${fmtTime(result.out.frameCount / fps)} · ${fmtBytes(result.out.blob.size)} · H.264 + AAC`}
             extra={<span className="mono" style={{ color: 'var(--text-muted)', fontSize: 11 }}>{codecLine(result.out)}</span>} />
           <div className="dialog-actions split">
             <button className="link-btn" onClick={() => setStep('settings')}>Export again</button>
@@ -234,6 +237,7 @@ function timeLeft(p: RenderState) {
   return `About ${Math.max(1, Math.round(elapsed / p.fraction - elapsed))} s left.`;
 }
 
+const dims = ({ width, height }: { width: number; height: number }) => `${width}×${height}`;
 const fmtBytes = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} kB`);
 
 /** e.g. `avc1.640028 · mp4a.40.2 (bundled encoder)`. */

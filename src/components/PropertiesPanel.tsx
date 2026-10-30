@@ -117,7 +117,7 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
           <label>Top<NumberField min={0} step={2} value={cs.cropT} defaultValue={VIDEO_CLIP_DEFAULTS.cropT} onChange={crop('cropT')} /></label>
           <span />
           <label>Left<NumberField min={0} step={2} value={cs.cropL} defaultValue={VIDEO_CLIP_DEFAULTS.cropL} onChange={crop('cropL')} /></label>
-          <div style={{ position: 'relative', width: '100%', maxWidth: 112, aspectRatio: '16 / 9', background: src.tone, borderRadius: 4, overflow: 'hidden' }} aria-hidden="true">
+          <div style={{ position: 'relative', width: '100%', maxWidth: Math.min(112, 63 * inf.width / inf.height), aspectRatio: `${inf.width} / ${inf.height}`, background: src.tone, borderRadius: 4, overflow: 'hidden' }} aria-hidden="true">
             <div style={{ position: 'absolute', inset: 0, background: 'rgba(12,14,13,0.7)' }} />
             <div style={{
               position: 'absolute', background: src.tone, outline: '1.5px solid var(--accent)',

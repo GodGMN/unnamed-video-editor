@@ -164,10 +164,20 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .preview { flex: 999 1 560px; min-width: 0; }
 .preview-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; }
 .preview-pills { display: flex; gap: 8px; align-items: center; color: var(--text-muted); font-size: 12px; }
-/* The stage keeps 16:9 and shrinks to whichever of the wrap's width or height runs out first. */
+.aspect { position: relative; }
+.aspect-btn { height: 26px; padding: 0 8px 0 10px; font-size: 12px; font-weight: 500; gap: 6px; }
+.aspect-btn .mono { color: var(--text-muted); font-size: 11px; }
+.aspect .menu { right: 0; top: calc(100% + 6px); width: 264px; }
+.aspect .menu .ib { height: 40px; }
+.aspect .menu .ib > span:first-of-type { flex: none; }
+.aspect-label { flex: 1 1 auto; }
+.aspect-icon { flex: none; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+.aspect-icon > span { border: 1.5px solid currentColor; border-radius: 2px; }
+.aspect-use { display: block; font-size: 11px; color: var(--text-muted); }
+/* The stage keeps the output ratio (`--ar`, width over height) and shrinks to whichever of the wrap's width or height runs out first. */
 .stage-wrap { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 4px 20px 12px; background: var(--inset); }
 .stage-fit { width: 100%; height: 100%; container-type: size; display: flex; align-items: center; justify-content: center; }
-.stage { position: relative; width: min(100cqw, 100cqh * 16 / 9, 760px); aspect-ratio: 16 / 9; background: #000; border-radius: 6px; overflow: hidden; }
+.stage { position: relative; width: min(100cqw, 100cqh * var(--ar), 760px); aspect-ratio: var(--ar); background: #000; border-radius: 6px; overflow: hidden; }
 .stage.grid { background: repeating-conic-gradient(#3a3e3c 0 25%, #262928 0 50%) 0 0 / 16px 16px; }
 .key-picker { position: absolute; inset: 0; cursor: crosshair; z-index: 3; }
 .key-picker-banner { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; width: max-content; max-width: calc(100% - 20px); padding: 6px 12px; border-radius: 999px; background: rgba(12, 14, 13, 0.85); border: 1px solid var(--control); font-size: 12px; pointer-events: none; }
@@ -204,7 +214,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .preview:fullscreen { border: 0; border-radius: 0; background: #000; }
 .preview:fullscreen > .preview-head, .preview:fullscreen > .trim { display: none; }
 .preview:fullscreen .stage-wrap { padding: 0; background: #000; }
-.preview:fullscreen .stage { width: min(100cqw, 100cqh * 16 / 9); border-radius: 0; }
+.preview:fullscreen .stage { width: min(100cqw, 100cqh * var(--ar)); border-radius: 0; }
 .preview:fullscreen .transport-bar { background: var(--panel); }
 
 /* Properties */

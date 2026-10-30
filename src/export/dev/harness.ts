@@ -64,6 +64,8 @@ document.body.innerHTML = `
             <option value="1920x1080">1080p · 1920×1080</option>
             <option value="1280x720">720p · 1280×720</option>
             <option value="640x360">360p · 640×360</option>
+            <option value="1080x1920">1080p vertical · 1080×1920</option>
+            <option value="1080x1080">1080p square · 1080×1080</option>
           </select>
         </label>
         <label>Frame rate
@@ -164,7 +166,7 @@ async function makeAudio(duration: number) {
 function makeRenderer(width: number, height: number, fps: number) {
   const canvas = new OffscreenCanvas(width, height);
   const g = canvas.getContext('2d')!;
-  const s = height / 1080;
+  const s = Math.min(width, height) / 1080;
   return ({ index, time }: { index: number; time: number }) => {
     g.fillStyle = `hsl(${(time * 36) % 360} 35% 18%)`;
     g.fillRect(0, 0, width, height);
