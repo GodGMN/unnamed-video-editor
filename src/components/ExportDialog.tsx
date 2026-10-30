@@ -14,10 +14,11 @@ export interface ExportSource {
   /** Sequence length in seconds. */
   duration: number;
   fps: number;
-  /** Returns the frame callback for one export at the given output size. */
-  frames: (width: number, height: number) => ExportOptions['renderFrame'];
-  /** Mixes the timeline's audio to a single buffer starting at 0 s, or `null` for a silent export. */
-  mixAudio: (sampleRate: number) => Promise<AudioBuffer | null>;
+  prepare: (width: number, height: number, sampleRate: number, signal: AbortSignal) => Promise<{
+    renderFrame: ExportOptions['renderFrame'];
+    audio: AudioBuffer | null;
+    dispose: () => void;
+  }>;
 }
 
 const SAMPLE_RATE = 48000;
@@ -90,17 +91,19 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
     setResult(null);
     setProgress({ phase: 'mixing', framesDone: 0, fraction: 0, t0: 0 });
     setStep('rendering');
+    let prepared: Awaited<ReturnType<ExportSource['prepare']>> | undefined;
     try {
-      const audio = await source.mixAudio(SAMPLE_RATE);
+      prepared = await source.prepare(width, height, SAMPLE_RATE, ctl.signal);
       ctl.signal.throwIfAborted();
       const t0 = performance.now();
       const out = await exportMp4({
         width, height, fps, duration: source.duration,
-        renderFrame: source.frames(width, height),
-        audio: audio ?? undefined,
+        renderFrame: prepared.renderFrame,
+        audio: prepared.audio ?? undefined,
         signal: ctl.signal,
         onProgress: (p) => setProgress({ phase: p.phase, framesDone: p.framesDone, fraction: p.fraction, t0 }),
       });
+      ctl.signal.throwIfAborted();
       setResult({ res, out, url: URL.createObjectURL(out.blob) });
       setStep('done');
     } catch (err) {
@@ -110,6 +113,7 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
         : { code: 'unknown', message: err instanceof Error ? err.message : String(err) });
       setStep('error');
     } finally {
+      prepared?.dispose();
       if (controller.current === ctl) controller.current = null;
     }
   };
