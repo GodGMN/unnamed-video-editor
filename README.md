@@ -224,3 +224,16 @@ node scripts/verify-project-home.mjs
 This checks search, sorting, favorite persistence, rename, keyboard menus at the
 bottom of the list, settings, resume, save-before-navigation, deletion, and the
 1280×720 layout. Sample project covers are generated only in the test profile.
+
+## Promo video
+
+`demo/` holds a [Remotion](https://www.remotion.dev) promo of the editor
+(1920×1080, 30 fps, about 42 s, in Spanish). The editor UI in it is redrawn at the app's
+own sizes; the project and footage are invented.
+
+```sh
+cd demo
+npm install
+npm run studio   # preview and scrub in the browser
+npm run render   # writes out/unnamed-video-editor-promo.mp4
+```
