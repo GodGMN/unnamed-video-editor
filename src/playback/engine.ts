@@ -5,6 +5,24 @@ import { audioGain, renderFrame } from './compositor';
 
 interface Player { element: HTMLVideoElement; url: string; gain: GainNode | null; source: MediaElementAudioSourceNode | null; audio: boolean }
 interface Request { project: Project; time: number; playing: boolean; volume: number }
+/** Why a source can't play: its file is gone, or it failed to decode. */
+type Unavailable = { missing: true } | { missing: false; error: string };
+
+function quoted(names: string[]) { return names.map((n) => `"${n}"`).join(', '); }
+
+/** One status line naming every source that can't play right now. */
+function unavailableMessage(problems: Map<string, Unavailable>, project: Project) {
+  const name = (mediaId: string) => project.media[mediaId]?.name ?? 'Missing media';
+  const missing: string[] = [];
+  const errors: string[] = [];
+  for (const [mediaId, problem] of problems) {
+    if (problem.missing) missing.push(name(mediaId));
+    else errors.push(`"${name(mediaId)}" could not be loaded: ${problem.error}`);
+  }
+  if (missing.length === 1) errors.unshift(`Source file ${quoted(missing)} is missing. Import your own media to preview it.`);
+  if (missing.length > 1) errors.unshift(`Source files ${quoted(missing)} are missing. Import your own media to preview them.`);
+  return errors.join(' ');
+}
 
 function waitFor(element: HTMLMediaElement, event: string, action: () => void) {
   return new Promise<void>((resolve, reject) => {
@@ -26,7 +44,7 @@ function waitFor(element: HTMLMediaElement, event: string, action: () => void) {
 /** Owns media elements, URLs, and the Web Audio graph for this preview only. */
 export class PlaybackEngine {
   private players = new Map<string, Player>();
-  private unavailable = new Map<string, string>();
+  private unavailable = new Map<string, Unavailable>();
   private context: AudioContext | null = null;
   private latest: Request | null = null;
   private busy = false;
@@ -51,7 +69,7 @@ export class PlaybackEngine {
     const file = await readMediaFile(clip.mediaId);
     if (this.disposed) return null;
     if (!file) {
-      this.unavailable.set(clip.mediaId, 'Source file is missing. Import your own media to preview it.');
+      this.unavailable.set(clip.mediaId, { missing: true });
       return null;
     }
     const element = document.createElement('video');
@@ -65,7 +83,7 @@ export class PlaybackEngine {
       return this.disposed ? null : player;
     } catch (error) {
       this.release(clip.id);
-      if (!this.disposed) this.unavailable.set(clip.mediaId, error instanceof Error ? error.message : 'Media could not be loaded.');
+      if (!this.disposed) this.unavailable.set(clip.mediaId, { missing: false, error: error instanceof Error ? error.message : 'Unknown error.' });
       return null;
     }
   }
@@ -82,7 +100,7 @@ export class PlaybackEngine {
         const { project, time, playing, volume } = request;
         const active = new Set<string>();
         const ready = new Map<string, HTMLVideoElement>();
-        const messages = new Set<string>();
+        const problems = new Map<string, Unavailable>();
         await Promise.all(project.tracks.flatMap((track) => {
           if (track.kind === 'text' || (track.kind === 'video' ? track.hidden : track.muted)) return [];
           return track.clips.filter((clip) => time >= clip.start && time < clipEnd(clip)).map(async (clip) => {
@@ -90,8 +108,8 @@ export class PlaybackEngine {
             const audio = track.kind === 'audio';
             const player = await this.player(clip, audio);
             if (!player || this.disposed) {
-              const message = this.unavailable.get(clip.mediaId);
-              if (message) messages.add(message);
+              const problem = this.unavailable.get(clip.mediaId);
+              if (problem) problems.set(clip.mediaId, problem);
               return;
             }
             const element = player.element;
@@ -121,7 +139,7 @@ export class PlaybackEngine {
         if (this.disposed || this.superseded) continue;
         const ctx = this.canvas.getContext('2d');
         if (ctx) renderFrame(project, time, ctx, (clip) => ready.get(clip.id) ?? null);
-        this.status([...messages].join(' '));
+        this.status(unavailableMessage(problems, project));
       }
     } catch (error) {
       if (!this.disposed) this.status(error instanceof Error ? error.message : 'Playback failed.');
