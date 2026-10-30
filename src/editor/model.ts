@@ -119,11 +119,11 @@ export const TRANSITION_BETWEEN: [string, string][] = [
   ['dinner_toast', 'dinner_toast (2)'],
 ];
 
-const base: ClipState = {
+export const CLIP_DEFAULTS: ClipState = {
   inS: 0, outS: 0, vol: 100, muted: false, fadeIn: 0, fadeOut: 0, curveIn: 0, curveOut: 0, linked: true,
   x: 0, y: 0, scale: 100, rot: 0, fit: 'fit', cropT: 0, cropR: 0, cropB: 0, cropL: 0,
 };
-const mk = (o: Partial<ClipState>): ClipState => ({ ...base, ...o });
+const mk = (o: Partial<ClipState>): ClipState => ({ ...CLIP_DEFAULTS, ...o });
 
 export interface ProjectState {
   sel: Selection;

@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
+import { ResetButton } from './ResetButton';
 
 interface Props {
   value: number;
@@ -7,6 +8,7 @@ interface Props {
   step?: number;
   min?: number;
   max?: number;
+  defaultValue?: number;
   lead?: ReactNode;
   unit?: string;
   className?: string;
@@ -16,7 +18,7 @@ interface Props {
 const PX_PER_STEP = 4;
 
 // Number input with a jog ruler: drag sideways to scrub, click to type, ↑/↓ to step (Shift ×10).
-export function NumberField({ value, onChange, step = 1, min = -Infinity, max = Infinity, lead, unit, className, ...aria }: Props) {
+export function NumberField({ value, onChange, step = 1, min = -Infinity, max = Infinity, defaultValue, lead, unit, className, ...aria }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const ticks = useRef<HTMLSpanElement>(null);
   const decimals = (String(step).split('.')[1] ?? '').length;
@@ -81,6 +83,7 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
       onMouseDown={(e) => { if (document.activeElement !== input.current) e.preventDefault(); }}
       onClick={(e) => e.preventDefault()}>
       {lead}
+      <ResetButton value={value} defaultValue={defaultValue} onReset={onChange} />
       <input ref={input} type="number" step={step} min={min} max={max} value={value} {...aria}
         onChange={(e) => {
           const v = e.target.valueAsNumber;
