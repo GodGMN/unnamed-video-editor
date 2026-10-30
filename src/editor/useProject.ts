@@ -158,7 +158,7 @@ export function useProject() {
       closeMenu: () => setUi((u) => (u.menu ? { ...u, menu: null } : u)),
 
       /** Moves a clip's in/out points; linked partners follow. */
-      trimClip: (id: string, patch: Partial<Pick<VideoClip | AudioClip, 'inS' | 'outS'>>) => edit((p) => patchClip(p, id, patch)),
+      trimClip: (id: string, patch: Partial<Pick<VideoClip | AudioClip, 'start' | 'inS' | 'outS'>>) => edit((p) => patchClip(p, id, patch)),
       updateVideoClip: (id: string, patch: Partial<VideoClip>) => edit((p) => patchClip(p, id, patch)),
       updateAudioClip: (id: string, patch: Partial<AudioClip>) => edit((p) => patchClip(p, id, patch)),
       /** Updates the transition after video clip `id`, creating it from the default cut if needed. */
