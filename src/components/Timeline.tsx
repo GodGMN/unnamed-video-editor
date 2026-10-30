@@ -10,6 +10,7 @@ import { useDrag } from '../editor/useProject';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
 import type { PickedFile } from '../media/links';
 import type { Placement } from '../media/useImports';
+import { shortcut } from '../platform';
 import { Dialog } from './Dialog';
 import { CutLine, Crossfade, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
 
@@ -952,16 +953,16 @@ function ClipMenu({ editor }: { editor: Editor }) {
         <Scissors size={14} stroke="#C8CEC9" /><span>{translate('splitAtPlayhead')}</span>
       </button>
       <button role="menuitem" className="ib" onClick={act(() => ui.picked.forEach((x) => editor.duplicateClip(x.id)))}>
-        <Duplicate size={14} stroke="#C8CEC9" /><span>{translate('duplicate')}</span><span className="kbd">{"Ctrl D"}</span>
+        <Duplicate size={14} stroke="#C8CEC9" /><span>{translate('duplicate')}</span><span className="kbd">{shortcut('D')}</span>
       </button>
       <div className="menu-sep" />
       {unlinkId ? (
         <button role="menuitem" className="ib" onClick={act(() => updateClip(unlinkId, { linked: false }))}>
-          <Unlink size={14} stroke='var(--warn)' /><span>{translate('unlinkAudioAndVideo')}</span><span className="kbd">{"Ctrl L"}</span>
+          <Unlink size={14} stroke='var(--warn)' /><span>{translate('unlinkAudioAndVideo')}</span><span className="kbd">{shortcut('L')}</span>
         </button>
       ) : pair && (
         <button role="menuitem" className="ib" onClick={act(() => linkClips(pair.video.id, pair.audio.id))}>
-          <Link size={14} stroke="var(--accent)" /><span>{translate('linkAudioAndVideo')}</span><span className="kbd">{"Ctrl L"}</span>
+          <Link size={14} stroke="var(--accent)" /><span>{translate('linkAudioAndVideo')}</span><span className="kbd">{shortcut('L')}</span>
         </button>
       )}
       {audio && (
