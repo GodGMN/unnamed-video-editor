@@ -551,7 +551,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   return (
     <button className={'clip' + (partner ? ' partner' : '')}
       style={{ left: cs.start * pps + 1, width, background: src.tone }}
-      aria-label={`Video: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
+      aria-label={`${src.still ? 'Image' : 'Video'}: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
       aria-pressed={selected}
       onPointerDown={move.onPointerDown}
       onClick={move.onClick}
@@ -747,7 +747,6 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         <span className="vol-mark" style={{ top: Math.max(0, Math.min(H - 2, volY - 1)) }} />
       </div>
       <span className="audio-badge" style={inset && { right: 8 + inset.tail * pps }}>
-        {!cs.linked && <span className="unlinked">unlinked</span>}
         {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
         {level}
       </span>

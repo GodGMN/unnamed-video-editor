@@ -85,3 +85,27 @@ export function useSourcePlayer(media: Media | null, volume: number) {
 
   return { video, playing, time, duration, status, toggle, seek };
 }
+
+/** An object URL for a still image previewing on its own, and why it can't show, if it can't. */
+export function useStillSource(media: Media | null) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [status, setStatus] = useState('');
+  const id = media?.id ?? null;
+  const name = media?.name ?? '';
+
+  useEffect(() => {
+    setUrl(null); setStatus('');
+    if (!id) return;
+    let created: string | null = null;
+    let cancelled = false;
+    readMediaFile(id).then((file) => {
+      if (cancelled) return;
+      if (!file) { setStatus(`Source file "${name}" is missing. Import your own media to preview it.`); return; }
+      created = URL.createObjectURL(file);
+      setUrl(created);
+    }, (error: unknown) => { if (!cancelled) setStatus(error instanceof Error ? error.message : 'Media could not be loaded.'); });
+    return () => { cancelled = true; if (created) URL.revokeObjectURL(created); };
+  }, [id, name]);
+
+  return { url, status, setStatus };
+}

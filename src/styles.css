@@ -181,6 +181,12 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .stage-wrap { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 4px 20px 12px; background: var(--inset); }
 .stage-fit { width: 100%; height: 100%; container-type: size; display: flex; align-items: center; justify-content: center; }
 .stage { position: relative; width: min(100cqw, 100cqh * 16 / 9, 760px); aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius-sm); overflow: hidden; }
+.stage.grid { background: repeating-conic-gradient(#3a3e3c 0 25%, #262928 0 50%) 0 0 / 16px 16px; }
+.key-picker { position: absolute; inset: 0; cursor: crosshair; z-index: 3; }
+.key-picker-banner { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; width: max-content; max-width: calc(100% - 20px); padding: 6px 12px; border-radius: calc((1lh + 14px) * var(--corner)); background: rgba(12, 14, 13, 0.85); border: 1px solid var(--control); font-size: 12px; pointer-events: none; }
+.key-picker-banner svg { color: var(--accent); flex: none; }
+.key-loupe { position: absolute; transform: translate(14px, 14px); display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; --r: calc(32px * var(--corner)); border-radius: var(--r); background: rgba(12, 14, 13, 0.9); border: 1px solid var(--control); font-size: 11px; pointer-events: none; }
+.key-loupe > span:first-child { width: 22px; height: 22px; border-radius: calc(var(--r) - 4px); border: 1px solid rgba(255, 255, 255, 0.4); }
 .stage-alert { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius-sm); background: #3a1512; border: 1px solid #e5484d; color: #ffd1cc; font-weight: 600; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); pointer-events: none; }
 .stage-alert svg { flex: none; color: #ff6b62; }
 .layer { position: absolute; inset: 0; }
@@ -312,7 +318,6 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .audio-wave:hover { filter: brightness(1.08); }
 .audio-wave > span { width: 2px; flex: none; border-radius: 1px; }
 .audio-badge { position: absolute; right: 8px; bottom: 4px; display: flex; align-items: center; gap: 4px; font: 500 10px var(--mono); color: var(--text-soft); pointer-events: none; }
-.audio-badge .unlinked { font-family: var(--sans); color: var(--warn); }
 /* The selected media clip's fade handles, in a box over the clip; above its trim edges so the top corners grab the fade. */
 .fade-layer { position: absolute; top: 6px; pointer-events: none; z-index: 4; }
 .fade-layer > * { pointer-events: auto; }
@@ -352,6 +357,18 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .dialog-head h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.03em; }
 .dialog-sub { color: var(--text-dim); font-size: 13px; line-height: 1.5; }
 .dialog-body { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 18px; }
+.dialog-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 10px 24px; border-top: 1px solid var(--line); color: var(--text-muted); font-size: 12px; }
+.made-by { display: flex; align-items: baseline; gap: 10px; }
+/* The gimeno.dev wordmark: VT323 in phosphor green, with the site's letter wave on hover. */
+@font-face { font-family: 'VT323'; src: url('./assets/vt323.woff2') format('woff2'); font-display: swap; }
+.gimeno { font-family: 'VT323', monospace; font-size: 22px; line-height: 1; letter-spacing: 0.05em; color: #33ff33; text-shadow: 0 0 10px rgba(51, 255, 51, 0.45); }
+.gimeno:hover { color: #33ff33; }
+.gimeno span { display: inline-block; }
+.gimeno .tld { color: #74a974; }
+.gimeno:hover .tld { color: #b7ffb7; }
+.gimeno:hover span { animation: gimeno-wave 0.5s ease-in-out; animation-delay: calc(var(--i) * 35ms); }
+@keyframes gimeno-wave { 50% { color: #b7ffb7; transform: translateY(-0.22em); } }
+@media (prefers-reduced-motion: reduce) { .gimeno:hover span { animation: none; } }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .dialog-actions.split { justify-content: space-between; align-items: center; }
 .choice { --r: calc(52px * var(--corner)); }

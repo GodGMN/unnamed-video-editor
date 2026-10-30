@@ -40,6 +40,13 @@ export interface Media {
   audio: AudioStream | null;
   /** Whether this browser can decode every stream; if not, the file needs converting first. */
   decodable: boolean;
+  /**
+   * A still image: `video` holds its size, and `duration` is only how long a new clip of it lasts.
+   * Its clips can be trimmed to any length.
+   */
+  still?: boolean;
+  /** For an animated still, the length of one loop in seconds; its clips repeat it to fill their length. */
+  animation?: number;
   /** Thumbnail background colour; also the clip colour on the timeline. */
   tone: string;
   /** Seed for the placeholder filmstrip and waveform until real ones are generated. */
@@ -74,6 +81,19 @@ export interface Fades {
   curveOut: number;
 }
 
+/** Makes pixels near one colour transparent, e.g. a green screen. */
+export interface ChromaKey {
+  enabled: boolean;
+  /** `#RRGGBB` colour to remove. */
+  color: string;
+  /** Percent: how far from `color` a pixel may be and still be removed completely. */
+  tolerance: number;
+  /** Percent: width of the partly transparent edge beyond `tolerance`. */
+  softness: number;
+  /** Percent: how much of the key colour's tint is taken out of the pixels that stay. */
+  spill: number;
+}
+
 export interface VideoClip extends ClipBase, Fades {
   /** Output-pixel offset from centre. */
   x: number;
@@ -90,6 +110,7 @@ export interface VideoClip extends ClipBase, Fades {
   cropL: number;
   /** Transition into the next adjacent clip on the same track; `null` is a plain cut. */
   transitionOut: Transition | null;
+  key: ChromaKey;
 }
 
 export interface AudioClip extends ClipBase, Fades {
@@ -195,18 +216,25 @@ export interface EditorUi {
   scrub: number;
   /** Timeline playhead position, in sequence seconds. */
   playhead: number;
+  /** The video clip whose key colour the next click on the preview picks, or null. */
+  keyPick: string | null;
 }
 
 /* ---------- Constants ---------- */
 
 export const PPS = 30; // timeline pixels per second
+/** How long a still image shows when dropped on the timeline, in seconds. */
+export const STILL_DURATION = 5;
+/** How long an animation dropped on the timeline lasts: whole loops, at least `STILL_DURATION`. */
+export const animationDuration = (loop: number) => Math.round(Math.ceil(STILL_DURATION / loop - 1e-9) * loop * 1e6) / 1e6;
 export const DEFAULT_TRANSITION: Transition = { type: 'cut', duration: 0.5 };
 
 type ClipDefaults<C> = Omit<C, 'id' | 'mediaId' | 'start' | 'inS' | 'outS' | 'linkId'>;
 /** Property values of a fresh clip; also what the properties panel's reset buttons restore. */
 export const NO_FADES: Fades = { fadeIn: 0, fadeOut: 0, curveIn: 0, curveOut: 0 };
+export const NO_KEY: ChromaKey = { enabled: false, color: '#00B140', tolerance: 25, softness: 20, spill: 50 };
 export const VIDEO_CLIP_DEFAULTS: ClipDefaults<VideoClip> = {
-  linked: true, x: 0, y: 0, scale: 100, rot: 0, fit: 'fit', cropT: 0, cropR: 0, cropB: 0, cropL: 0, transitionOut: null, ...NO_FADES,
+  linked: true, x: 0, y: 0, scale: 100, rot: 0, fit: 'fit', cropT: 0, cropR: 0, cropB: 0, cropL: 0, transitionOut: null, key: NO_KEY, ...NO_FADES,
 };
 export const AUDIO_CLIP_DEFAULTS: ClipDefaults<AudioClip> = {
   linked: true, gainDb: 0, muted: false, ...NO_FADES,
@@ -407,16 +435,19 @@ export function patchClip<C extends Clip>(p: Project, id: string, patch: Partial
 
 /** Links a video and an audio clip as a fresh pair, detaching each from any earlier partner. */
 export function linkClips(p: Project, videoId: string, audioId: string, linkId: string): Project {
-  if (!findVideoClip(p, videoId) || !findAudioClip(p, audioId)) return p;
+  if (!canLink(p, findVideoClip(p, videoId)) || !findAudioClip(p, audioId)) return p;
   return mapClips(p, (clips) => clips.map((c) => c.id === videoId || c.id === audioId ? { ...c, linkId, linked: true } : c));
 }
+
+/** Stills can't be linked: their trims don't move a source in point that audio could follow. */
+const canLink = (p: Project, video: VideoClip | null): video is VideoClip => !!video && !p.media[video.mediaId]?.still;
 
 /** The picked clips as a video and audio pair, when they are exactly one of each. */
 export function pickedPair(p: Project, picked: ClipSelection[]): { video: VideoClip; audio: AudioClip } | null {
   if (picked.length !== 2) return null;
   const video = findVideoClip(p, picked.find((x) => x.kind === 'clip')?.id);
   const audio = findAudioClip(p, picked.find((x) => x.kind === 'audio')?.id);
-  return video && audio ? { video, audio } : null;
+  return canLink(p, video) && audio ? { video, audio } : null;
 }
 
 /** Clips that move with these: the clips themselves plus their linked partners. */
@@ -582,7 +613,7 @@ export const MIN_TRIM_DURATION = 0.5;
 
 /**
  * Moves one edge of clip `id` to sequence time `time`, keeping the other edge where it is. Media
- * clips can't reach past either end of their source; text clips can be any length.
+ * clips can't reach past either end of their source; text clips and stills can be any length.
  */
 export function trimClipEdge(p: Project, id: string, edge: 'in' | 'out', time: number): Project {
   const found = findClip(p, id);
@@ -594,7 +625,13 @@ export function trimClipEdge(p: Project, id: string, edge: 'in' | 'out', time: n
     const start = round6(Math.max(0, Math.min(end - MIN_TRIM_DURATION, time)));
     return patchClip<TextClip>(p, id, { start, duration: round6(end - start) });
   }
-  const source = (p.media[c.mediaId] ?? MISSING_MEDIA).duration;
+  const media = p.media[c.mediaId] ?? MISSING_MEDIA;
+  if (media.still) {
+    if (edge === 'out') return patchClip<MediaClip>(p, id, { outS: round6(c.inS + Math.max(MIN_TRIM_DURATION, time - c.start)) });
+    const start = round6(Math.max(0, Math.min(end - MIN_TRIM_DURATION, time)));
+    return patchClip<MediaClip>(p, id, { start, outS: round6(c.outS + c.start - start) });
+  }
+  const source = media.duration;
   const min = Math.min(MIN_TRIM_DURATION, source);
   if (edge === 'out') return patchClip<MediaClip>(p, id, { outS: round6(Math.min(source, Math.max(c.inS + min, c.outS + time - end))) });
   // The start edge moves the clip's start along with its in point.

@@ -1,12 +1,16 @@
-import { clipEnd } from '../editor/model';
+import { clipEnd, findVideoClip } from '../editor/model';
 import type { AudioClip, MediaClip, Project } from '../editor/model';
 import { readMediaFile } from '../media/files';
-import { audioGain, renderFrame } from './compositor';
-import { FrameCache } from './frameCache';
+import { imageSize, sampleColor } from './chromaKey';
+import { audioGain, renderFrame, sourcePoint } from './compositor';
+import { imageType } from '../media/animation';
+import { AnimatedFrame, FrameCache, StillFrame } from './frameCache';
+import type { Frames } from './frameCache';
 
 interface Player { element: HTMLAudioElement; url: string; gain: GainNode | null; source: MediaElementAudioSourceNode | null; ready: boolean; busy: boolean; wantedPlaying: boolean }
-interface Entry { mediaId: string; used: number; frames: FrameCache | null; audio: Player | null; disposed: boolean; abort: AbortController }
-interface Request { project: Project; time: number; playing: boolean; volume: number }
+interface Entry { mediaId: string; used: number; frames: Frames | null; audio: Player | null; disposed: boolean; abort: AbortController }
+/** `transparent` leaves uncovered and keyed-out pixels clear, so the stage's transparency grid shows through. */
+interface Request { project: Project; time: number; playing: boolean; volume: number; transparent: boolean }
 /** Why a source can't play: its file is gone, or it failed to decode. */
 type Unavailable = { missing: true } | { missing: false; error: string };
 
@@ -118,7 +122,11 @@ export class PlaybackEngine {
       if (entry.disposed) return;
       if (!file) { this.unavailable.set(entry.mediaId, { missing: true }); return; }
       if (!audio) {
-        entry.frames = new FrameCache(file, () => this.scheduleDraw(), (error) => this.fail(entry, error));
+        const media = this.latest?.project.media[entry.mediaId];
+        const changed = () => this.scheduleDraw(), failed = (error: unknown) => this.fail(entry, error);
+        const size = this.canvas;
+        entry.frames = media?.animation ? new AnimatedFrame(file, imageType(media.container), size, changed, failed)
+          : media?.still ? new StillFrame(file, size, changed, failed) : new FrameCache(file, size, changed, failed);
       } else {
         const element = document.createElement('audio');
         const url = URL.createObjectURL(file);
@@ -180,15 +188,21 @@ export class PlaybackEngine {
     }
   }
 
+  /** The canvas changed size: decoders reopen at the new resolution. */
+  resize() {
+    for (const [id, entry] of this.entries) if (entry.frames) this.release(id);
+    if (this.latest) this.update(this.latest);
+  }
+
   private scheduleDraw() {
     if (this.disposed || this.redraw) return;
     this.redraw = requestAnimationFrame(() => { this.redraw = 0; this.draw(); });
   }
   private draw() {
     if (this.disposed || !this.latest) return;
-    const { project, time, playing } = this.latest;
+    const { project, time, playing, transparent } = this.latest;
     const ctx = this.canvas.getContext('2d');
-    if (ctx) renderFrame(project, time, ctx, (clip, sourceTime) => this.entries.get(clip.id)?.frames?.frame(sourceTime, playing) ?? null);
+    if (ctx) renderFrame(project, time, ctx, (clip, sourceTime) => this.entries.get(clip.id)?.frames?.frame(sourceTime, playing) ?? null, transparent ? null : '#000');
     const problems = new Map<string, Unavailable>();
     for (const track of project.tracks) {
       if (track.kind === 'text' || (track.kind === 'video' ? track.hidden : track.muted)) continue;
@@ -198,6 +212,23 @@ export class PlaybackEngine {
       }
     }
     this.status(unavailableMessage(problems, project));
+  }
+  /**
+   * The unkeyed colour of video clip `clipId` under output pixel (`x`, `y`) in the frame on
+   * screen, or null when the clip isn't there or its frame hasn't decoded yet.
+   */
+  sample(clipId: string, x: number, y: number): string | null {
+    if (!this.latest) return null;
+    const { project, time, playing } = this.latest;
+    const clip = findVideoClip(project, clipId);
+    const video = clip && project.media[clip.mediaId]?.video;
+    if (!clip || !video || time < clip.start || time >= clipEnd(clip)) return null;
+    const point = sourcePoint(project, clip, x, y);
+    const frame = point && this.entries.get(clipId)?.frames?.frame(clip.inS + time - clip.start, playing);
+    if (!point || !frame) return null;
+    // Preview frames are decoded smaller than the source.
+    const size = imageSize(frame);
+    return sampleColor(frame, point.x * size.width / video.width, point.y * size.height / video.height);
   }
   private release(id: string) {
     const entry = this.entries.get(id);
