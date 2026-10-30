@@ -28,6 +28,8 @@ export interface AudioStream {
 
 /** An imported source file. The file bytes live outside the project, keyed by `id`. */
 export interface Media {
+  fingerprint?: string;
+  lastModified?: number;
   id: string;
   name: string;
   /** Container format label, e.g. `MP4`, `WebM`, `MOV`. */

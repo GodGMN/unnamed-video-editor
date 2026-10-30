@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { locales, setLocale } from '../i18n';
 import { getLocale } from '../i18n/core';
 import { useT } from '../i18n';
 import { t as translate } from '../i18n/core';
 import type { CSSProperties } from 'react';
+import { StorageSettings } from './StorageSettings';
 import { previewSize, updateSettings, useSettings } from '../settings';
 import type { PreviewResolution } from '../settings';
 import { Choice, Dialog, Note } from './Dialog';
@@ -11,6 +13,7 @@ import { GitHub } from './icons';
 type Key = `${PreviewResolution}`;
 
 export function SettingsDialog({ output, onClose }: { output: { width: number; height: number }; onClose: () => void }) {
+  const [tab, setTab] = useState<'playback' | 'storage'>('playback');
   useT();
   const { previewResolution } = useSettings();
   const { width, height } = previewSize(output, 'full');
@@ -29,9 +32,17 @@ export function SettingsDialog({ output, onClose }: { output: { width: number; h
             {Object.entries(locales).map(([code, entry]) => <option key={code} value={code}>{entry.name}</option>)}
           </select>
         </label>
+        <div className="settings-tabs" role="tablist" aria-label={translate('projectHomeSettingsSections')} onKeyDown={e => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+          e.preventDefault();
+          const next = e.key === 'Home' ? 'playback' : e.key === 'End' ? 'storage' : tab === 'playback' ? 'storage' : 'playback';
+          setTab(next); document.getElementById(`${next}-tab`)?.focus();
+        }}><button id="playback-tab" role="tab" tabIndex={tab === 'playback' ? 0 : -1} aria-selected={tab === 'playback'} aria-controls="playback-settings" onClick={() => setTab('playback')}>{translate('projectHomePlayback')}</button><button id="storage-tab" role="tab" tabIndex={tab === 'storage' ? 0 : -1} aria-selected={tab === 'storage'} aria-controls="storage-settings" onClick={() => setTab('storage')}>{translate('projectHomeStorage')}</button></div>
+        {tab === 'playback' ? <div className="settings-panel" role="tabpanel" id="playback-settings" aria-labelledby="playback-tab">
         <Choice label={translate('previewResolution')} options={options} value={`${previewResolution}`}
           onChange={(k) => updateSettings({ previewResolution: k === 'full' ? 'full' : Number(k) as PreviewResolution })} />
         <Note>{translate('lowerResolutionsKeepPlaybackSmoothOnSlowerMachinesExport')}</Note>
+        </div> : <div role="tabpanel" id="storage-settings" aria-labelledby="storage-tab"><StorageSettings /></div>}
       </div>
       <footer className="dialog-foot">
         <span className="made-by">
