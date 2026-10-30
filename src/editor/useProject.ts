@@ -131,8 +131,9 @@ export function useProject() {
         const last = picked.at(-1) ?? null;
         return { ...u, sel: last, picked, menu: null, focusClip: last?.id ?? u.focusClip };
       }),
-      /** Moves clip `id` to `start`; `others` shift by the same amount. */
-      moveClip: (snapshot: Project, id: string, start: number, others: string[] = []) => setProject(moveClip(snapshot, id, start, others)),
+      /** Moves clip `id` to `start`, `trackShift` tracks down; `others` shift by the same amount. */
+      moveClip: (snapshot: Project, id: string, start: number, others: string[] = [], trackShift = 0) =>
+        setProject(moveClip(snapshot, id, start, others, trackShift)),
       setTool: (tool: Tool) => setUi((u) => ({ ...u, tool })),
       setScrub: (scrub: number) => setUi((u) => ({ ...u, scrub })),
       setPlayhead: (playhead: number) => setUi((u) => ({ ...u, playhead: rangeRef.current ? clamp(playhead, rangeRef.current) : playhead })),
@@ -190,16 +191,19 @@ export function useDrag() {
     const el = e.currentTarget;
     const x0 = e.clientX;
     const y0 = e.clientY;
-    el.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => onMove(ev.clientX - x0, ev.clientY - y0);
-    const end = () => {
-      el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', end);
-      el.removeEventListener('pointercancel', end);
+    const id = e.pointerId;
+    el.setPointerCapture(id);
+    // Listening on window keeps the drag alive if the element remounts, e.g. a clip moving to another track.
+    const move = (ev: PointerEvent) => { if (ev.pointerId === id) onMove(ev.clientX - x0, ev.clientY - y0); };
+    const end = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
     };
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', end);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
   }, []);
   return start;
 }

@@ -2,7 +2,7 @@ import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, curveName, findClip, movingGroup, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
-import type { AudioClip, ClipSelection, Project, TextItem, TransitionType, Tool, Track, VideoClip } from '../editor/model';
+import type { AudioClip, AudioTrack, ClipSelection, Project, TextItem, TransitionType, Tool, Track, VideoClip, VideoTrack } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
@@ -374,12 +374,28 @@ function useClipMove(editor: Editor, clip: VideoClip | AudioClip, kind: 'clip' |
     }
     const element = e.currentTarget;
     const pps = ((element.closest('.audio-clip') ?? element).getBoundingClientRect().width + 3) / clipDuration(clip);
+    // Vertical bands of the tracks the clip can move between, measured once at drag start.
+    const trackKind = kind === 'clip' ? 'video' : 'audio';
+    const laneIds = snapshot.tracks.filter(t => t.kind === trackKind).map(t => t.id);
+    const lanes = laneIds.map(tid => element.closest('.tl-scroll')?.querySelector(`.track[data-track-id="${tid}"]`)?.getBoundingClientRect());
+    const from = laneIds.findIndex(tid => (snapshot.tracks.find(t => t.id === tid) as VideoTrack | AudioTrack).clips.some(c => c.id === clip.id));
+    const laneAt = (y: number) => {
+      let best = from;
+      let distance = Infinity;
+      lanes.forEach((r, i) => {
+        if (!r) return;
+        const d = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+        if (d < distance) { best = i; distance = d; }
+      });
+      return best;
+    };
+    const y0 = e.clientY;
     if (!others.length) editor.select({ kind, id: clip.id });
-    startDrag(e, dx => {
-      if (!dragged.current && Math.abs(dx) < 3) return;
+    startDrag(e, (dx, dy) => {
+      if (!dragged.current && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
       dragged.current = true;
       const start = Math.max(0, clip.start + dx / pps);
-      editor.moveClip(snapshot, clip.id, snapping ? snapClipStart(start, clipDuration(clip), targets, pps) : start, others);
+      editor.moveClip(snapshot, clip.id, snapping ? snapClipStart(start, clipDuration(clip), targets, pps) : start, others, laneAt(y0 + dy) - from);
     });
   };
   // The click that ends a drag keeps the selection as it is.
