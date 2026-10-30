@@ -3,10 +3,12 @@ import type { AudioClip, MediaClip, Project } from '../editor/model';
 import { readMediaFile } from '../media/files';
 import { imageSize, sampleColor } from './chromaKey';
 import { audioGain, renderFrame, sourcePoint } from './compositor';
-import { FrameCache } from './frameCache';
+import { imageType } from '../media/animation';
+import { AnimatedFrame, FrameCache, StillFrame } from './frameCache';
+import type { Frames } from './frameCache';
 
 interface Player { element: HTMLAudioElement; url: string; gain: GainNode | null; source: MediaElementAudioSourceNode | null; ready: boolean; busy: boolean; wantedPlaying: boolean }
-interface Entry { mediaId: string; used: number; frames: FrameCache | null; audio: Player | null; disposed: boolean; abort: AbortController }
+interface Entry { mediaId: string; used: number; frames: Frames | null; audio: Player | null; disposed: boolean; abort: AbortController }
 /** `transparent` leaves uncovered and keyed-out pixels clear, so the stage's transparency grid shows through. */
 interface Request { project: Project; time: number; playing: boolean; volume: number; transparent: boolean }
 /** Why a source can't play: its file is gone, or it failed to decode. */
@@ -120,7 +122,10 @@ export class PlaybackEngine {
       if (entry.disposed) return;
       if (!file) { this.unavailable.set(entry.mediaId, { missing: true }); return; }
       if (!audio) {
-        entry.frames = new FrameCache(file, () => this.scheduleDraw(), (error) => this.fail(entry, error));
+        const media = this.latest?.project.media[entry.mediaId];
+        const changed = () => this.scheduleDraw(), failed = (error: unknown) => this.fail(entry, error);
+        entry.frames = media?.animation ? new AnimatedFrame(file, imageType(media.container), changed, failed)
+          : media?.still ? new StillFrame(file, changed, failed) : new FrameCache(file, changed, failed);
       } else {
         const element = document.createElement('audio');
         const url = URL.createObjectURL(file);
