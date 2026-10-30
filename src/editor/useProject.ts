@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, DEFAULT_TRANSITION, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, settle, videoTracks } from './model';
-import type { AudioClip, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
+import { newId, placeMedia, linkClips, DEFAULT_TRANSITION, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, settle, videoTracks } from './model';
+import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
 
@@ -9,6 +9,7 @@ const SAVE_DELAY_MS = 250;
 
 const initialUi: EditorUi = {
   sel: { kind: 'clip', id: SEED_SELECTION },
+  picked: [{ kind: 'clip', id: SEED_SELECTION }],
   focusClip: SEED_SELECTION,
   tool: 'select',
   menu: null,
@@ -23,7 +24,9 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   const s = ui.sel;
   const valid = !!s && (s.kind === 'text' ? !!findTextItem(p, s.id) : !!findClip(p, s.id));
   const sel: Selection | null = valid ? s : focusClip ? { kind: 'clip', id: focusClip } : null;
-  return { ...ui, sel, focusClip, menu: null };
+  const picked = ui.picked.filter((x) => findClip(p, x.id));
+  if (!picked.length && sel && (sel.kind === 'clip' || sel.kind === 'audio')) picked.push(sel);
+  return { ...ui, sel, picked, focusClip, menu: null };
 }
 
 /** Loads the saved project (or the seed) and saves it back after every change. */
@@ -71,16 +74,29 @@ export function useProject() {
       placeMedia: (mediaId: string, trackId: string, time: number) => {
         const id = newId();
         edit((p) => placeMedia(p, mediaId, trackId, time, id));
-        setUi((u) => ({ ...u, focusClip: id, sel: { kind: 'clip', id } }));
+        setUi((u) => ({ ...u, focusClip: id, sel: { kind: 'clip', id }, picked: [{ kind: 'clip', id }] }));
       },
-      select: (sel: Selection) => setUi((u) => ({
-        ...u, sel, menu: null, focusClip: sel.kind === 'clip' || sel.kind === 'audio' ? sel.id : u.focusClip,
-      })),
+      select: (sel: Selection) => setUi((u) => {
+        const clip = sel.kind === 'clip' || sel.kind === 'audio';
+        return { ...u, sel, menu: null, picked: clip ? [sel] : [], focusClip: clip ? sel.id : u.focusClip };
+      }),
+      /** Ctrl-click: adds a clip to the selection, or removes it if it's already there. */
+      togglePick: (clip: ClipSelection) => setUi((u) => {
+        if (!u.picked.some((x) => x.id === clip.id)) return { ...u, sel: clip, picked: [...u.picked, clip], menu: null, focusClip: clip.id };
+        const picked = u.picked.filter((x) => x.id !== clip.id);
+        if (u.sel?.id !== clip.id) return { ...u, picked, menu: null };
+        const last = picked.at(-1) ?? null;
+        return { ...u, sel: last, picked, menu: null, focusClip: last?.id ?? u.focusClip };
+      }),
       moveClip: (snapshot: Project, id: string, start: number) => setProject(moveClip(snapshot, id, start)),
       setTool: (tool: Tool) => setUi((u) => ({ ...u, tool })),
       setScrub: (scrub: number) => setUi((u) => ({ ...u, scrub })),
       setPlayhead: (playhead: number) => setUi((u) => ({ ...u, playhead })),
-      openMenu: (menu: MenuState) => setUi((u) => ({ ...u, menu, sel: { kind: menu.kind, id: menu.id }, focusClip: menu.id })),
+      /** Right-clicking a clip outside the selection selects just that clip. */
+      openMenu: (menu: MenuState) => setUi((u) => ({
+        ...u, menu, sel: { kind: menu.kind, id: menu.id }, focusClip: menu.id,
+        picked: u.picked.some((x) => x.id === menu.id) ? u.picked : [{ kind: menu.kind, id: menu.id }],
+      })),
       closeMenu: () => setUi((u) => (u.menu ? { ...u, menu: null } : u)),
 
       /** Moves a clip's in/out points; linked partners follow. */
@@ -92,6 +108,8 @@ export function useProject() {
         const clip = findVideoClip(p, id);
         return clip ? patchClip<VideoClip>(p, id, { transitionOut: { ...(clip.transitionOut ?? DEFAULT_TRANSITION), ...patch } }) : p;
       }),
+      /** Links a video and an audio clip so they move and trim together. */
+      linkClips: (videoId: string, audioId: string) => edit((p) => linkClips(p, videoId, audioId, newId())),
       updateText: (id: string, patch: Partial<TextItem>) => edit((p) => patchTextItem(p, id, patch)),
       toggleTrack: (id: string) => edit((p) => {
         const t = p.tracks.find((x) => x.id === id);
