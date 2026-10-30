@@ -7,10 +7,8 @@ import { importMedia } from '../media/import';
 import { PreviewStrip } from '../media/PreviewStrip';
 
 const TRANSITIONS = [
-  { name: 'Cross dissolve', swatch: 'linear-gradient(90deg, #35503F, #4A5B6E)' },
-  { name: 'Fade to black', swatch: 'linear-gradient(90deg, #35503F, #0B0D0C)' },
-  { name: 'Wipe', swatch: 'linear-gradient(90deg, #35503F 50%, #4A5B6E 50%)' },
-  { name: 'Slide', swatch: 'linear-gradient(90deg, #35503F 30%, #4A5B6E 30%)' },
+  { type: 'crossfade', name: 'Cross dissolve', swatch: 'linear-gradient(90deg, #35503F, #4A5B6E)' },
+  { type: 'fade', name: 'Fade to black', swatch: 'linear-gradient(90deg, #35503F, #0B0D0C)' },
 ];
 
 interface Props {
@@ -107,13 +105,14 @@ export function MediaPanel({ project, onConvert, onImport }: Props) {
         </div>
         <div className="transition-grid">
           {TRANSITIONS.map((t) => (
-            <button key={t.name} className="transition-card" draggable>
+            <button key={t.name} className="transition-card" draggable
+              onDragStart={e => { e.dataTransfer.setData('application/x-timeline-transition', t.type); e.dataTransfer.effectAllowed = 'copy'; }}>
               <span style={{ background: t.swatch }} />
               {t.name}
             </button>
           ))}
         </div>
-        <span className="hint" style={{ lineHeight: 1.4 }}>Drag onto the cut between two clips.</span>
+        <span className="hint" style={{ lineHeight: 1.4 }}>Overlap two clips, then drag a transition onto their overlap.</span>
       </div>
     </aside>
   );

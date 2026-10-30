@@ -1,4 +1,4 @@
-import { clipEnd, findVideoClip, partnersOf, videoTracks } from '../editor/model';
+import { clipEnd, overlapAfter, findVideoClip, partnersOf, videoTracks } from '../editor/model';
 import type { AudioClip, Project, VideoClip } from '../editor/model';
 
 export type RenderContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -28,16 +28,16 @@ export function videoOpacity(p: Project, clip: VideoClip, time: number): number 
   const prev = track.clips[i - 1], next = track.clips[i + 1];
   let alpha = 1;
   if (prev && prev.transitionOut?.type === 'crossfade') {
-    const overlap = clipEnd(prev) - clip.start;
+    const overlap = overlapAfter(prev, clip);
     if (overlap > 0) alpha *= clamp((time - clip.start) / overlap);
   }
-  if (prev?.transitionOut?.type === 'fade' && Math.abs(clipEnd(prev) - clip.start) < 1e-5) {
-    const half = Math.min(prev.transitionOut.duration / 2, (clip.outS - clip.inS) / 2);
-    if (half > 0) alpha *= clamp((time - clip.start) / half);
+  if (prev?.transitionOut?.type === 'fade') {
+    const overlap = overlapAfter(prev, clip);
+    if (overlap > 0) alpha *= clamp(((time - clip.start) / overlap - 0.5) * 2);
   }
-  if (next && clip.transitionOut?.type === 'fade' && Math.abs(clipEnd(clip) - next.start) < 1e-5) {
-    const half = Math.min(clip.transitionOut.duration / 2, (clip.outS - clip.inS) / 2);
-    if (half > 0) alpha *= clamp((clipEnd(clip) - time) / half);
+  if (next && clip.transitionOut?.type === 'fade') {
+    const overlap = overlapAfter(clip, next);
+    if (overlap > 0) alpha *= clamp(1 - (time - next.start) / overlap * 2);
   }
   return alpha;
 }
@@ -53,8 +53,8 @@ export function audioGain(p: Project, clip: AudioClip, time: number): number {
     const track = videoTracks(p).find((t) => t.clips.some((c) => c.id === partner.id));
     const next = track?.clips[track.clips.findIndex((c) => c.id === partner.id) + 1];
     if (next && partner.transitionOut?.type === 'crossfade') {
-      const overlap = clipEnd(partner) - next.start;
-      if (overlap > 0) gain *= clamp((clipEnd(partner) - time) / overlap);
+      const overlap = overlapAfter(partner, next);
+      if (overlap > 0) gain *= clamp((Math.min(clipEnd(partner), clipEnd(next)) - time) / overlap);
     }
   }
   return gain;

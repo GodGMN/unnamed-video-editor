@@ -317,3 +317,9 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .gate-card h1 { margin: 6px 0 0; font-size: 28px; font-weight: 800; letter-spacing: -0.035em; }
 .gate-card p { margin: 0; color: var(--text-dim); font-size: 15px; line-height: 1.55; max-width: 380px; }
 .gate-card .pill { margin-top: 6px; font-size: 12px; color: var(--text-muted); border-color: var(--line-strong); padding: 5px 12px; }
+
+.tool-separator { width: 1px; background: var(--control); margin: 4px 5px; }
+.clip, .audio-wave { touch-action: none; }
+
+.trans-chip.overlap-zone { border-style: dashed; border-radius: 5px; min-width: 3px; background: rgba(30, 45, 32, .88); overflow: hidden; }
+.trans-chip.overlap-zone:hover { background: var(--selected); border-color: var(--accent); }

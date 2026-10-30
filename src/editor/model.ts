@@ -116,8 +116,7 @@ export interface VideoTrack extends TrackBase {
   kind: 'video';
   hidden: boolean;
   /**
-   * Clips sit back to back with no gaps, and crossfades overlap neighbours. Edits that
-   * change a clip's length ripple the clips after it (and their linked clips).
+   * Legacy saved-track flag. Placement is always controlled by clip start times.
    */
   magnetic: boolean;
   /** Sorted by `start`. */
@@ -193,8 +192,8 @@ export const AUDIO_CLIP_DEFAULTS: ClipDefaults<AudioClip> = {
 export const TRANSITION_NAMES: Record<TransitionType, string> = { cut: 'Cut', fade: 'Fade', crossfade: 'Crossfade' };
 export const TRANSITION_HELP: Record<TransitionType, string> = {
   cut: 'Instant switch to the next clip. Default for new clips.',
-  fade: 'Fades the outgoing clip to black, then the next clip in from black. Audio dips with it.',
-  crossfade: 'Overlaps both clips and blends their opacity and audio. Shortens the sequence by the overlap.',
+  fade: 'Fades through black across the existing overlap. Drag clips to change the overlap.',
+  crossfade: 'Blends the two clips across their existing overlap. Drag clips to change the overlap.',
 };
 
 /** Stands in for a clip's media when its id isn't in `Project.media`. */
@@ -259,11 +258,9 @@ export function audioFor(p: Project, id: string): AudioClip | null {
   return partner ? (partner as AudioClip) : null;
 }
 
-/** Seconds two adjacent clips overlap: crossfades overlap by their duration, capped by either clip. */
+/** Actual intersection of two clips, independent of the selected effect. */
 export function overlapAfter(clip: VideoClip, next: Clip) {
-  const tr = clip.transitionOut;
-  if (!tr || tr.type !== 'crossfade') return 0;
-  return Math.max(0, Math.min(tr.duration, clipDuration(clip), clipDuration(next)));
+  return Math.max(0, Math.min(clipEnd(clip), clipEnd(next)) - Math.max(clip.start, next.start));
 }
 
 /* ---------- Layout ---------- */
@@ -326,41 +323,11 @@ export function layoutTimeline(p: Project): TimelineLayout {
 
 const round6 = (x: number) => Math.round(x * 1e6) / 1e6;
 
-/**
- * Restores the model's invariants after an edit: packs magnetic tracks back to back
- * (honouring crossfade overlaps) and moves each shifted clip's linked partners by the same
- * amount, so audio stays in sync with its video.
- */
+/** Keep track order deterministic without changing user-authored positions. */
 export function settle(p: Project): Project {
-  const shift = new Map<string, number>();
-  const moved = new Set<string>();
-  let tracks = p.tracks.map((t) => {
-    if (t.kind === 'text') return t;
-    if (t.kind === 'audio' || !t.magnetic) return { ...t, clips: [...t.clips].sort((a, b) => a.start - b.start) } as Track;
-    if (t.clips.length === 0) return t;
-    let at = t.clips[0].start;
-    const clips = t.clips.map((c, i) => {
-      const start = round6(at);
-      const next = t.clips[i + 1];
-      at = start + clipDuration(c) - (next ? overlapAfter(c, next) : 0);
-      if (start === c.start) return c;
-      if (c.linkId) shift.set(c.linkId, start - c.start);
-      moved.add(c.id);
-      return { ...c, start };
-    });
-    return { ...t, clips };
-  });
-  if (shift.size) {
-    tracks = tracks.map((t) => {
-      if (t.kind === 'text') return t;
-      const clips = (t.clips as Clip[]).map((c) => {
-        const d = c.linkId != null && !moved.has(c.id) ? shift.get(c.linkId) : undefined;
-        return d ? { ...c, start: round6(c.start + d) } : c;
-      }).sort((a, b) => a.start - b.start);
-      return { ...t, clips } as Track;
-    });
-  }
-  return { ...p, tracks };
+  return { ...p, tracks: p.tracks.map(t => t.kind === 'text' ? t : {
+    ...t, clips: [...t.clips].sort((a, b) => a.start - b.start),
+  } as Track) };
 }
 
 /** Clip fields that apply to every linked partner when `linked` is on. */
@@ -383,6 +350,33 @@ export function patchClip<C extends Clip>(p: Project, id: string, patch: Partial
     return { ...t, clips } as Track;
   });
   return { ...p, tracks };
+}
+
+/** Move linked clips by a common delta without packing away the user's placement. */
+export function moveClip(p: Project, id: string, start: number): Project {
+  const found = findClip(p, id);
+  if (!found) return p;
+  const group = [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])];
+  const ids = new Set(group.map(c => c.id));
+  const delta = Math.max(start - found.clip.start, -Math.min(...group.map(c => c.start)));
+  return { ...p, tracks: p.tracks.map(t => {
+    if (t.kind === 'text') return t;
+    const clips = t.clips.map(c => ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c)
+      .sort((a, b) => a.start - b.start);
+    return { ...t, clips } as Track;
+  }) };
+}
+
+/** Both edges can snap; the radius stays constant in screen pixels at every zoom. */
+export function snapClipStart(start: number, duration: number, targets: number[], pixelsPerSecond: number): number {
+  let result = start;
+  let distance = 8 / pixelsPerSecond;
+  for (const target of targets) for (const edge of [0, duration]) {
+    const candidate = target - edge;
+    const d = Math.abs(candidate - start);
+    if (candidate >= 0 && d < distance) { result = candidate; distance = d; }
+  }
+  return result;
 }
 
 export function patchTextItem(p: Project, id: string, patch: Partial<TextItem>): Project {

@@ -1,10 +1,7 @@
 import { AUDIO_CLIP_DEFAULTS, VIDEO_CLIP_DEFAULTS, settle } from './model';
 import type { AudioClip, Media, Project, Transition, VideoClip } from './model';
 
-/*
- * The demo project a fresh editor opens with. Clips on the magnetic V1 track only need to be
- * listed in order: `settle` lays them out back to back and moves their linked audio along.
- */
+/* Demo clip positions are explicit, just like user-authored timeline positions. */
 
 const media: Media[] = [
   {
@@ -63,11 +60,11 @@ function pair(s: PairSpec): [VideoClip, AudioClip] {
 const main = [
   pair({ id: 'intro', mediaId: 'intro', inS: 2.0, outS: 10.4, audio: { fadeIn: 1.2, curveIn: 0.6 },
     transitionOut: { type: 'crossfade', duration: 0.8 } }),
-  pair({ id: 'drone', mediaId: 'drone', inS: 3.2, outS: 14.0,
+  pair({ id: 'drone', start: 7.6, mediaId: 'drone', inS: 3.2, outS: 14.0,
     video: { fit: 'custom', scale: 110, y: -20, cropB: 120 }, audio: { vol: 80, fadeOut: 1.5, curveOut: -0.5 },
     transitionOut: { type: 'cut', duration: 0.5 } }),
-  pair({ id: 'toast1', mediaId: 'toast', inS: 0, outS: 7.4, transitionOut: { type: 'fade', duration: 0.5 } }),
-  pair({ id: 'toast2', mediaId: 'toast', inS: 9.8, outS: 19.0, linked: false, audio: { muted: true, fadeOut: 1 } }),
+  pair({ id: 'toast1', start: 18.4, mediaId: 'toast', inS: 0, outS: 7.4, transitionOut: { type: 'fade', duration: 0.5 } }),
+  pair({ id: 'toast2', start: 25.8, mediaId: 'toast', inS: 9.8, outS: 19.0, linked: false, audio: { muted: true, fadeOut: 1 } }),
 ];
 const overlay = [
   pair({ id: 'sunset', mediaId: 'sunset', start: 27, inS: 4.0, outS: 10.0,
