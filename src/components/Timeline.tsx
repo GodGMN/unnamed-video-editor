@@ -1,11 +1,12 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, clipKind, curveName, dbToFader, dbToGain, faderToDb, fmtDb, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, removeTrack as removeTrackModel, clipDuration, clipEnd, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
+import { DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, STILL_DURATION, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, clipKind, curveName, dbToFader, dbToGain, faderToDb, fmtDb, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, removeTrack as removeTrackModel, clipDuration, clipEnd, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
 import type { AudioClip, Clip, ClipKind, Fades, ClipSelection, MediaClip, Project, TextClip, TransitionType, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
+import type { Placement } from '../media/useImports';
 import { Dialog } from './Dialog';
 import { CutLine, Crossfade, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
 
@@ -54,6 +55,8 @@ function overlapInsets(clips: MediaClip[]) {
 
 const TRANSITION_MIME = 'application/x-timeline-transition';
 const isTransitionDrag = (e: { dataTransfer: DataTransfer }) => e.dataTransfer.types.includes(TRANSITION_MIME);
+/** Whether a drag carries files from outside the page. */
+const isFileDrag = (e: { dataTransfer: DataTransfer }) => e.dataTransfer.types.includes('Files');
 
 /**
  * The video clip whose outgoing transition a drop at `time` on `track` sets, or null. Audio overlaps
@@ -68,7 +71,8 @@ function transitionTargetAt(project: Project, track: Track, time: number, slop: 
   return video && overlapsOf<MediaClip>(video.track.clips).some((o) => o.from.id === video.clip.id) ? video.clip.id : null;
 }
 
-export function Timeline({ editor }: { editor: Editor }) {
+/** `onDropFiles` imports files dropped on a track and places them there. */
+export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles: (files: File[], place: Placement) => void }) {
   const { project, ui, layout, select, setTool, setPlayhead, unlock, toggleTrack, openMenu, closeMenu, deleteSelection } = editor;
   const focus = ui.lockClip ? layout.clips[ui.lockClip] : undefined;
   const focused = !!focus;
@@ -307,11 +311,22 @@ export function Timeline({ editor }: { editor: Editor }) {
       const start = mediaDropStart(t, mediaTime(e, t, media.duration));
       if (ghost?.trackId !== t.id || ghost.start !== start || ghost.duration !== media.duration)
         setGhost({ trackId: t.id, start, duration: media.duration, name: media.name, insert });
+    } else if (isFileDrag(e)) {
+      // A file's length is only known once it's dropped and read, so the ghost shows a still's.
+      if (t.kind === 'text') { setGhost(null); return; }
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      const count = e.dataTransfer.items.length;
+      const name = count > 1 ? `Import ${count} files` : 'Import file';
+      const start = mediaDropStart(t, mediaTime(e, t, STILL_DURATION));
+      if (ghost?.trackId !== t.id || ghost.start !== start || ghost.name !== name)
+        setGhost({ trackId: t.id, start, duration: STILL_DURATION, name, insert: t.kind === 'video' && t.magnetic });
     }
   };
-  // The pointer's time on the track; off magnetic tracks the clip snaps to nearby edges and the playhead.
-  const mediaTime = (e: DragEvent<HTMLDivElement>, t: Track, duration: number) => {
-    const time = Math.max(0, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps);
+  const pointerTime = (e: DragEvent<HTMLDivElement>) => Math.max(0, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps);
+  const mediaTime = (e: DragEvent<HTMLDivElement>, t: Track, duration: number) => snapDrop(pointerTime(e), t, duration);
+  // Off magnetic tracks a dropped clip snaps to nearby edges and the playhead.
+  const snapDrop = (time: number, t: Track, duration: number) => {
     if (!snapping || (t.kind === 'video' && t.magnetic)) return time;
     const targets = [0, ui.playhead];
     for (const track of project.tracks) for (const clip of track.clips as Clip[]) targets.push(clip.start, clipEnd(clip));
@@ -329,6 +344,12 @@ export function Timeline({ editor }: { editor: Editor }) {
       return;
     }
     setGhost(null);
+    if (!e.dataTransfer.types.includes(MEDIA_MIME) && isFileDrag(e)) {
+      // The clip snaps once the file is read and its length known.
+      const time = pointerTime(e);
+      if (t.kind !== 'text') onDropFiles(Array.from(e.dataTransfer.files), { trackId: t.id, timeFor: (duration) => snapDrop(time, t, duration) });
+      return;
+    }
     const media = project.media[e.dataTransfer.getData(MEDIA_MIME)];
     if (t.kind !== 'text' && acceptsMedia(t, media)) editor.placeMedia(media.id, t.id, mediaTime(e, t, media.duration));
   };
@@ -549,9 +570,9 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   const partner = partnerSelected(editor, cs, 'audio');
 
   return (
-    <button className={'clip' + (partner ? ' partner' : '')}
+    <button className={'clip' + (partner ? ' partner' : '') + (src.importing ? ' importing' : '')}
       style={{ left: cs.start * pps + 1, width, background: src.tone }}
-      aria-label={`${src.still ? 'Image' : 'Video'}: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
+      aria-label={`${src.still ? 'Image' : 'Video'}: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}${src.importing ? ', importing' : ''}`}
       aria-pressed={selected}
       onPointerDown={move.onPointerDown}
       onClick={move.onClick}
@@ -563,7 +584,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
           {cs.linked && <Link size={11} stroke="#D8DED9" strokeWidth={2.4} style={{ flex: 'none' }} />}
           <span className="name">{src.name}</span>
         </span>
-        <span className="mono">{dur.toFixed(1)}s</span>
+        <span className="mono">{src.importing ? 'Importing…' : `${dur.toFixed(1)}s`}</span>
       </span>
       <FadeRamps clip={cs} width={width} height={VIDEO_CLIP_H} />
     </button>
@@ -696,7 +717,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   const picked = isPicked(editor, id);
   const partner = partnerSelected(editor, cs, 'clip');
 
-  const preview = useMediaPreview(src.id);
+  const preview = useMediaPreview(src);
   const bars = [];
   for (let k = 0, n = Math.max(0, Math.floor((width - 24) / 4)); k < n; k++) {
     const n = Math.max(1, Math.floor((width - 24) / 4));
@@ -724,10 +745,10 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   };
 
   return (
-    <div className={'audio-clip' + (picked ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked')}
+    <div className={'audio-clip' + (picked ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked') + (src.importing ? ' importing' : '')}
       style={{ left: cs.start * pps + 1, width }}>
       <button className="audio-wave"
-        aria-label={`Audio: ${src.name}, volume ${level}${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
+        aria-label={`Audio: ${src.name}, volume ${level}${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}${src.importing ? ', importing' : ''}`}
         aria-pressed={picked}
         onPointerDown={move.onPointerDown}
         onClick={move.onClick}

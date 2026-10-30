@@ -4,18 +4,19 @@ import { readPreview } from './files';
 import type { MediaPreview } from './files';
 import { loopTime } from './animation';
 
-export function useMediaPreview(id: string) {
+/** The stored previews of `media`, once its import has written them. */
+export function useMediaPreview({ id, importing }: Media) {
   const [preview, setPreview] = useState<MediaPreview | null>(null);
   useEffect(() => {
     let cancelled = false;
     setPreview(null);
-    readPreview(id).then((value) => { if (!cancelled) setPreview(value); }).catch(console.warn);
+    if (!importing) readPreview(id).then((value) => { if (!cancelled) setPreview(value); }).catch(console.warn);
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, importing]);
   return preview;
 }
 export function PreviewStrip({ media, width, inS = 0, outS = media.duration }: { media: Media; width: number; inS?: number; outS?: number }) {
-  const preview = useMediaPreview(media.id);
+  const preview = useMediaPreview(media);
   const n = Math.max(1, Math.ceil(width / 70));
   return <span className="strip" aria-hidden="true">{preview?.thumbnails.length ? Array.from({ length: n }, (_, i) => {
     const time = inS + (outS - inS) * i / n;

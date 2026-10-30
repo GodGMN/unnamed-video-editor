@@ -6,6 +6,7 @@ import { useProject } from './editor/useProject';
 import type { Editor } from './editor/useProject';
 import { useConversionJob } from './convert/job';
 import { importMedia } from './media/import';
+import { useImports } from './media/useImports';
 import { ConvertDialog } from './components/ConvertDialog';
 import { DesktopOnly } from './components/DesktopOnly';
 import { ExportDialog } from './components/ExportDialog';
@@ -56,6 +57,7 @@ export function App() {
   const [settings, setSettings] = useState(false);
   const [converting, setConverting] = useState<Pick<Media, 'id' | 'name'> | null>(null);
   useConvertedMedia(editor);
+  const imports = useImports(editor);
 
   if (width < MIN_WIDTH) return <DesktopOnly width={width} />;
   // The saved project loads from IndexedDB in a few milliseconds.
@@ -70,11 +72,11 @@ export function App() {
       <TopBar projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onSettings={() => setSettings(true)} onShowConversion={(id, name) => setConverting({ id, name })} />
       <div className="workspace">
-        <MediaPanel onImport={editor.addMedia} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
+        <MediaPanel onImport={imports.ingest} pending={imports.pending} errors={imports.errors} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
         <PreviewPanel editor={editor} totalTime={totalTime} />
         <PropertiesPanel editor={editor} />
       </div>
-      <Timeline editor={editor} />
+      <Timeline editor={editor} onDropFiles={imports.ingest} />
       {exporting && (
         <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project, editor.layout)}
           onClose={() => setExporting(false)} />

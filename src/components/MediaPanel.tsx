@@ -4,7 +4,6 @@ import { codecFamily, fmtShortDuration, videoTracks } from '../editor/model';
 import type { Media, Project } from '../editor/model';
 import { Convert, Plus, Trash, Warning } from './icons';
 
-import { importMedia } from '../media/import';
 import { PreviewStrip } from '../media/PreviewStrip';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
 
@@ -16,7 +15,12 @@ const TRANSITIONS = [
 interface Props {
   project: Project;
   onConvert: (media: Media) => void;
-  onImport: (media: Media) => void;
+  /** Imports files into the library. */
+  onImport: (files: FileList) => void;
+  /** Files still being imported. */
+  pending: number;
+  /** Imports that failed, as `name: reason`. */
+  errors: string[];
   /** The source playing in the preview on its own, if any. */
   previewing: string | null;
   /** Plays a source in the preview on its own. */
@@ -54,7 +58,7 @@ function clipCount(project: Project, mediaId: string): number {
 /** Whether a drag carries files from outside the page (not a media item or transition). */
 const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
 
-export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, previewing }: Props) {
+export function MediaPanel({ project, onConvert, onImport, pending, errors, onPreview, onRemove, previewing }: Props) {
   const [menu, setMenu] = useState<MediaMenu | null>(null);
   useEffect(() => {
     if (!menu) return;
@@ -74,32 +78,20 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
   const dragDepth = useRef(0);
   const media = Object.values(project.media);
   const input = useRef<HTMLInputElement>(null);
-  const queue = useRef(Promise.resolve());
-  const [pending, setPending] = useState(0);
-  const [errors, setErrors] = useState<string[]>([]);
-  const ingest = (files: FileList | File[]) => {
-    const batch = Array.from(files);
-    setPending((n) => n + batch.length);
-    for (const file of batch) queue.current = queue.current.then(async () => {
-      try { onImport(await importMedia(file)); }
-      catch (error) { setErrors((items) => [...items, `${file.name}: ${error instanceof Error ? error.message : 'Import failed'}`]); }
-      finally { setPending((n) => n - 1); }
-    });
-  };
 
   return (
     <aside className="panel media"
       onDragEnter={(e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDragOver(true); }}
       onDragOver={(e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
       onDragLeave={(e) => { if (hasFiles(e) && --dragDepth.current === 0) setDragOver(false); }}
-      onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragOver(false); ingest(e.dataTransfer.files); }}>
+      onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragOver(false); onImport(e.dataTransfer.files); }}>
       {dragOver && <div className="media-drop">Drop to import</div>}
       <div className="media-head">
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span className="panel-title">Media</span>
           <span className="count">{media.length}</span>
         </div>
-        <input ref={input} type="file" multiple accept="video/*,audio/*,image/*,.mov,.mkv" aria-label="Import media files" hidden onChange={(e) => { if (e.target.files) ingest(e.target.files); e.target.value = ''; }} />
+        <input ref={input} type="file" multiple accept="video/*,audio/*,image/*,.mov,.mkv" aria-label="Import media files" hidden onChange={(e) => { if (e.target.files) onImport(e.target.files); e.target.value = ''; }} />
         <button onClick={() => input.current?.click()} className="ib outlined" style={{ height: 30, padding: '0 10px', fontSize: 12, fontWeight: 500 }}>
           <Plus size={13} strokeWidth={2.2} />
           Import
@@ -110,10 +102,13 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
         {errors.map((error, i) => <p key={i} className="media-meta error media-status">{error}</p>)}
       </div>
       <div className="media-list">
-        {media.map((m) => (
-          <div key={m.id} className={'media-item' + (m.decodable ? ' playable' : '') + (previewing === m.id ? ' active' : '')} draggable={m.decodable}
-            title={m.decodable ? 'Click to preview · drag onto the timeline' : undefined}
-            onClick={() => { if (m.decodable) onPreview(m.id); }}
+        {media.map((m) => {
+          // A source still importing can't be previewed or dragged yet.
+          const ready = m.decodable && !m.importing;
+          return (
+          <div key={m.id} className={'media-item' + (ready ? ' playable' : '') + (m.importing ? ' importing' : '') + (previewing === m.id ? ' active' : '')} draggable={ready}
+            title={ready ? 'Click to preview · drag onto the timeline' : m.importing ? 'Importing…' : undefined}
+            onClick={() => { if (ready) onPreview(m.id); }}
             onDragStart={(e) => { e.dataTransfer.setData(MEDIA_MIME, m.id); e.dataTransfer.effectAllowed = 'copy'; mediaDrag.id = m.id; }}
             onDragEnd={() => { mediaDrag.id = null; }}
             onContextMenu={(e) => {
@@ -123,12 +118,13 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
             <div className="media-thumb" style={{ background: m.tone }}>
               <PreviewStrip media={m} width={100} />
               {!m.decodable && <div className="warn"><Warning stroke="var(--warn-icon)" /></div>}
+              {m.importing && <span className="media-importing">Importing…</span>}
               <span className="media-dur">{m.animation ? `${m.animation.toFixed(1)}s loop` : m.still ? 'Still' : m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
             </div>
             <div className="media-text">
               <span className="media-name">{m.name}</span>
               <span className={'media-meta' + (m.decodable ? '' : ' error')}>{mediaMeta(project, m)}</span>
-              {!m.decodable && (
+              {!m.decodable && !m.importing && (
                 <button className="convert-btn" onClick={() => onConvert(m)}>
                   <Convert size={12} strokeWidth={2.2} />
                   Convert to MP4
@@ -136,7 +132,8 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
       {menu && project.media[menu.id] && (() => {
         const clips = clipCount(project, menu.id);

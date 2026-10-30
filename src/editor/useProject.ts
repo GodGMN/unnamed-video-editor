@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, settle, trimClipEdge, videoTracks } from './model';
+import { newId, dropMedia, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, settle, trimClipEdge, videoTracks } from './model';
 import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
@@ -38,6 +38,16 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   return { ...ui, sel, picked, focusClip, lockClip, source, keyPick, menu: null };
 }
 
+/** Media whose import was cut off by a reload never finished storing its file, so it goes, clips and all. */
+function dropUnfinished(p: Project): Project {
+  for (const m of Object.values(p.media)) {
+    if (!m.importing) continue;
+    p = removeMedia(p, m.id);
+    removeMediaFiles(m.id).catch(() => undefined);
+  }
+  return p;
+}
+
 /** Loads the saved project (or the seed) and saves it back after every change. */
 function usePersistentProject(onLoad: (p: Project) => void) {
   const [project, setProject] = useState<Project | null>(null);
@@ -55,7 +65,7 @@ function usePersistentProject(onLoad: (p: Project) => void) {
       .catch((err) => { console.warn('Could not load the saved project', err); return null; })
       .then((saved) => {
         if (cancelled) return;
-        const p = saved ?? seedProject();
+        const p = dropUnfinished(saved ?? seedProject());
         setProject(p);
         onLoad(p);
       });
@@ -128,6 +138,35 @@ export function useProject() {
         const next = deleteClips(p, ids);
         setProject(next);
         setUi((u) => reconcileUi(next, { ...u, sel: null, picked: [] }));
+      },
+      /** Adds media still importing and places them back to back from `time`, selecting the first clip placed. */
+      dropMedia: (media: Media[], trackId: string, time: number) => {
+        const p = projectRef.current;
+        if (!p) return;
+        const { project, clipIds } = dropMedia(p, media, trackId, time);
+        setProject(settle(project));
+        const id = clipIds.find((x) => x !== null);
+        const track = id && findClip(project, id)?.track;
+        if (!id || !track) return;
+        const sel: ClipSelection = { kind: clipKind(track.kind), id };
+        setUi((u) => ({ ...u, source: null, sel, picked: [sel], focusClip: focusOf(sel, u.focusClip), menu: null }));
+      },
+      /**
+       * Swaps in a finished import. Returns false when the media was deleted meanwhile, so the
+       * caller can drop the files it just stored.
+       */
+      finishMedia: (media: Media) => {
+        if (!projectRef.current?.media[media.id]) return false;
+        edit((p) => (p.media[media.id] ? { ...p, media: { ...p.media, [media.id]: media } } : p));
+        return true;
+      },
+      /** Takes back media whose import failed, with any clips already placed from it. */
+      cancelMedia: (mediaId: string) => {
+        const p = projectRef.current;
+        if (!p?.media[mediaId]) return;
+        const next = removeMedia(p, mediaId);
+        setProject(next);
+        setUi((u) => reconcileUi(next, u));
       },
       placeMedia: (mediaId: string, trackId: string, time: number) => {
         const id = newId();

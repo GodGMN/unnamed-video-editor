@@ -47,6 +47,8 @@ export interface Media {
   still?: boolean;
   /** For an animated still, the length of one loop in seconds; its clips repeat it to fill their length. */
   animation?: number;
+  /** Still being stored and previewed: its clips can be edited but don't play or export yet. */
+  importing?: boolean;
   /** Thumbnail background colour; also the clip colour on the timeline. */
   tone: string;
   /** Seed for the placeholder filmstrip and waveform until real ones are generated. */
@@ -803,4 +805,24 @@ export function placeMedia(p: Project, mediaId: string, trackId: string, time: n
   });
   if (media.audio && !audioTrack) tracks.push({ id: `${id}-track`, name: `A${p.tracks.filter((t) => t.kind === 'audio').length + 1}`, label: 'Audio', kind: 'audio', muted: false, clips: [audioClip] });
   return settle({ ...p, tracks });
+}
+
+/**
+ * Adds `media` to the project and places each one at `time` on `trackId`, back to back, or on the
+ * first track that takes it when that one can't. Returns the id of each media's clip, or null
+ * when no track takes it.
+ */
+export function dropMedia(p: Project, media: Media[], trackId: string, time: number): { project: Project; clipIds: (string | null)[] } {
+  const clipIds: (string | null)[] = [];
+  for (const m of media) {
+    p = { ...p, media: { ...p.media, [m.id]: m } };
+    const track = [p.tracks.find((t) => t.id === trackId), ...p.tracks].find((t) => !!t && acceptsMedia(t, m));
+    if (!track || track.kind === 'text') { clipIds.push(null); continue; }
+    const id = newId();
+    const start = mediaDropStart(track, time);
+    p = placeMedia(p, m.id, track.id, start, id);
+    clipIds.push(id);
+    time = start + m.duration;
+  }
+  return { project: p, clipIds };
 }
