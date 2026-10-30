@@ -385,6 +385,34 @@ export function patchClip<C extends Clip>(p: Project, id: string, patch: Partial
   return { ...p, tracks };
 }
 
+/** Move linked clips by a common delta without packing away the user's placement. */
+export function moveClip(p: Project, id: string, start: number): Project {
+  const found = findClip(p, id);
+  if (!found) return p;
+  const group = [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])];
+  const ids = new Set(group.map(c => c.id));
+  const delta = Math.max(start - found.clip.start, -Math.min(...group.map(c => c.start)));
+  return { ...p, tracks: p.tracks.map(t => {
+    if (t.kind === 'text') return t;
+    const affected = t.clips.some(c => ids.has(c.id));
+    const clips = t.clips.map(c => ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c)
+      .sort((a, b) => a.start - b.start);
+    return { ...t, ...(t.kind === 'video' && affected ? { magnetic: false } : {}), clips } as Track;
+  }) };
+}
+
+/** Both edges can snap; the radius stays constant in screen pixels at every zoom. */
+export function snapClipStart(start: number, duration: number, targets: number[], pixelsPerSecond: number): number {
+  let result = start;
+  let distance = 8 / pixelsPerSecond;
+  for (const target of targets) for (const edge of [0, duration]) {
+    const candidate = target - edge;
+    const d = Math.abs(candidate - start);
+    if (candidate >= 0 && d < distance) { result = candidate; distance = d; }
+  }
+  return result;
+}
+
 export function patchTextItem(p: Project, id: string, patch: Partial<TextItem>): Project {
   return {
     ...p,

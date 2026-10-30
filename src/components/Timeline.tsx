@@ -1,10 +1,10 @@
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
-import { useRef } from 'react';
-import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, filmstrip, findClip, partnersOf } from '../editor/model';
+import { useRef, useState } from 'react';
+import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, filmstrip, findClip, partnersOf, clipDuration, clipEnd, snapClipStart } from '../editor/model';
 import type { AudioClip, Tool, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { CutLine, Crossfade, Cursor, Duplicate, Eye, FadeBlack, Link, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
+import { CutLine, Crossfade, Cursor, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
 
 const TEXT_TRACK_H = 44;
 const VIDEO_TRACK_H = 56;
@@ -25,6 +25,7 @@ export function Timeline({ editor }: { editor: Editor }) {
   const { project, ui, layout, select, setTool, setPlayhead, toggleTrack, openMenu, closeMenu } = editor;
   const rootRef = useRef<HTMLElement>(null);
   const startDrag = useDrag();
+  const [snapping, setSnapping] = useState(true);
   const tlWidth = (Math.ceil(layout.end) + 2) * PPS + 20;
 
   const onContextMenu = (kind: 'clip' | 'audio', id: string) => (e: MouseEvent) => {
@@ -69,6 +70,8 @@ export function Timeline({ editor }: { editor: Editor }) {
               {o.label}<span className="kbd">{o.key}</span>
             </button>
           ))}
+          <span className="tool-separator" role="separator" aria-orientation="vertical" />
+          <button aria-label="Snap clips" aria-pressed={snapping} title="Snap clips" onClick={() => setSnapping(v => !v)}><Magnet size={16} /></button>
         </div>
         <span className="hint">Right-click a clip for more</span>
         <div className="spacer" />
@@ -114,12 +117,12 @@ export function Timeline({ editor }: { editor: Editor }) {
                 ))}
                 {t.kind === 'video' && (
                   <>
-                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} clip={c} onMenu={onContextMenu('clip', c.id)} />)}
+                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} snapping={snapping} clip={c} onMenu={onContextMenu('clip', c.id)} />)}
                     <Transitions editor={editor} clips={t.clips} />
                   </>
                 )}
                 {t.kind === 'audio' && t.clips.map((c) => (
-                  <AudioClipView key={c.id} editor={editor} clip={c} onMenu={onContextMenu('audio', c.id)} />
+                  <AudioClipView key={c.id} editor={editor} snapping={snapping} clip={c} onMenu={onContextMenu('audio', c.id)} />
                 ))}
               </div>
             ))}
@@ -134,8 +137,35 @@ export function Timeline({ editor }: { editor: Editor }) {
   );
 }
 
+function useClipMove(editor: Editor, clip: VideoClip | AudioClip, snapping: boolean) {
+  const startDrag = useDrag();
+  return (e: PointerEvent<HTMLElement>) => {
+    if (e.button !== 0 || editor.ui.tool !== 'select') return;
+    const snapshot = editor.project;
+    const moving = new Set([clip.id, ...(clip.linked ? partnersOf(snapshot, clip).map(c => c.id) : [])]);
+    const targets = [0];
+    for (const track of snapshot.tracks) {
+      if (track.kind === 'text') {
+        for (const item of track.items) targets.push(item.start, item.start + item.duration);
+      } else for (const c of track.clips) if (!moving.has(c.id)) targets.push(c.start, clipEnd(c));
+    }
+    const visible = editor.layout.clips[clip.id];
+    const element = e.currentTarget;
+    const pps = ((element.closest('.audio-clip') ?? element).getBoundingClientRect().width + 3) / (visible.ve - visible.vs);
+    editor.select({ kind: findClip(snapshot, clip.id)!.track.kind === 'video' ? 'clip' : 'audio', id: clip.id });
+    let dragging = false;
+    startDrag(e, dx => {
+      if (!dragging && Math.abs(dx) < 3) return;
+      dragging = true;
+      const start = Math.max(0, clip.start + dx / pps);
+      editor.moveClip(snapshot, clip.id, snapping ? snapClipStart(start, clipDuration(clip), targets, pps) : start);
+    });
+  };
+}
+
 interface ClipProps<C> {
   editor: Editor;
+  snapping: boolean;
   clip: C;
   onMenu: (e: MouseEvent) => void;
 }
@@ -146,8 +176,9 @@ function partnerSelected({ project, ui }: Editor, clip: VideoClip | AudioClip, k
   return !!sel && sel.kind === kind && clip.linked && clip.linkId !== null && findClip(project, sel.id)?.clip.linkId === clip.linkId;
 }
 
-function VideoClipView({ editor, clip: cs, onMenu }: ClipProps<VideoClip>) {
+function VideoClipView({ editor, snapping, clip: cs, onMenu }: ClipProps<VideoClip>) {
   const { project, ui, layout, select } = editor;
+  const dragClip = useClipMove(editor, cs, snapping);
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const l = layout.clips[id];
@@ -161,6 +192,7 @@ function VideoClipView({ editor, clip: cs, onMenu }: ClipProps<VideoClip>) {
       style={{ left: l.vs * PPS + 1, width, background: src.tone, cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
       aria-label={`Video: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
       aria-pressed={selected}
+      onPointerDown={dragClip}
       onClick={() => select({ kind: 'clip', id })}
       onContextMenu={onMenu}>
       <span className="strip" aria-hidden="true">
@@ -210,9 +242,10 @@ function Transitions({ editor, clips }: { editor: Editor; clips: VideoClip[] }) 
 
 const f1 = (x: number) => x.toFixed(1);
 
-function AudioClipView({ editor, clip: cs, onMenu }: ClipProps<AudioClip>) {
+function AudioClipView({ editor, snapping, clip: cs, onMenu }: ClipProps<AudioClip>) {
   const { project, ui, layout, select, updateAudioClip: updateClip } = editor;
   const startDrag = useDrag();
+  const dragClip = useClipMove(editor, cs, snapping);
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const l = layout.clips[id];
@@ -276,6 +309,7 @@ function AudioClipView({ editor, clip: cs, onMenu }: ClipProps<AudioClip>) {
       <button className="audio-wave" style={{ cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
         aria-label={`Audio: ${src.name}, volume ${cs.vol}%${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
         aria-pressed={selected}
+        onPointerDown={dragClip}
         onClick={() => select({ kind: 'audio', id })}
         onContextMenu={onMenu}>
         {bars.map((h, i) => (
