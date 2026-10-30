@@ -1,3 +1,4 @@
+import { openEditor } from './browser-helpers.mjs';
 // Run with PLAYWRIGHT_MODULE pointing at playwright-core's index.mjs; start Vite on TEST_URL first.
 // SCREENSHOTS=<dir> also saves the timeline while the file imports and once it has.
 import assert from 'node:assert/strict';
@@ -15,8 +16,8 @@ try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(`${process.env.TEST_URL ?? 'http://127.0.0.1:5212'}/?reset`);
-  await page.locator('.track .clip').first().waitFor();
+  await page.goto(process.env.TEST_URL ?? 'http://127.0.0.1:5212');
+  await openEditor(page);
   // Slow the page down so the import is still running when the timeline is checked.
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 12 });
@@ -25,7 +26,7 @@ try {
   await page.evaluate(() => { const input = document.createElement('input'); input.type = 'file'; input.id = 'drop-source'; input.hidden = true; document.body.append(input); });
   await page.locator('#drop-source').setInputFiles(file);
   const drop = await page.evaluateHandle(() => { const dt = new DataTransfer(); dt.items.add(document.querySelector('#drop-source').files[0]); return dt; });
-  const v1 = page.locator('.track[data-track-id]').filter({ has: page.locator('.clip') }).first();
+  const v1 = page.locator('.track[data-track-id="V1"]');
   const box = await v1.boundingBox();
   await v1.dispatchEvent('dragover', { dataTransfer: drop, clientX: box.x + 5, clientY: box.y + 20 });
   await page.locator('.drop-ghost').filter({ hasText: 'Import file' }).waitFor();

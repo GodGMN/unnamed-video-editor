@@ -6,13 +6,15 @@ import { loopTime } from './animation';
 
 /** The stored previews of `media`, once its import has written them. */
 export function useMediaPreview({ id, importing }: Media) {
+  const [revision, setRevision] = useState(0);
+  useEffect(() => { const refresh = () => setRevision(n => n + 1); window.addEventListener('media-preview-change', refresh); return () => window.removeEventListener('media-preview-change', refresh); }, []);
   const [preview, setPreview] = useState<MediaPreview | null>(null);
   useEffect(() => {
     let cancelled = false;
     setPreview(null);
     if (!importing) readPreview(id).then((value) => { if (!cancelled) setPreview(value); }).catch(console.warn);
     return () => { cancelled = true; };
-  }, [id, importing]);
+  }, [id, importing, revision]);
   return preview;
 }
 export function PreviewStrip({ media, width, inS = 0, outS = media.duration }: { media: Media; width: number; inS?: number; outS?: number }) {

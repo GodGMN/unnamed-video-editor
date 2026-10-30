@@ -8,6 +8,7 @@ import type { AudioClip, Clip, ClipKind, Fades, ClipSelection, MediaClip, Projec
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
+import type { PickedFile } from '../media/links';
 import type { Placement } from '../media/useImports';
 import { Dialog } from './Dialog';
 import { CutLine, Crossfade, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
@@ -74,7 +75,7 @@ function transitionTargetAt(project: Project, track: Track, time: number, slop: 
 }
 
 /** `onDropFiles` imports files dropped on a track and places them there. */
-export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles: (files: File[], place: Placement) => void }) {
+export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles: (files: PickedFile[], place: Placement) => void }) {
   useT();
   const { project, ui, layout, select, setTool, setPlayhead, unlock, toggleTrack, openMenu, closeMenu, deleteSelection } = editor;
   const focus = ui.lockClip ? layout.clips[ui.lockClip] : undefined;
@@ -350,7 +351,7 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
     if (!e.dataTransfer.types.includes(MEDIA_MIME) && isFileDrag(e)) {
       // The clip snaps once the file is read and its length known.
       const time = pointerTime(e);
-      if (t.kind !== 'text') onDropFiles(Array.from(e.dataTransfer.files), { trackId: t.id, timeFor: (duration) => snapDrop(time, t, duration) });
+      if (t.kind !== 'text') onDropFiles(Array.from(e.dataTransfer.files, (file) => ({ file })), { trackId: t.id, timeFor: (duration) => snapDrop(time, t, duration) });
       return;
     }
     const media = project.media[e.dataTransfer.getData(MEDIA_MIME)];

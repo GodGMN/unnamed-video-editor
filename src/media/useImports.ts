@@ -4,6 +4,7 @@ import type { Editor } from '../editor/useProject';
 import { removeMediaFiles } from './files';
 import { probeMedia } from './import';
 import type { Probe } from './import';
+import type { PickedFile } from './links';
 
 /** Where dropped files go on the timeline: a track, and where a first clip of `duration` seconds starts. */
 export interface Placement { trackId: string; timeFor: (duration: number) => number }
@@ -22,12 +23,11 @@ export function useImports(editor: Editor | null) {
   const [pending, setPending] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const ingest = useCallback(async (files: FileList | File[], place?: Placement) => {
-    const batch = Array.from(files);
+  const ingest = useCallback(async (batch: PickedFile[], place?: Placement) => {
     if (!batch.length) return;
     setPending((n) => n + batch.length);
     const fail = (file: File, error: unknown) => setErrors((items) => [...items, message(file, error)]);
-    const probes = await Promise.all(batch.map((file) => probeMedia(file).catch((error: unknown): Probe | null => {
+    const probes = await Promise.all(batch.map(({ file, handle }) => probeMedia(file, handle).catch((error: unknown): Probe | null => {
       fail(file, error);
       setPending((n) => n - 1);
       return null;
@@ -43,7 +43,7 @@ export function useImports(editor: Editor | null) {
           if (!ref.current?.finishMedia(media)) await removeMediaFiles(media.id).catch(() => undefined);
         } catch (error) {
           ref.current?.cancelMedia(probe.media.id);
-          fail(batch[i], error);
+          fail(batch[i].file, error);
         } finally { setPending((n) => n - 1); }
       });
     });

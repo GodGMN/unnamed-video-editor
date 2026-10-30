@@ -1,11 +1,10 @@
-import { t as translate } from '../i18n/core';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { newId, dropMedia, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, setAspect, settle, trimClipEdge, videoTracks } from './model';
 import type { Aspect, AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
-import { SEED_SELECTION, seedProject } from './seed';
-import { clearProject, loadProject, saveProject } from './storage';
 import { removeMediaFiles } from '../media/files';
+import { SEED_SELECTION } from './seed';
+import { createProject, listProjects, saveProject, selectProject } from './storage';
 
 const SAVE_DELAY_MS = 250;
 
@@ -39,7 +38,7 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   return { ...ui, sel, picked, focusClip, lockClip, source, keyPick, menu: null };
 }
 
-/** Media whose import was cut off by a reload never finished storing its file, so it goes, clips and all. */
+/** Media whose import was cut off by a reload never finished linking its file, so it goes, clips and all. */
 function dropUnfinished(p: Project): Project {
   for (const m of Object.values(p.media)) {
     if (!m.importing) continue;
@@ -49,37 +48,49 @@ function dropUnfinished(p: Project): Project {
   return p;
 }
 
-/** Loads the saved project (or the seed) and saves it back after every change. */
-function usePersistentProject(onLoad: (p: Project) => void) {
-  const [project, setProject] = useState<Project | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    // `?reset` discards the saved project and starts over from the seed.
-    const url = new URL(window.location.href);
-    const reset = url.searchParams.has('reset');
-    if (reset) {
-      url.searchParams.delete('reset');
-      history.replaceState(null, '', url);
+/**
+ * Saves the project as it changes. A draft (a new, blank project) isn't stored until its first
+ * edit, so leaving one untouched doesn't add an empty project to the library.
+ */
+function usePersistentProject(id: string, initial: Project, draft: boolean) {
+  const [project, setProject] = useState(initial);
+  const [saveState, setSaveState] = useState('Saved');
+  const latest = useRef(project);
+  latest.current = project;
+  const stored = useRef<Promise<void> | null>(draft ? null : Promise.resolve());
+  const persist = useCallback(async (snapshot: Project) => {
+    if (!stored.current) {
+      if (snapshot === initial) return;
+      stored.current = createProject(snapshot, id).then(() => selectProject(id));
+      stored.current.catch(() => { stored.current = null; });
+      return stored.current;
     }
-    (reset ? clearProject().then(() => null) : loadProject())
-      .catch((err) => { console.warn(translate('couldNotLoadTheSavedProject'), err); return null; })
-      .then((saved) => {
-        if (cancelled) return;
-        const p = dropUnfinished(saved ?? seedProject());
-        setProject(p);
-        onLoad(p);
-      });
-    return () => { cancelled = true; };
-  }, [onLoad]);
-
+    await stored.current;
+    await saveProject(snapshot, id);
+  }, [id, initial]);
+  const save = useCallback(async () => {
+    const snapshot = latest.current;
+    setSaveState('Saving');
+    try {
+      await persist(snapshot);
+      if (snapshot === latest.current) setSaveState('Saved');
+    } catch (error) {
+      setSaveState(error instanceof Error ? `Save failed: ${error.message}` : 'Save failed');
+      throw error;
+    }
+  }, [persist]);
   useEffect(() => {
-    if (!project) return;
-    const t = setTimeout(() => saveProject(project).catch((err) => console.warn(translate('couldNotSaveTheProject'), err)), SAVE_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [project]);
-
-  return [project, setProject] as const;
+    setSaveState('Saving');
+    const timer = setTimeout(() => { void save().catch(() => undefined); }, SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [project, save]);
+  useEffect(() => {
+    if (saveState === 'Saved') return;
+    const leave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', leave);
+    return () => window.removeEventListener('beforeunload', leave);
+  }, [saveState]);
+  return { project, setProject, saveState, flush: save, persist };
 }
 
 export interface PlayRange {
@@ -99,10 +110,10 @@ function playRange(p: Project, end: number, lockClip: string | null): PlayRange 
   return { start: clip.start, end: Math.max(clip.start, clipEnd(clip) - 1 / p.output.fps) };
 }
 
-export function useProject() {
-  const [ui, setUi] = useState<EditorUi>(initialUi);
-  const onLoad = useCallback((p: Project) => setUi((u) => reconcileUi(p, u)), []);
-  const [project, setProject] = usePersistentProject(onLoad);
+export function useProject(id: string, initial: Project, draft = false) {
+  const start = useMemo(() => dropUnfinished(initial), [initial]);
+  const [ui, setUi] = useState<EditorUi>(() => reconcileUi(start, initialUi));
+  const { project, setProject, saveState, flush, persist } = usePersistentProject(id, start, draft);
   const projectRef = useRef(project);
   projectRef.current = project;
   const uiRef = useRef(ui);
@@ -130,7 +141,10 @@ export function useProject() {
         const next = removeMedia(p, mediaId);
         setProject(next);
         setUi((u) => reconcileUi(next, u));
-        removeMediaFiles(mediaId).catch(() => undefined);
+        void persist(next).then(async () => {
+          const entries = await listProjects();
+          if (!entries.some(e => Object.hasOwn(e.project.media, mediaId))) await removeMediaFiles(mediaId);
+        }).catch(error => console.warn('Could not remove unused media', error));
       },
       /** Deletes the selected clips, with their linked partners. */
       deleteSelection: () => {
@@ -155,7 +169,7 @@ export function useProject() {
       },
       /**
        * Swaps in a finished import. Returns false when the media was deleted meanwhile, so the
-       * caller can drop the files it just stored.
+       * caller can drop the files it just linked.
        */
       finishMedia: (media: Media) => {
         if (!projectRef.current?.media[media.id]) return false;
@@ -263,10 +277,10 @@ export function useProject() {
         return t.kind === 'audio' ? patchTrack(p, id, { muted: !t.muted }) : patchTrack(p, id, { hidden: !t.hidden });
       }),
     };
-  }, [setProject]);
+  }, [persist, setProject]);
 
   if (!project || !layout || !range) return null;
-  return { project, ui, layout, range, ...actions };
+  return { project, ui, layout, range, saveState, flush, ...actions };
 }
 
 export type Editor = NonNullable<ReturnType<typeof useProject>>;
