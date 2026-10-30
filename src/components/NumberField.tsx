@@ -38,6 +38,9 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
     let lastX = x0;
     let cursorY = e.clientY;
     let moved = false;
+    // Locking warps the OS cursor to the screen center, which arrives as one huge delta. Drop events until the
+    // lock lands, and any later locked jump too big to be a real hand movement.
+    let settling = false;
     let cursor: HTMLDivElement | null = null;
     const listening = new AbortController();
     el.setPointerCapture(e.pointerId);
@@ -45,12 +48,20 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
     // Once scrubbing starts, lock the pointer and draw a stand-in cursor that wraps across the window edges,
     // so the drag never runs out of screen.
     const lock = () => {
-      Promise.resolve(el.requestPointerLock()).catch(() => {});
+      settling = true;
+      Promise.resolve(el.requestPointerLock()).catch(() => { settling = false; });
       cursor = document.body.appendChild(document.createElement('div'));
       cursor.className = 'scrub-cursor';
+      cursor.hidden = true;
     };
     const move = (ev: globalThis.PointerEvent) => {
       const locked = document.pointerLockElement === el;
+      if (settling) {
+        lastX = ev.clientX;
+        if (locked) settling = false;
+        return;
+      }
+      if (locked && Math.abs(ev.movementX) > window.innerWidth / 4) return;
       const delta = locked ? ev.movementX : ev.clientX - lastX;
       dx += delta;
       travel += Math.abs(delta);
@@ -77,6 +88,7 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
     el.addEventListener('pointermove', move, { signal: listening.signal });
     el.addEventListener('pointerup', up, { signal: listening.signal });
     el.addEventListener('pointercancel', up, { signal: listening.signal });
+    document.addEventListener('pointerlockerror', () => { settling = false; }, { signal: listening.signal });
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
