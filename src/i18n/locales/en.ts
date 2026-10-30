@@ -602,7 +602,7 @@ export const en = {
   "saveFailed": "Save failed",
   "saveFailedWith": "Save failed: {error}",
   "mediaImportLinksOriginals": "Import links originals. Dropped files need reconnecting after reload.",
-  "mediaFilesStayOnDisk": "Files stay on your disk. Reconnect them after reopening this page.",
+  "mediaFilesStayOnDisk": "Imported media is saved in this browser for reopening after reload.",
   "mediaReconnectNeeded": "Reconnect needed",
   "mediaLinkedOriginal": "Linked original",
   "mediaSessionOnly": "Session only",

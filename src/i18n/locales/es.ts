@@ -597,7 +597,7 @@ export const es: Record<TranslationKey, Message> = {
   "saveFailed": "Error al guardar",
   "saveFailedWith": "Error al guardar: {error}",
   "mediaImportLinksOriginals": "Importar enlaza los originales. Los archivos soltados hay que reconectarlos al recargar.",
-  "mediaFilesStayOnDisk": "Los archivos se quedan en tu disco. Reconéctalos al volver a abrir esta página.",
+  "mediaFilesStayOnDisk": "Los medios importados se guardan en este navegador para volver a abrirlos después de recargar.",
   "mediaReconnectNeeded": "Hay que reconectar",
   "mediaLinkedOriginal": "Original enlazado",
   "mediaSessionOnly": "Solo esta sesión",
