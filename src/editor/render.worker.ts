@@ -25,7 +25,8 @@ async function frame(time: number) {
     for (const track of videoTracks(project)) {
       if (track.hidden) continue;
       for (const clip of track.clips) {
-        if (time < clip.start || time >= clipEnd(clip)) continue;
+        // Stills are decoded once on the main thread.
+        if (time < clip.start || time >= clipEnd(clip) || project.media[clip.mediaId]?.still) continue;
         let stream = streams.get(clip.id);
         if (!stream) {
           const input = new Input({ source: new BlobSource(files[clip.mediaId]), formats: ALL_FORMATS });

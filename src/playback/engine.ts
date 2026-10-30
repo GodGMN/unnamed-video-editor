@@ -2,10 +2,11 @@ import { clipEnd } from '../editor/model';
 import type { AudioClip, MediaClip, Project } from '../editor/model';
 import { readMediaFile } from '../media/files';
 import { audioGain, renderFrame } from './compositor';
-import { FrameCache } from './frameCache';
+import { FrameCache, StillFrame } from './frameCache';
+import type { Frames } from './frameCache';
 
 interface Player { element: HTMLAudioElement; url: string; gain: GainNode | null; source: MediaElementAudioSourceNode | null; ready: boolean; busy: boolean; wantedPlaying: boolean }
-interface Entry { mediaId: string; used: number; frames: FrameCache | null; audio: Player | null; disposed: boolean; abort: AbortController }
+interface Entry { mediaId: string; used: number; frames: Frames | null; audio: Player | null; disposed: boolean; abort: AbortController }
 interface Request { project: Project; time: number; playing: boolean; volume: number }
 /** Why a source can't play: its file is gone, or it failed to decode. */
 type Unavailable = { missing: true } | { missing: false; error: string };
@@ -118,7 +119,8 @@ export class PlaybackEngine {
       if (entry.disposed) return;
       if (!file) { this.unavailable.set(entry.mediaId, { missing: true }); return; }
       if (!audio) {
-        entry.frames = new FrameCache(file, () => this.scheduleDraw(), (error) => this.fail(entry, error));
+        const Source = this.latest?.project.media[entry.mediaId]?.still ? StillFrame : FrameCache;
+        entry.frames = new Source(file, () => this.scheduleDraw(), (error) => this.fail(entry, error));
       } else {
         const element = document.createElement('audio');
         const url = URL.createObjectURL(file);

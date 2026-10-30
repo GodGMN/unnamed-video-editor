@@ -549,7 +549,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   return (
     <button className={'clip' + (partner ? ' partner' : '')}
       style={{ left: cs.start * pps + 1, width, background: src.tone }}
-      aria-label={`Video: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
+      aria-label={`${src.still ? 'Image' : 'Video'}: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
       aria-pressed={selected}
       onPointerDown={move.onPointerDown}
       onClick={move.onClick}

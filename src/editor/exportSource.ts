@@ -26,10 +26,13 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
       // Composite on the main thread so text uses the same loaded fonts as preview.
       await document.fonts.load('700 72px Figtree');
       signal.throwIfAborted();
+      const stills = new Map<string, ImageBitmap>();
       const worker = new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
       let pending: { resolve: (reply: RenderReply) => void; reject: (error: Error) => void } | null = null;
       const dispose = () => {
         worker.terminate();
+        stills.forEach((image) => image.close());
+        stills.clear();
         pending?.reject(new DOMException('Export stopped.', 'AbortError'));
         pending = null;
         signal.removeEventListener('abort', dispose);
@@ -48,6 +51,12 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
       });
       try {
         await request({ type: 'init', project: p, files });
+        for (const id of ids) {
+          if (!p.media[id]?.still) continue;
+          const image = await createImageBitmap(files[id]).catch(() => { throw new Error(`Cannot decode the image "${p.media[id].name}".`); });
+          if (signal.aborted) { image.close(); signal.throwIfAborted(); }
+          stills.set(id, image);
+        }
         const audio = await mixdown(p, layout.end, files, sampleRate, signal);
         const canvas = document.createElement('canvas');
         canvas.width = width; canvas.height = height;
@@ -60,7 +69,7 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
             try {
               signal.throwIfAborted();
               const images = new Map(reply.frames.map((f) => [f.clipId, f.image]));
-              renderFrame(p, time, ctx, (clip) => images.get(clip.id) ?? null);
+              renderFrame(p, time, ctx, (clip) => images.get(clip.id) ?? stills.get(clip.mediaId) ?? null);
               return canvas;
             } finally { reply.frames.forEach((f) => f.image.close()); }
           },
