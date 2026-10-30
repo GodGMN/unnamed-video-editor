@@ -161,6 +161,8 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .stage-wrap { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 4px 20px 12px; background: var(--inset); }
 .stage-fit { width: 100%; height: 100%; container-type: size; display: flex; align-items: center; justify-content: center; }
 .stage { position: relative; width: min(100cqw, 100cqh * 16 / 9, 760px); aspect-ratio: 16 / 9; background: #000; border-radius: 6px; overflow: hidden; }
+.stage-alert { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; background: #3a1512; border: 1px solid #e5484d; color: #ffd1cc; font-weight: 600; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); pointer-events: none; }
+.stage-alert svg { flex: none; color: #ff6b62; }
 .layer { position: absolute; inset: 0; }
 .frame-label { position: absolute; left: 12px; top: 10px; font: 500 11px var(--mono); color: var(--text); background: rgba(0, 0, 0, 0.55); padding: 3px 7px; border-radius: 5px; }
 .overlay-box { position: absolute; inset: 0; display: flex; padding: 5%; }
