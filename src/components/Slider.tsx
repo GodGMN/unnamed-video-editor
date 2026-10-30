@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+import { t as translate } from '../i18n/core';
 import { useRef, useState } from 'react';
 import { ResetButton } from './ResetButton';
 
@@ -21,6 +23,7 @@ interface Props {
 // Scrub field: a field-shaped range input that fills as you drag. The native input sits on top, invisible, for pointer and keyboard.
 // The value readout sits above it and turns into a text box on click, so a number can be typed in.
 export function Slider({ label, value, unit, min, max, step = 1, defaultValue, hideLabel, className, taper, format, onChange }: Props) {
+  useT();
   const [draft, setDraft] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
   const pos = taper ? taper.toPos(value) : (value - min) / (max - min);
@@ -41,7 +44,7 @@ export function Slider({ label, value, unit, min, max, step = 1, defaultValue, h
       <ResetButton value={value} defaultValue={defaultValue} onReset={onChange} />
       <span className="slider-value" onMouseDown={(e) => { if (e.target !== field.current) { e.preventDefault(); field.current?.focus(); } }}
         onClick={(e) => e.preventDefault()}>
-        <input ref={field} type="text" inputMode="decimal" aria-label={`${label} value`} value={shown}
+        <input ref={field} type="text" inputMode="decimal" aria-label={translate('value', { value1: label })} value={shown}
           style={{ width: `${Math.max(1, shown.length)}ch` }}
           onFocus={(e) => { setDraft(String(value)); e.target.select(); }}
           onChange={(e) => setDraft(e.target.value)}

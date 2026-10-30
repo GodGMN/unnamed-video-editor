@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+import { t as translate, formatNumber } from '../i18n/core';
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { codecFamily, fmtShortDuration, videoTracks } from '../editor/model';
@@ -8,10 +10,10 @@ import { importMedia } from '../media/import';
 import { PreviewStrip } from '../media/PreviewStrip';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
 
-const TRANSITIONS = [
-  { type: 'crossfade', name: 'Cross dissolve', swatch: 'linear-gradient(90deg, #35503F, #4A5B6E)' },
-  { type: 'fade', name: 'Fade to black', swatch: 'linear-gradient(90deg, #35503F, #0B0D0C)' },
-];
+const TRANSITIONS = () => ([
+  { type: 'crossfade', name: translate('crossDissolve'), swatch: 'linear-gradient(90deg, #35503F, #4A5B6E)' },
+  { type: 'fade', name: translate('fadeToBlack'), swatch: 'linear-gradient(90deg, #35503F, #0B0D0C)' },
+]);
 
 interface Props {
   project: Project;
@@ -26,24 +28,23 @@ interface Props {
 
 interface MediaMenu { id: string; left: number; top: number }
 
-const TIMES = ['', 'once', 'twice', 'three times'];
 
 /** The one-line summary under a media item's name. */
 function mediaMeta(project: Project, m: Media): string {
   const v = m.video;
-  if (!m.decodable) return `${v ? codecFamily(v.codec) : 'This format'} isn’t supported by this browser.`;
-  if (!v) return m.audio ? `Audio · ${codecFamily(m.audio.codec)}` : m.container;
+  if (!m.decodable) return translate('isnTSupportedByThisBrowser', { value1: v ? codecFamily(v.codec) : translate('uiThisFormat') });
+  if (!v) return m.audio ? translate('audio', { value1: codecFamily(m.audio.codec) }) : m.container;
 
   const tracks = videoTracks(project);
   const uses = tracks.flatMap((t) => t.clips.filter((c) => c.mediaId === m.id).map(() => t));
   const { width: ow, height: oh } = project.output;
   const main = tracks.find((t) => t.magnetic);
   const note =
-    uses.length > 1 ? `used ${TIMES[uses.length] ?? `${uses.length} times`}`
-    : v.width > ow || v.height > oh ? 'scaled to output'
-    : uses.length === 1 && uses[0] !== main ? `on ${uses[0].name}`
+    uses.length > 1 ? translate('usedTimes', { count: uses.length })
+    : v.width > ow || v.height > oh ? translate('scaledToOutput')
+    : uses.length === 1 && uses[0] !== main ? translate('on', { value1: uses[0].name })
     : m.still ? m.container : codecFamily(v.codec);
-  return `${v.width}×${v.height} · ${m.animation ? 'Animated' : m.still ? 'Image' : `${Math.round(v.fps)} fps`} · ${note}`;
+  return `${v.width}×${v.height} · ${m.animation ? translate('animated') : m.still ? translate('image') : translate('fps', { value1: Math.round(v.fps) })} · ${note}`;
 }
 
 /** How many timeline clips (video and audio) play this source. */
@@ -55,6 +56,7 @@ function clipCount(project: Project, mediaId: string): number {
 const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
 
 export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, previewing }: Props) {
+  useT();
   const [menu, setMenu] = useState<MediaMenu | null>(null);
   useEffect(() => {
     if (!menu) return;
@@ -82,7 +84,7 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
     setPending((n) => n + batch.length);
     for (const file of batch) queue.current = queue.current.then(async () => {
       try { onImport(await importMedia(file)); }
-      catch (error) { setErrors((items) => [...items, `${file.name}: ${error instanceof Error ? error.message : 'Import failed'}`]); }
+      catch (error) { setErrors((items) => [...items, `${file.name}: ${error instanceof Error ? error.message : translate('importFailed')}`]); }
       finally { setPending((n) => n - 1); }
     });
   };
@@ -93,26 +95,25 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
       onDragOver={(e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
       onDragLeave={(e) => { if (hasFiles(e) && --dragDepth.current === 0) setDragOver(false); }}
       onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragOver(false); ingest(e.dataTransfer.files); }}>
-      {dragOver && <div className="media-drop">Drop to import</div>}
+      {dragOver && <div className="media-drop">{translate('dropToImport')}</div>}
       <div className="media-head">
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span className="panel-title">Media</span>
+          <span className="panel-title">{translate('media')}</span>
           <span className="count">{media.length}</span>
         </div>
-        <input ref={input} type="file" multiple accept="video/*,audio/*,image/*,.mov,.mkv" aria-label="Import media files" hidden onChange={(e) => { if (e.target.files) ingest(e.target.files); e.target.value = ''; }} />
+        <input ref={input} type="file" multiple accept="video/*,audio/*,image/*,.mov,.mkv" aria-label={translate('importMediaFiles')} hidden onChange={(e) => { if (e.target.files) ingest(e.target.files); e.target.value = ''; }} />
         <button onClick={() => input.current?.click()} className="ib outlined" style={{ height: 30, padding: '0 10px', fontSize: 12, fontWeight: 500 }}>
           <Plus size={13} strokeWidth={2.2} />
-          Import
-        </button>
+          {translate('import')}</button>
       </div>
       <div role="status" aria-live="polite">
-        {pending > 0 && <p className="media-meta media-status">Importing {pending} file{pending === 1 ? '' : 's'}…</p>}
+        {pending > 0 && <p className="media-meta media-status">{translate('importingFiles', { count: pending })}</p>}
         {errors.map((error, i) => <p key={i} className="media-meta error media-status">{error}</p>)}
       </div>
       <div className="media-list">
         {media.map((m) => (
           <div key={m.id} className={'media-item' + (m.decodable ? ' playable' : '') + (previewing === m.id ? ' active' : '')} draggable={m.decodable}
-            title={m.decodable ? 'Click to preview · drag onto the timeline' : undefined}
+            title={m.decodable ? translate('clickToPreviewDragOntoTheTimeline') : undefined}
             onClick={() => { if (m.decodable) onPreview(m.id); }}
             onDragStart={(e) => { e.dataTransfer.setData(MEDIA_MIME, m.id); e.dataTransfer.effectAllowed = 'copy'; mediaDrag.id = m.id; }}
             onDragEnd={() => { mediaDrag.id = null; }}
@@ -123,7 +124,7 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
             <div className="media-thumb" style={{ background: m.tone }}>
               <PreviewStrip media={m} width={100} />
               {!m.decodable && <div className="warn"><Warning stroke="var(--warn-icon)" /></div>}
-              <span className="media-dur">{m.animation ? `${m.animation.toFixed(1)}s loop` : m.still ? 'Still' : m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
+              <span className="media-dur">{m.animation ? translate('sLoop', { value1: formatNumber(m.animation, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : m.still ? translate('still') : m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
             </div>
             <div className="media-text">
               <span className="media-name">{m.name}</span>
@@ -131,8 +132,7 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
               {!m.decodable && (
                 <button className="convert-btn" onClick={() => onConvert(m)}>
                   <Convert size={12} strokeWidth={2.2} />
-                  Convert to MP4
-                </button>
+                  {translate('convertToMP4')}</button>
               )}
             </div>
           </div>
@@ -146,21 +146,21 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
             <span className="menu-label">{project.media[menu.id].name}</span>
             <button role="menuitem" className="ib danger" autoFocus onClick={() => { onRemove(menu.id); setMenu(null); }}>
               <Trash size={14} />
-              <span>Delete from project</span>
+              <span>{translate('deleteFromProject')}</span>
             </button>
-            {clips > 0 && <span className="menu-label menu-note">Also removes {clips} clip{clips === 1 ? '' : 's'} from the timeline.</span>}
+            {clips > 0 && <span className="menu-label menu-note">{translate('alsoRemovesClips', { count: clips })}</span>}
           </div>
         );
       })()}
       <div className="transitions">
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-          <span className="panel-title">Transitions</span>
-          <span className="count">{TRANSITIONS.length}</span>
+          <span className="panel-title">{translate('transitions')}</span>
+          <span className="count">{TRANSITIONS().length}</span>
         </div>
         <div className="transition-grid">
-          {TRANSITIONS.map((t) => (
+          {TRANSITIONS().map((t) => (
             // A div, not a button: Firefox won't start a drag from a button.
-            <div key={t.name} className="transition-card" draggable title="Drag onto an overlap between two clips"
+            <div key={t.name} className="transition-card" draggable title={translate('dragOntoAnOverlapBetweenTwoClips')}
               onDragStart={e => { e.dataTransfer.setData('application/x-timeline-transition', t.type); e.dataTransfer.effectAllowed = 'copy'; document.body.classList.add('dragging-transition'); }}
               onDragEnd={() => document.body.classList.remove('dragging-transition')}>
               <span style={{ background: t.swatch }} />
@@ -168,7 +168,7 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
             </div>
           ))}
         </div>
-        <span className="hint" style={{ lineHeight: 1.4 }}>Overlap two clips, then drag a transition onto their overlap.</span>
+        <span className="hint" style={{ lineHeight: 1.4 }}>{translate('overlapTwoClipsThenDragATransitionOntoTheir')}</span>
       </div>
     </aside>
   );

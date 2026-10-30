@@ -1,3 +1,4 @@
+import { t as translate, formatNumber } from '../i18n/core';
 /*
  * Project model. Everything in `Project` is plain, structured-clone-safe data (no class
  * instances, Maps or functions) so it can be persisted to IndexedDB and posted to the
@@ -240,16 +241,16 @@ export const AUDIO_CLIP_DEFAULTS: ClipDefaults<AudioClip> = {
   linked: true, gainDb: 0, muted: false, ...NO_FADES,
 };
 
-export const TRANSITION_NAMES: Record<TransitionType, string> = { cut: 'Cut', fade: 'Fade', crossfade: 'Crossfade' };
+export const TRANSITION_NAMES: Record<TransitionType, string> = { get cut() { return translate('cut'); }, get fade() { return translate('fade'); }, get crossfade() { return translate('crossfade'); } };
 export const TRANSITION_HELP: Record<TransitionType, string> = {
-  cut: 'Instant switch to the next clip. Default for new clips.',
-  fade: 'Fades through black across the existing overlap. Drag clips to change the overlap.',
-  crossfade: 'Blends the two clips across their existing overlap. Drag clips to change the overlap.',
+  get cut() { return translate('instantSwitchToTheNextClipDefaultForNew'); },
+  get fade() { return translate('fadesThroughBlackAcrossTheExistingOverlapDragClips'); },
+  get crossfade() { return translate('blendsTheTwoClipsAcrossTheirExistingOverlapDrag'); },
 };
 
 /** Stands in for a clip's media when its id isn't in `Project.media`. */
 export const MISSING_MEDIA: Media = {
-  id: '', name: 'Missing media', container: '—', duration: 0, size: 0, bitrate: 0,
+  id: '', get name() { return translate('missingMedia'); }, container: '—', duration: 0, size: 0, bitrate: 0,
   video: null, audio: null, decodable: false, tone: '#24262B', seed: 0,
 };
 
@@ -360,7 +361,7 @@ export function layoutTimeline(p: Project): TimelineLayout {
       if (isMediaClip(c)) {
         const key = track.kind + ':' + c.mediaId;
         uses[key] = (uses[key] ?? 0) + 1;
-        const stem = p.media[c.mediaId]?.name.replace(/\.[^.]+$/, '') ?? 'Missing media';
+        const stem = p.media[c.mediaId]?.name.replace(/\.[^.]+$/, '') ?? translate('missingMedia');
         name = uses[key] > 1 ? `${stem} (${uses[key]})` : stem;
       }
       clips[c.id] = {
@@ -571,7 +572,7 @@ export function splitClip(p: Project, id: string, time: number, rightId: string)
 }
 
 /** Property values of a text clip added from the timeline toolbar. */
-export const TEXT_CLIP_DEFAULTS: Omit<TextClip, 'id' | 'start'> = { content: 'Title', size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, duration: 3 };
+export const TEXT_CLIP_DEFAULTS: Omit<TextClip, 'id' | 'start'> = { get content() { return translate('title'); }, size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, duration: 3 };
 
 /** Adds a default text clip at `time` to the top text track with room for it, or to a new text track on top. */
 export function addTextClip(p: Project, time: number, id: string): Project {
@@ -580,7 +581,7 @@ export function addTextClip(p: Project, time: number, id: string): Project {
   const tracks = textTracks(p);
   const track = tracks.find((t) => t.clips.every((x) => clipEnd(x) <= clip.start + EPS || x.start >= end - EPS));
   if (!track) {
-    const name = tracks.length ? `Text ${tracks.length + 1}` : 'Text';
+    const name = tracks.length ? translate('text3', { value1: tracks.length + 1 }) : translate('text');
     return { ...p, tracks: [{ kind: 'text', id: `${id}-track`, name, label: '', hidden: false, clips: [clip] }, ...p.tracks] };
   }
   return settle({ ...p, tracks: p.tracks.map((t) => t === track ? { ...track, clips: [...track.clips, clip] } : t) });
@@ -700,7 +701,7 @@ export function parseTime(text: string): number | null {
 export const fmtShortDuration = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 export const curveName = (c: number) =>
-  Math.abs(c) < 0.05 ? 'linear' : (c > 0 ? 'logarithmic' : 'exponential') + ' ' + Math.round(Math.abs(c) * 100) + '%';
+  Math.abs(c) < 0.05 ? translate('linear') : (c > 0 ? translate('logarithmic') : translate('exponential')) + ' ' + Math.round(Math.abs(c) * 100) + '%';
 
 const H264_PROFILES: Record<string, string> = {
   '42': 'Baseline', '4d': 'Main', '58': 'Extended', '64': 'High', '6e': 'High 10', '7a': 'High 4:2:2', 'f4': 'High 4:4:4',
@@ -730,11 +731,11 @@ export function codecName(codec: string): string {
 /** Codec family without profile, e.g. `H.264`. */
 export const codecFamily = (codec: string) => codecName(codec).split(' ')[0];
 
-export const fmtFps = (fps: number) => `${Number(fps.toFixed(2))} fps`;
-export const fmtBitrate = (bps: number) => `${(bps / 1e6).toFixed(1)} Mb/s`;
-export const fmtSize = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${(bytes / 1e6).toFixed(1)} MB`);
+export const fmtFps = (fps: number) => translate('fps', { value1: Number(fps.toFixed(2)) });
+export const fmtBitrate = (bps: number) => translate('bitrateValue', { value1: formatNumber(bps / 1e6, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
+export const fmtSize = (bytes: number) => (bytes >= 1e9 ? translate('gb', { value1: formatNumber(bytes / 1e9, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }) : translate('mb', { value1: formatNumber(bytes / 1e6, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }));
 export const fmtAudio = (a: AudioStream) =>
-  `${codecName(a.codec)} · ${a.sampleRate / 1000} kHz ${a.channels === 1 ? 'mono' : a.channels === 2 ? 'stereo' : `${a.channels} ch`}`;
+  translate('khz', { value1: codecName(a.codec), value2: a.sampleRate / 1000, value3: a.channels === 1 ? translate('mono') : a.channels === 2 ? translate('stereo') : translate('channels', { value1: a.channels }) });
 
 /** Placeholder filmstrip: one cell per ~44px with varying brightness. */
 export const filmstrip = (width: number, seed: number) => {
@@ -801,6 +802,6 @@ export function placeMedia(p: Project, mediaId: string, trackId: string, time: n
     if (t === audioTrack) return { ...audioTrack, clips: [...audioTrack.clips, audioClip].sort((a, b) => a.start - b.start) };
     return t;
   });
-  if (media.audio && !audioTrack) tracks.push({ id: `${id}-track`, name: `A${p.tracks.filter((t) => t.kind === 'audio').length + 1}`, label: 'Audio', kind: 'audio', muted: false, clips: [audioClip] });
+  if (media.audio && !audioTrack) tracks.push({ id: `${id}-track`, name: `A${p.tracks.filter((t) => t.kind === 'audio').length + 1}`, label: translate('audio2'), kind: 'audio', muted: false, clips: [audioClip] });
   return settle({ ...p, tracks });
 }

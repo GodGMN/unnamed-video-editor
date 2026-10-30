@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import { ALL_FORMATS, BlobSource, CanvasSink, Input } from 'mediabunny';
 import type { WrappedCanvas } from 'mediabunny';
 import { frameAt, openAnimation } from '../media/animation';
@@ -63,7 +64,7 @@ export class AnimatedFrame implements Frames {
       images.push(await createImageBitmap(frame, { resizeWidth, resizeHeight: Math.max(1, Math.round(resizeWidth * h / w)), resizeQuality: 'high' }));
     }).then((animation) => {
       animation?.decoder.close();
-      if (this.disposed || !animation) { images.forEach((i) => i.close()); if (!this.disposed) failed(new Error('This animation could not be decoded.')); return; }
+      if (this.disposed || !animation) { images.forEach((i) => i.close()); if (!this.disposed) failed(new Error(translate('thisAnimationCouldNotBeDecoded'))); return; }
       this.images = images;
       this.timing = animation;
       changed();
@@ -97,7 +98,7 @@ export class FrameCache implements Frames {
   constructor(file: File, size: Size, private changed: () => void, private failed: (error: unknown) => void) {
     this.input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
     this.sink = this.input.getPrimaryVideoTrack().then(async (track) => {
-      if (!track || !await track.canDecode()) throw new Error('This video could not be decoded.');
+      if (!track || !await track.canDecode()) throw new Error(translate('thisVideoCouldNotBeDecoded'));
       return new CanvasSink(track, { width: previewWidth(track.displayWidth, track.displayHeight, size), alpha: true, poolSize: 0 });
     });
     // The first request attaches the operational error handler; avoid an unhandled rejection during preload.

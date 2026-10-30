@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import { AUDIO_CLIP_DEFAULTS, VIDEO_CLIP_DEFAULTS, settle } from './model';
 import type { AudioClip, Media, Project, Transition, VideoClip } from './model';
 
@@ -73,20 +74,20 @@ const overlay = [
 
 export function seedProject(): Project {
   return settle({
-    name: 'Weekend trip',
+    name: translate('weekendTrip'),
     output: { width: 1920, height: 1080, fps: 30 },
     media: Object.fromEntries(media.map((m) => [m.id, m])),
     tracks: [
       {
-        kind: 'text', id: 'T1', name: 'Text', label: '', hidden: false, clips: [
-          { id: 'title', content: 'Summer ’26', size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start: 10, duration: 5 },
-          { id: 'caption', content: 'Dinner on the terrace', size: 56, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start: 19, duration: 4 },
+        kind: 'text', id: 'T1', name: translate('text'), label: '', hidden: false, clips: [
+          { id: 'title', content: translate('summer26'), size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start: 10, duration: 5 },
+          { id: 'caption', content: translate('dinnerOnTheTerrace'), size: 56, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start: 19, duration: 4 },
         ],
       },
-      { kind: 'video', id: 'V2', name: 'V2', label: 'Overlay', hidden: false, magnetic: false, clips: overlay.map(([v]) => v) },
-      { kind: 'video', id: 'V1', name: 'V1', label: 'Main', hidden: false, magnetic: true, clips: main.map(([v]) => v) },
-      { kind: 'audio', id: 'A1', name: 'A1', label: 'Clip audio', muted: false, clips: main.map(([, a]) => a) },
-      { kind: 'audio', id: 'A2', name: 'A2', label: 'Overlay audio', muted: false, clips: overlay.map(([, a]) => a) },
+      { kind: 'video', id: 'V2', name: 'V2', label: translate('overlay'), hidden: false, magnetic: false, clips: overlay.map(([v]) => v) },
+      { kind: 'video', id: 'V1', name: 'V1', label: translate('mainTrack'), hidden: false, magnetic: true, clips: main.map(([v]) => v) },
+      { kind: 'audio', id: 'A1', name: 'A1', label: translate('clipAudio'), muted: false, clips: main.map(([, a]) => a) },
+      { kind: 'audio', id: 'A2', name: 'A2', label: translate('overlayAudio'), muted: false, clips: overlay.map(([, a]) => a) },
     ],
   });
 }

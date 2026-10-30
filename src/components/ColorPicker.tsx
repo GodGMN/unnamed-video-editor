@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+import { t as translate } from '../i18n/core';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent, RefObject } from 'react';
 import { createPortal } from 'react-dom';
@@ -82,6 +84,7 @@ function pushRecent(hex: string) {
 
 /** A `#RRGGBB` text field that commits when the typed text is a valid hex color. */
 export function HexField({ value, onChange, style }: { value: string; onChange: (v: string) => void; style?: CSSProperties }) {
+  useT();
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
     const rgb = draft === null ? null : hexToRgb(draft);
@@ -89,7 +92,7 @@ export function HexField({ value, onChange, style }: { value: string; onChange: 
     setDraft(null);
   };
   return (
-    <input className="fld mono" type="text" aria-label="Hex color" spellCheck={false} style={style}
+    <input className="fld mono" type="text" aria-label={translate('hexColor')} spellCheck={false} style={style}
       value={draft ?? value.toUpperCase()} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === 'Enter') commit();
@@ -108,6 +111,7 @@ interface Props {
 
 /** Hue ring with a tone square inside, plus hex and RGB fields. Floats over the page below its anchor. */
 export function ColorPopover({ anchor, value, onChange, onClose }: Props) {
+  useT();
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; caret: number; above: boolean } | null>(null);
   // Hue survives greys and black, where the hex value alone can't say what it was.
@@ -182,11 +186,11 @@ export function ColorPopover({ anchor, value, onChange, onClose }: Props) {
   };
 
   return createPortal(
-    <div ref={ref} className={'color-pop' + (pos?.above ? ' above' : '')} role="dialog" aria-label="Custom color"
+    <div ref={ref} className={'color-pop' + (pos?.above ? translate('above') : '')} role="dialog" aria-label={translate('customColor')}
       style={{ width: POP_W, left: pos?.left ?? -9999, top: pos?.top ?? 0, ['--caret' as string]: `${pos?.caret ?? 0}px` }}>
       <div className="color-pop-main">
         <div className="hue-ring" style={{ width: RING, height: RING }} onPointerDown={onRingDown}
-          role="slider" aria-label="Hue" aria-valuemin={0} aria-valuemax={359} aria-valuenow={Math.round(hsv.h)} tabIndex={0}
+          role="slider" aria-label={translate('hue')} aria-valuemin={0} aria-valuemax={359} aria-valuenow={Math.round(hsv.h)} tabIndex={0}
           onKeyDown={(e) => {
             const d = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
             if (d) { e.preventDefault(); set({ h: (hsv.h + d * (e.shiftKey ? 10 : 1) + 360) % 360 }); }
@@ -194,7 +198,7 @@ export function ColorPopover({ anchor, value, onChange, onClose }: Props) {
           <span className="hue-ring-hole" style={{ inset: RING_W }} />
           <span className="picker-knob" style={{ left: RING / 2 + Math.cos(angle) * radius, top: RING / 2 + Math.sin(angle) * radius, background: pure }} />
           <div className="tone-pad" style={{ width: PAD, height: PAD, background: pure }} onPointerDown={onPadDown}
-            role="slider" aria-label="Saturation and brightness" aria-valuetext={`Saturation ${Math.round(hsv.s * 100)}%, brightness ${Math.round(hsv.v * 100)}%`}>
+            role="slider" aria-label={translate('saturationAndBrightness')} aria-valuetext={translate('saturationBrightness', { value1: Math.round(hsv.s * 100), value2: Math.round(hsv.v * 100) })}>
             <span className="picker-knob" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: current }} />
           </div>
         </div>
@@ -202,15 +206,15 @@ export function ColorPopover({ anchor, value, onChange, onClose }: Props) {
           <span className="color-pop-chip" style={{ background: current }} />
           <HexField value={current} onChange={onChange} />
           {(['R', 'G', 'B'] as const).map((k, i) => (
-            <NumberField key={k} lead={k} aria-label={`${k === 'R' ? 'Red' : k === 'G' ? 'Green' : 'Blue'} channel`}
+            <NumberField key={k} lead={k} aria-label={translate('channel', { value1: k === 'R' ? translate('uiRed') : k === 'G' ? translate('uiGreen') : translate('uiBlue') })}
               min={0} max={255} value={rgb[i]} onChange={setChannel(i)} />
           ))}
         </div>
       </div>
       {recent.length > 0 && (
         <div className="color-pop-recent">
-          <span className="eyebrow">Recent</span>
-          <div role="group" aria-label="Recent colors">
+          <span className="eyebrow">{translate('recent')}</span>
+          <div role="group" aria-label={translate('recentColors')}>
             {recent.map((hex) => (
               <button key={hex} style={{ background: hex }} aria-label={hex} title={hex}
                 aria-pressed={hex === current} onClick={() => onChange(hex)} />
