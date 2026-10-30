@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Brand } from './Brand';
 import { Download, Maximize, Minimize, Pencil, Redo, Undo } from './icons';
+import { progressPercent, useConversionJob } from '../convert/job';
 
 function useFullscreen() {
   const [on, setOn] = useState(() => !!document.fullscreenElement);
@@ -18,9 +19,30 @@ interface Props {
   clipCount: number;
   totalTime: string;
   onExport: () => void;
+  /** Reopens the Convert dialog for the conversion running in the background. */
+  onShowConversion: (mediaId: string, fileName: string) => void;
 }
 
-export function TopBar({ projectName, clipCount, totalTime, onExport }: Props) {
+function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
+  const job = useConversionJob();
+  if (job?.state.status !== 'running') return null;
+  const p = Math.round(progressPercent(job.state.progress, job.source.duration));
+  const label = `Converting ${job.sourceName}`;
+  return (
+    <>
+      <button className="ib conversion" onClick={() => onShow(job.mediaId, job.sourceName)} title={`${label} · ${p}%`}>
+        <span className="conversion-name">{label}</span>
+        <span role="progressbar" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100} aria-label={label} className="progress">
+          <span style={{ width: `${p}%` }} />
+        </span>
+        <span className="mono conversion-pct">{p}%</span>
+      </button>
+      <div className="vsep" role="separator" aria-orientation="vertical" />
+    </>
+  );
+}
+
+export function TopBar({ projectName, clipCount, totalTime, onExport, onShowConversion }: Props) {
   const [fullscreen, toggleFullscreen] = useFullscreen();
   return (
     <header className="topbar">
@@ -32,6 +54,7 @@ export function TopBar({ projectName, clipCount, totalTime, onExport }: Props) {
       </button>
       <span className="count">{clipCount} clips · {totalTime}</span>
       <div className="spacer" />
+      <ConversionProgress onShow={onShowConversion} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button className="ib square" aria-label="Undo (Ctrl+Z)" title="Undo · Ctrl+Z"><Undo stroke="#C8CEC9" /></button>
         <button className="ib square" aria-label="Redo (Ctrl+Shift+Z)" title="Redo · Ctrl+Shift+Z"><Redo stroke="#C8CEC9" /></button>
