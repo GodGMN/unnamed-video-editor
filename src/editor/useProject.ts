@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, settle, trimClipEdge, videoTracks } from './model';
-import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
+import { newId, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, setAspect, settle, trimClipEdge, videoTracks } from './model';
+import type { Aspect, AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
 import { removeMediaFiles } from '../media/files';
@@ -110,6 +110,7 @@ export function useProject() {
     const edit = (fn: (p: Project) => Project) => setProject((p) => (p ? settle(fn(p)) : p));
     return {
       renameProject: (name: string) => edit((p) => ({ ...p, name })),
+      setAspect: (aspect: Aspect) => edit((p) => setAspect(p, aspect)),
       addMedia: (media: Media) => edit((p) => ({ ...p, media: { ...p.media, [media.id]: media } })),
       /** Deletes a source, its clips on the timeline, and its stored files. */
       removeMedia: (mediaId: string) => {

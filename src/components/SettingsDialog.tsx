@@ -8,7 +8,8 @@ type Key = `${PreviewResolution}`;
 
 export function SettingsDialog({ output, onClose }: { output: { width: number; height: number }; onClose: () => void }) {
   const { previewResolution } = useSettings();
-  const full = previewSize(output, 'full').height;
+  const { width, height } = previewSize(output, 'full');
+  const full = Math.min(width, height);
   const options: { key: Key; label: string; sub: string }[] = [
     { key: '360', label: '360p', sub: 'Fastest' },
     { key: '540', label: '540p', sub: 'Default' },
