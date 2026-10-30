@@ -138,8 +138,13 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
       <div className="props-section" style={{ gap: 10 }}>
         <span className="eyebrow">Timing</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-          <Stat label="In" value={fmtTime(cs.inS)} />
-          <Stat label="Out" value={fmtTime(cs.outS)} />
+          {src.still ? <>
+            <Stat label="Start" value={fmtTime(cs.start)} />
+            <Stat label="End" value={fmtTime(cs.start + dur)} />
+          </> : <>
+            <Stat label="In" value={fmtTime(cs.inS)} />
+            <Stat label="Out" value={fmtTime(cs.outS)} />
+          </>}
           <Stat label="Length" value={dur.toFixed(2) + ' s'} />
         </div>
       </div>
@@ -147,12 +152,15 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
       <div className="props-section" style={{ gap: 8 }}>
         <span className="eyebrow">Source info</span>
         <dl className="info-list">
-          {[
+          {(src.still ? [
+            ['File', src.name], ['Format', `${src.container} ${src.animation ? 'animation' : 'image'}`], ['Resolution', `${inf.width}×${inf.height}`],
+            ...(src.animation ? [['Loop', `${src.animation.toFixed(2)} s · ${Math.round(src.animation * inf.fps)} frames`]] : []), ['Size', fmtSize(src.size)],
+          ] : [
             ['File', src.name], ['Container', src.container], ['Video', src.video ? codecName(src.video.codec) : '—'],
             ['Resolution', src.video ? `${inf.width}×${inf.height}` : '—'], ['Frame rate', src.video ? fmtFps(inf.fps) : '—'],
             ['Bitrate', fmtBitrate(src.bitrate)], ['Audio', src.audio ? fmtAudio(src.audio) : 'None'],
             ['Duration', fmtTime(src.duration)], ['Size', fmtSize(src.size)],
-          ].map(([k, v]) => (
+          ]).map(([k, v]) => (
             <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>
           ))}
         </dl>
