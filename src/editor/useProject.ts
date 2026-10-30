@@ -38,6 +38,8 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   return { ...ui, sel, picked, focusClip, lockClip, source, keyPick, menu: null };
 }
 
+export type SaveState = { status: 'saved' | 'saving' | 'failed'; error?: string };
+
 /** Media whose import was cut off by a reload never finished linking its file, so it goes, clips and all. */
 function dropUnfinished(p: Project): Project {
   for (const m of Object.values(p.media)) {
@@ -54,7 +56,7 @@ function dropUnfinished(p: Project): Project {
  */
 function usePersistentProject(id: string, initial: Project, draft: boolean) {
   const [project, setProject] = useState(initial);
-  const [saveState, setSaveState] = useState('Saved');
+  const [saveState, setSaveState] = useState<SaveState>({ status: 'saved' });
   const latest = useRef(project);
   latest.current = project;
   const stored = useRef<Promise<void> | null>(draft ? null : Promise.resolve());
@@ -70,22 +72,22 @@ function usePersistentProject(id: string, initial: Project, draft: boolean) {
   }, [id, initial]);
   const save = useCallback(async () => {
     const snapshot = latest.current;
-    setSaveState('Saving');
+    setSaveState({ status: 'saving' });
     try {
       await persist(snapshot);
-      if (snapshot === latest.current) setSaveState('Saved');
+      if (snapshot === latest.current) setSaveState({ status: 'saved' });
     } catch (error) {
-      setSaveState(error instanceof Error ? `Save failed: ${error.message}` : 'Save failed');
+      setSaveState({ status: 'failed', error: error instanceof Error ? error.message : undefined });
       throw error;
     }
   }, [persist]);
   useEffect(() => {
-    setSaveState('Saving');
+    setSaveState({ status: 'saving' });
     const timer = setTimeout(() => { void save().catch(() => undefined); }, SAVE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [project, save]);
   useEffect(() => {
-    if (saveState === 'Saved') return;
+    if (saveState.status === 'saved') return;
     const leave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', leave);
     return () => window.removeEventListener('beforeunload', leave);

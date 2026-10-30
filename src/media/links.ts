@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 export interface ReadHandle extends FileSystemFileHandle {
   queryPermission(options: { mode: 'read' }): Promise<PermissionState>;
   requestPermission(options: { mode: 'read' }): Promise<PermissionState>;
@@ -11,7 +12,7 @@ declare global {
 }
 export interface PickedFile { file: File; handle?: ReadHandle }
 export async function pickFiles(): Promise<PickedFile[]> {
-  if (!window.showOpenFilePicker) throw new Error('Choose files using the file input.');
+  if (!window.showOpenFilePicker) throw new Error(translate('linksChooseWithFileInput'));
   const handles = await window.showOpenFilePicker({ multiple: true });
   return Promise.all(handles.map(async handle => ({ handle, file: await handle.getFile() })));
 }
@@ -45,7 +46,7 @@ export async function mediaTransaction<T>(store: 'sources' | 'previews', mode: I
   return new Promise((resolve, reject) => {
     const request = fn(tx.objectStore(store));
     tx.oncomplete = () => resolve(request.result);
-    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Media storage failed.'));
+    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error(translate('linksMediaStorageFailed')));
   });
 }
 const session = new Map<string, File>();

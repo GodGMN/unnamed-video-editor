@@ -186,7 +186,7 @@ export function ColorPopover({ anchor, value, onChange, onClose }: Props) {
   };
 
   return createPortal(
-    <div ref={ref} className={'color-pop' + (pos?.above ? translate('above') : '')} role="dialog" aria-label={translate('customColor')}
+    <div ref={ref} className={'color-pop' + (pos?.above ? ' above' : '')} role="dialog" aria-label={translate('customColor')}
       style={{ width: POP_W, left: pos?.left ?? -9999, top: pos?.top ?? 0, ['--caret' as string]: `${pos?.caret ?? 0}px` }}>
       <div className="color-pop-main">
         <div className="hue-ring" style={{ width: RING, height: RING }} onPointerDown={onRingDown}

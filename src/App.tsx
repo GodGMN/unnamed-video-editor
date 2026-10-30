@@ -52,7 +52,7 @@ function useConvertedMedia(editor: Editor | null) {
       add(media);
       // V1 is magnetic, so the clip goes after its last clip whatever time is passed.
       if (addToTimeline && main) place(media.id, main, 0);
-    }, (error: unknown) => setError(error instanceof Error ? error.message : 'Could not import converted media.')).finally(() => setPending(false));
+    }, (error: unknown) => setError(error instanceof Error ? error.message : translate('couldNotImportConvertedMedia'))).finally(() => setPending(false));
   }, [output, add, place, addToTimeline, main]);
   return { pending, error };
 }
@@ -80,7 +80,7 @@ function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Projec
   return (
     <div className="editor">
       <TopBar onProjects={() => {
-        if (pendingImports || converted.pending || job) { setNavigationError('Finish importing or finish/cancel the conversion before leaving the editor.'); return; }
+        if (pendingImports || converted.pending || job) { setNavigationError(translate('finishBeforeLeavingEditor')); return; }
         void editor.flush().then(() => onHome(editor.project), e => setNavigationError(String(e)));
       }} onSettings={() => setSettings(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onShowConversion={(id, name) => setConverting({ id, name })} />
