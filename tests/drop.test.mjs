@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { VIDEO_CLIP_DEFAULTS, AUDIO_CLIP_DEFAULTS, acceptsMedia, magneticCut, placeMedia } from '../src/editor/model.ts';
+import { VIDEO_CLIP_DEFAULTS, AUDIO_CLIP_DEFAULTS, acceptsMedia, dropMedia, magneticCut, placeMedia } from '../src/editor/model.ts';
 
 const clip = (id, start, linkId = null) => ({ ...VIDEO_CLIP_DEFAULTS, id, start, mediaId: 'old', inS: 0, outS: 5, linkId, linked: !!linkId });
 const media = (id, extra = {}) => ({ id, name: id, duration: 3, decodable: true, video: { width: 320, height: 180 }, audio: { channels: 2 }, ...extra });
@@ -56,4 +56,22 @@ test('tracks only take media they can play', () => {
   assert.equal(acceptsMedia(a, p.media.silent), false);
   assert.equal(acceptsMedia({ kind: 'text', clips: [] }, p.media.new), false);
   assert.equal(placeMedia(p, 'sound', 'v', 0, 'n'), p);
+});
+
+test('dropped files are added and placed back to back from the drop point', () => {
+  const p0 = project();
+  const first = media('first', { duration: 2, importing: true }), second = media('second', { duration: 4, importing: true });
+  const { project: p, clipIds } = dropMedia({ ...p0, media: { old: p0.media.old } }, [first, second], 'v', 4.2);
+  assert.ok(p.media.first.importing && p.media.second.importing);
+  const [a, b] = clipIds;
+  assert.deepEqual(starts(p, 0), { a: 0, [a]: 5, [b]: 7, b: 11 });
+});
+
+test('a dropped file goes to the first track that takes it when the target cannot', () => {
+  const p0 = project();
+  const sound = media('tune', { video: null, duration: 2 });
+  const { project: p, clipIds } = dropMedia(p0, [sound], 'v', 20);
+  assert.equal(p.tracks[1].clips.find((c) => c.id === clipIds[0])?.start, 20);
+  const broken = media('broken', { decodable: false });
+  assert.deepEqual(dropMedia(p0, [broken], 'v', 0).clipIds, [null]);
 });
