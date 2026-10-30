@@ -1,6 +1,7 @@
+import type { CSSProperties } from 'react';
 import { useRef, useState } from 'react';
 import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, MISSING_MEDIA, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextItem, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
-import type { AudioClip, FitMode, TextAnchor, TextItem, TransitionType, VideoClip } from '../editor/model';
+import type { AudioClip, Fades, FitMode, TextAnchor, TextItem, TransitionType, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { Dropper, Mute, Waveform } from './icons';
 import { ColorPopover } from './ColorPicker';
@@ -42,6 +43,20 @@ function FadeStat({ label, len, curve }: { label: string; len: number; curve: nu
         <span style={{ textTransform: 'capitalize' }}>{shape}</span>
         {amount && <span className="mono">{amount}</span>}
       </span>
+    </div>
+  );
+}
+
+/** Fade readouts for a clip; the lengths and curves are set on the timeline. */
+function FadesSection({ clip: cs, what, style }: { clip: Fades; what: 'video' | 'audio'; style?: CSSProperties }) {
+  return (
+    <div className="props-section" style={{ gap: 10, ...style }}>
+      <span className="eyebrow">Fades</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+        <FadeStat label="Fade in" len={cs.fadeIn} curve={cs.curveIn} />
+        <FadeStat label="Fade out" len={cs.fadeOut} curve={cs.curveOut} />
+      </div>
+      <span className="hint">Drag the corner handles on the {what} clip to set length, and the round handle on each ramp up or down to shape its curve.</span>
     </div>
   );
 }
@@ -116,6 +131,8 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
         </div>
       </div>
 
+      <FadesSection clip={cs} what="video" />
+
       <div className="props-section" style={{ gap: 10 }}>
         <span className="eyebrow">Timing</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
@@ -168,14 +185,7 @@ function AudioClipProps({ editor, clip: cs }: { editor: Editor; clip: AudioClip 
         </div>
         <Slider label="Volume" value={cs.vol} unit="%" defaultValue={AUDIO_CLIP_DEFAULTS.vol} min={0} max={200} onChange={(v) => updateClip(id, { vol: v })} />
       </div>
-      <div className="props-section" style={{ borderTop: 0, gap: 10, paddingTop: 14 }}>
-        <span className="eyebrow">Fades</span>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-          <FadeStat label="Fade in" len={cs.fadeIn} curve={cs.curveIn} />
-          <FadeStat label="Fade out" len={cs.fadeOut} curve={cs.curveOut} />
-        </div>
-        <span className="hint">Drag the corner handles on the audio clip to set length, and the round handle on each ramp up or down to shape its curve.</span>
-      </div>
+      <FadesSection clip={cs} what="audio" style={{ borderTop: 0, paddingTop: 14 }} />
     </div>
   );
 }

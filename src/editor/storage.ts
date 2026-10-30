@@ -1,3 +1,4 @@
+import { NO_FADES } from './model';
 import type { Project } from './model';
 
 /*
@@ -39,13 +40,14 @@ function run<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequ
 /** The saved project, or null when there is none (or it's from an older schema). */
 export async function loadProject(): Promise<Project | null> {
   const saved = await run<Saved | undefined>('readonly', (s) => s.get(KEY));
-  return saved?.schema === SCHEMA ? withTextOffsets(saved.project) : null;
+  return saved?.schema === SCHEMA ? upgrade(saved.project) : null;
 }
 
-/** Saves from before text items had an x/y offset get a zero offset. */
-function withTextOffsets(p: Project): Project {
+/** Saves from before text items had an x/y offset get a zero offset, and video clips from before video fades get none. */
+function upgrade(p: Project): Project {
   return { ...p, tracks: p.tracks.map((t) => t.kind === 'text'
     ? { ...t, items: t.items.map((x) => ({ ...x, x: x.x ?? 0, y: x.y ?? 0 })) }
+    : t.kind === 'video' ? { ...t, clips: t.clips.map((c) => ({ ...NO_FADES, ...c })) }
     : t) };
 }
 

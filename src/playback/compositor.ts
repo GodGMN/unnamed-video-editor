@@ -1,5 +1,5 @@
 import { clipEnd, overlapAfter, findVideoClip, partnersOf, videoTracks } from '../editor/model';
-import type { AudioClip, Project, VideoClip } from '../editor/model';
+import type { AudioClip, Clip, Project, VideoClip } from '../editor/model';
 
 export type RenderContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 export type FrameSource = (clip: VideoClip, sourceTime: number) => CanvasImageSource | null;
@@ -18,6 +18,14 @@ export function fadeCurve(progress: number, curve: number): number {
   }
   const u = (lo + hi) / 2;
   return 2 * (1 - u) * u * (1 - control) + u * u;
+}
+
+/** A clip's level from its own fade in and fade out: opacity for video, a gain factor for audio. */
+export function fadeLevel(clip: Clip, time: number): number {
+  let level = 1;
+  if (clip.fadeIn > 0) level *= fadeCurve((time - clip.start) / clip.fadeIn, clip.curveIn);
+  if (clip.fadeOut > 0) level *= fadeCurve((clipEnd(clip) - time) / clip.fadeOut, clip.curveOut);
+  return level;
 }
 
 /** Incoming opacity for crossfade; outgoing stays opaque underneath it. */
@@ -44,9 +52,7 @@ export function videoOpacity(p: Project, clip: VideoClip, time: number): number 
 
 export function audioGain(p: Project, clip: AudioClip, time: number): number {
   if (clip.muted || time < clip.start || time >= clipEnd(clip)) return 0;
-  let gain = clip.vol / 100;
-  if (clip.fadeIn > 0) gain *= fadeCurve((time - clip.start) / clip.fadeIn, clip.curveIn);
-  if (clip.fadeOut > 0) gain *= fadeCurve((clipEnd(clip) - time) / clip.fadeOut, clip.curveOut);
+  let gain = clip.vol / 100 * fadeLevel(clip, time);
   const partner = partnersOf(p, clip).map((c) => findVideoClip(p, c.id)).find((c) => !!c);
   if (partner) {
     gain *= videoOpacity(p, partner, time);
@@ -99,7 +105,8 @@ export function renderFrame(p: Project, time: number, ctx: RenderContext, frameS
       const sw = video.width, sh = video.height;
       const scale = (clip.fit === 'fill' ? Math.max(width / sw, height / sh) : Math.min(width / sw, height / sh)) * (clip.fit === 'custom' ? clip.scale / 100 : 1);
       ctx.save();
-      ctx.globalAlpha = videoOpacity(p, clip, time);
+      // The clip's own fades go through whatever is underneath: black on the main track.
+      ctx.globalAlpha = videoOpacity(p, clip, time) * fadeLevel(clip, time);
       ctx.translate(width / 2 + clip.x, height / 2 + clip.y);
       ctx.rotate(clip.rot * Math.PI / 180);
       ctx.scale(scale, scale);

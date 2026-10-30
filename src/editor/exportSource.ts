@@ -1,11 +1,13 @@
 /*
  * Feeds the current timeline to the MP4 export. The mixdown is real (clip timing, trims, volume, mute, fades
- * and their curves, muted tracks), but there is no decoded media or shared compositor yet, so sources are
- * stand-ins: each clip renders as its tone colour with a source timecode, and sounds as a steady sine tone.
+ * and their curves, muted tracks), and so are video fades to and from black, but there is no decoded media or
+ * shared compositor yet, so sources are stand-ins: each clip renders as its tone colour with a source timecode,
+ * and sounds as a steady sine tone.
  * Swap `placeholderFrames` and `placeholderAudio` for the compositor and decoded audio once they exist.
  */
 
 import type { ExportSource } from '../components/ExportDialog';
+import { fadeLevel } from '../playback/compositor';
 import { MISSING_MEDIA, audioTracks, fmtTime, videoTracks } from './model';
 import type { Media, Project, TimelineLayout } from './model';
 
@@ -34,6 +36,7 @@ function placeholderFrames(p: Project, layout: TimelineLayout, width: number, he
       : undefined;
     if (clip) {
       const l = layout.clips[clip.id];
+      g.globalAlpha = fadeLevel(clip, time);
       g.fillStyle = (p.media[clip.mediaId] ?? MISSING_MEDIA).tone;
       g.fillRect(0, 0, width, height);
       g.fillStyle = 'rgba(255,255,255,0.85)';
@@ -41,6 +44,7 @@ function placeholderFrames(p: Project, layout: TimelineLayout, width: number, he
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.fillText(`${l.name} @ ${fmtTime(clip.inS + time - l.start)}`, width / 2, height / 2);
+      g.globalAlpha = 1;
     }
     return canvas;
   };
