@@ -237,7 +237,7 @@ export function Timeline({ editor }: { editor: Editor }) {
   };
 
   // Drag on empty timeline space to draw a box; every clip it touches is picked.
-  // Ctrl, Cmd or Shift adds the boxed clips to the current selection.
+  // Ctrl, Cmd or Shift adds the boxed clips to the current selection; a plain click without a drag clears it.
   const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const onMarqueeDown = (e: PointerEvent<HTMLDivElement>) => {
     const content = contentRef.current;
@@ -277,7 +277,9 @@ export function Timeline({ editor }: { editor: Editor }) {
       const key = picked.map((x) => x.id).join();
       if (key !== lastKey) { lastKey = key; editor.pickClips(picked); }
     };
-    const end = () => {
+    const end = (ev: globalThis.PointerEvent) => {
+      // A plain click on empty space (no box drawn) deselects everything.
+      if (!dragging && ev.type === 'pointerup' && !base.length) editor.pickClips([]);
       setMarquee(null);
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', end);
@@ -735,11 +737,15 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
           <span key={i} style={{ height: h, background: cs.muted ? 'rgba(241,244,240,0.22)' : 'rgba(198,240,191,0.7)' }} />
         ))}
       </button>
-      <span className="vol-headroom" style={{ height: volY }} aria-hidden="true" />
-      <FadeRamps clip={cs} width={width} height={H} />
       <button className={'vol-line' + (cs.muted ? ' muted' : '')} style={{ top: volY - 6 }}
         aria-label={`Volume ${level}, drag up or down to adjust`} title={`Volume ${level} · drag to adjust`}
         onPointerDown={volDown} onKeyDown={volKey} />
+      {/* Drawn apart from the line's hit area so the clip's rounded corners can clip it at 0% and 200%. */}
+      <div className="vol-clip" aria-hidden="true">
+        <span className="vol-headroom" style={{ height: volY }} />
+        <FadeRamps clip={cs} width={width} height={H} />
+        <span className="vol-mark" style={{ top: Math.max(0, Math.min(H - 2, volY - 1)) }} />
+      </div>
       <span className="audio-badge" style={inset && { right: 8 + inset.tail * pps }}>
         {!cs.linked && <span className="unlinked">unlinked</span>}
         {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
@@ -771,7 +777,7 @@ function FadeRamps({ clip, width, height: H }: { clip: MediaClip; width: number;
   const { fiW, foW, ci, co } = fadeGeometry(clip, width, H);
   return (
     <>
-      <svg width={f1(fiW)} height={H} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', borderRadius: '8px 0 0 8px' }} aria-hidden="true">
+      <svg width={f1(fiW)} height={H} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} aria-hidden="true">
         <path d={`M0,0 L${f1(fiW)},0 Q${f1(ci.cx)},${f1(ci.cy)} 0,${H} Z`} fill="rgba(12,14,13,0.62)" />
         <path d={`M0,${H} Q${f1(ci.cx)},${f1(ci.cy)} ${f1(fiW)},0`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
       </svg>
