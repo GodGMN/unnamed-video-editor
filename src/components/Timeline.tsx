@@ -1,7 +1,7 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, removeTrack as removeTrackModel, curveName, findClip, movingGroup, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
+import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, removeTrack as removeTrackModel, curveName, findClip, movingGroup, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart, edgeTargets, snapEdge, MIN_TEXT_DURATION } from '../editor/model';
 import type { AudioClip, AudioTrack, ClipSelection, Project, TextItem, TransitionType, Track, VideoClip, VideoTrack } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
@@ -132,6 +132,8 @@ export function Timeline({ editor }: { editor: Editor }) {
 
   const startDrag = useDrag();
   const [snapping, setSnapping] = useState(true);
+  // The time a trimmed edge is snapped to, drawn as a dashed line across every track.
+  const [snapGuide, setSnapGuide] = useState<number | null>(null);
   // The video clip whose transition a dragged transition would replace, for drop highlighting.
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   // Where a clip dragged in from the media panel would land.
@@ -441,14 +443,14 @@ export function Timeline({ editor }: { editor: Editor }) {
                         <span className="mono">{x.duration.toFixed(1)}s</span>
                       </button>
                     ))}
-                    <TextTrimHandles editor={editor} items={t.items} pps={pps} />
+                    <TextTrimHandles editor={editor} items={t.items} pps={pps} snapping={snapping} onGuide={setSnapGuide} />
                   </>
                 )}
                 {t.kind === 'video' && (
                   <>
                     {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} inset={insets!.get(c.id)} onMenu={onContextMenu('clip', c.id)} />)}
                     <Transitions pps={pps} editor={editor} clips={t.clips} dropTarget={dropTarget} />
-                    <TrimHandles pps={pps} editor={editor} clips={t.clips} />
+                    <TrimHandles pps={pps} editor={editor} clips={t.clips} snapping={snapping} onGuide={setSnapGuide} />
                   </>
                 )}
                 {t.kind === 'audio' && (
@@ -479,6 +481,7 @@ export function Timeline({ editor }: { editor: Editor }) {
               </>
             )}
             <div className="playhead" style={{ left: ui.playhead * pps }} />
+            {snapGuide !== null && <div className="snap-guide" style={{ left: snapGuide * pps }} aria-hidden="true" />}
             {marquee && <div className="marquee" style={marquee} aria-hidden="true" />}
           </div>
         </div>
@@ -604,11 +607,26 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   );
 }
 
+interface TrimProps {
+  editor: Editor;
+  pps: number;
+  snapping: boolean;
+  /** Reports the time a dragged edge snapped to, or null when it is not snapped. */
+  onGuide: (time: number | null) => void;
+}
+
+/** Edges a trimmed clip can snap to: every other clip and text item, minus its linked partners that trim with it. */
+function trimTargets(project: Project, clip: VideoClip | AudioClip) {
+  const skip = new Set([clip.id]);
+  if (clip.linked && clip.linkId !== null) for (const p of partnersOf(project, clip)) skip.add(p.id);
+  return edgeTargets(project, skip);
+}
+
 /**
  * Trim handles for the selected clip on a track. They sit in their own layer above every clip and
  * transition chip, so where clips touch or overlap the active clip's handles win.
  */
-function TrimHandles({ editor, clips, pps }: { editor: Editor; clips: VideoClip[]; pps: number }) {
+function TrimHandles({ editor, clips, pps, snapping, onGuide }: TrimProps & { clips: VideoClip[] }) {
   const { project, ui, trimClip } = editor;
   const startDrag = useDrag();
   const cs = ui.sel?.kind === 'clip' ? clips.find((c) => c.id === ui.sel!.id) : undefined;
@@ -624,13 +642,23 @@ function TrimHandles({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
     const minDuration = Math.min(0.5, src.duration);
     const round = (x: number) => Math.round(x * 100) / 100;
     const round6 = (x: number) => Math.round(x * 1e6) / 1e6;
+    const targets = trimTargets(project, cs);
+    const edge = which === 'in' ? start : clipEnd(cs);
     startDrag(e, (dx) => {
+      const snap = snapping ? snapEdge(edge + dx / pps, targets, pps) : null;
+      const moved = snap === null ? dx / pps : snap - edge;
       // The start edge moves the clip's start along with its in point, so the end stays put.
       if (which === 'in') {
-        const d = round(Math.max(-inS, -start, Math.min(outS - minDuration - inS, dx / pps)));
+        const clamped = Math.max(-inS, -start, Math.min(outS - minDuration - inS, moved));
+        const d = snap === null ? round(clamped) : clamped;
         trimClip(id, { inS: round6(inS + d), start: round6(start + d) });
-      } else trimClip(id, { outS: round(Math.min(src.duration, Math.max(inS + minDuration, outS + dx / pps))) });
-    });
+        onGuide(snap !== null && d === moved ? snap : null);
+      } else {
+        const out = Math.min(src.duration, Math.max(inS + minDuration, outS + moved));
+        trimClip(id, { outS: snap === null ? round(out) : round6(out) });
+        onGuide(snap !== null && out === outS + moved ? snap : null);
+      }
+    }, () => onGuide(null));
   };
 
   return (
@@ -642,8 +670,8 @@ function TrimHandles({ editor, clips, pps }: { editor: Editor; clips: VideoClip[
 }
 
 /** Edge handles for the selected text item: drag either end to change when it starts or ends. */
-function TextTrimHandles({ editor, items, pps }: { editor: Editor; items: TextItem[]; pps: number }) {
-  const { ui, trimText } = editor;
+function TextTrimHandles({ editor, items, pps, snapping, onGuide }: TrimProps & { items: TextItem[] }) {
+  const { project, ui, trimText } = editor;
   const startDrag = useDrag();
   const item = ui.sel?.kind === 'text' ? items.find((x) => x.id === ui.sel!.id) : undefined;
   if (!item) return null;
@@ -653,7 +681,14 @@ function TextTrimHandles({ editor, items, pps }: { editor: Editor; items: TextIt
   const edgeDown = (which: 'in' | 'out') => (e: PointerEvent<HTMLSpanElement>) => {
     if (e.button !== 0) return;
     const t0 = which === 'in' ? item.start : item.start + item.duration;
-    startDrag(e, (dx) => trimText(item.id, which, Math.round((t0 + dx / pps) * 100) / 100));
+    const targets = edgeTargets(project, new Set([item.id]));
+    startDrag(e, (dx) => {
+      const snap = snapping ? snapEdge(t0 + dx / pps, targets, pps) : null;
+      trimText(item.id, which, snap ?? Math.round((t0 + dx / pps) * 100) / 100);
+      // Only show the guide when the edge really lands there, not when the minimum length holds it back.
+      const reachable = which === 'in' ? snap !== null && snap <= item.start + item.duration - MIN_TEXT_DURATION : snap !== null && snap >= item.start + MIN_TEXT_DURATION;
+      onGuide(reachable ? snap : null);
+    }, () => onGuide(null));
   };
 
   return (

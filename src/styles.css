@@ -396,3 +396,4 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .timeline.splitting .vol-line, .timeline.splitting .fade-handle, .timeline.splitting .curve-handle { pointer-events: none; }
 .split-guide { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: var(--text-bright); box-shadow: 0 0 0 1px rgba(12, 14, 13, 0.6); border-radius: 1px; pointer-events: none; z-index: 5; }
 .marquee { position: absolute; z-index: 7; pointer-events: none; border: 1.5px solid var(--accent); border-radius: 8px; background: radial-gradient(circle at center, rgba(198, 240, 191, 0.18) 0.5px, transparent 1px) 0 0 / 5px 5px, rgba(198, 240, 191, 0.1); }
+.snap-guide { position: absolute; top: 0; bottom: 0; width: 0; margin-left: -1px; border-left: 2px dashed var(--accent); pointer-events: none; z-index: 6; }

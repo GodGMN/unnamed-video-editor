@@ -228,7 +228,7 @@ export type Editor = NonNullable<ReturnType<typeof useProject>>;
  * pointer delta from where the drag started.
  */
 export function useDrag() {
-  const start = useCallback((e: ReactPointerEvent<HTMLElement>, onMove: (dx: number, dy: number) => void) => {
+  const start = useCallback((e: ReactPointerEvent<HTMLElement>, onMove: (dx: number, dy: number) => void, onEnd?: () => void) => {
     e.preventDefault();
     e.stopPropagation();
     const el = e.currentTarget;
@@ -243,6 +243,7 @@ export function useDrag() {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
+      onEnd?.();
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
