@@ -1,3 +1,4 @@
+import { openEditor } from './browser-helpers.mjs';
 // Run Vite, then PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs TEST_URL=http://127.0.0.1:5217 node scripts/verify-preview-cache.mjs
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -14,12 +15,14 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(process.env.TEST_URL ?? 'http://127.0.0.1:5217');
+  await openEditor(page);
+  await page.getByRole('button', { name: 'Projects', exact: true }).waitFor();
   const result = await page.evaluate(async (bytes) => {
     const { PlaybackEngine } = await import('/src/playback/engine.ts');
     const { VIDEO_CLIP_DEFAULTS, AUDIO_CLIP_DEFAULTS } = await import('/src/editor/model.ts');
-    const { writeMediaFile } = await import('/src/media/files.ts');
+    const { linkFile } = await import('/src/media/links.ts');
     const file = new File([new Uint8Array(bytes)], 'cuts.mp4', { type: 'video/mp4' });
-    await writeMediaFile('cache-test', file);
+    await linkFile('cache-test', file);
     const canvas = document.createElement('canvas'); canvas.width = 320; canvas.height = 180;
     document.body.replaceChildren(canvas);
     const statuses = [];
@@ -27,7 +30,7 @@ try {
     const clip = (id, start, inS, outS) => ({ ...VIDEO_CLIP_DEFAULTS, id, mediaId: 'cache-test', start, inS, outS, linkId: null });
     const project = { name: 'Cache test', output: { width: 320, height: 180, fps: 60 }, media: { 'cache-test': { id: 'cache-test', name: 'cuts.mp4', video: { width: 320, height: 180 } } }, tracks: [{ id: 'v', kind: 'video', hidden: false, clips: [clip('red', 0, 0, 1), clip('blue', 1, 1, 2)] }] };
     const pixel = () => Array.from(canvas.getContext('2d').getImageData(160, 90, 1, 1).data).slice(0, 3);
-    const wait = async (fn, message) => { const until = performance.now() + 10000; while (!fn()) { if (performance.now() > until) throw Error(message); await new Promise((r) => setTimeout(r, 10)); } };
+    const wait = async (fn, message) => { const until = performance.now() + 10000; while (!fn()) { if (performance.now() > until) throw Error(`${message}: ${JSON.stringify(statuses)}, pixel=${pixel()}, unavailable=${JSON.stringify([...engine.unavailable])}`); await new Promise((r) => setTimeout(r, 10)); } };
     const update = (time, playing = false) => engine.update({ project, time, playing, volume: 0 });
     update(0);
     await wait(() => pixel()[0] > 240, 'first red frame');
