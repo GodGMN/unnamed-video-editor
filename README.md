@@ -2,45 +2,133 @@
 
 # Unnamed Video Editor
 
-Created in [T3 Code](https://t3.codes).
+A desktop browser video editor with a multitrack timeline, video and audio clips,
+text overlays, chroma key, and MP4 export. Media processing runs locally in your
+browser. There is no application backend or account to set up.
+
+Created by [Sergio Gimeno](https://gimeno.dev) in [T3 Code](https://t3.codes).
+Licensed under [AGPL-3.0-or-later](LICENSE).
+
+## Browser requirements and limitations
+
+Use a recent desktop Chromium browser such as Chrome or Edge. Codec decoding and
+WebCodecs encoding depend on your browser and operating system. A source that
+cannot be decoded can be converted with the built-in FFmpeg converter, subject
+to browser memory limits. Large files and exports can exhaust available memory.
+
+Serve the app over HTTPS outside localhost. Browser media and file-picker APIs
+may be unavailable on plain HTTP LAN addresses. Browsers without persistent
+file handles require reconnecting source files after reloading.
+
+Projects autosave in the current browser profile, with no cloud sync. Clearing
+site data removes saved edits. Download project backups and keep your original
+media. Concurrent editing of one project in multiple tabs is not synchronized.
+See [Project storage](#project-storage) for details.
 
 ## Development
 
-Start the dev server with Docker Compose:
+### With Node.js
+
+Use Node.js 24 and pnpm 10, matching the Docker setup:
 
 ```sh
-docker compose up
+npm install --global pnpm@10
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-The app is then available at:
+Open the local URL printed by Vite. No API keys or environment file are required.
 
-- http://localhost:5200 (this machine)
-- http://<this machine's LAN IP>:5200 (other devices on the local network)
+### With Docker Compose
 
-Compose builds the `dev` stage of the [Dockerfile](Dockerfile) and bind-mounts
-the source into it, so `node_modules` comes from the image and only code changes
-need a reload. After changing `package.json` or the lockfile, rebuild:
+Install Docker with Compose, then run:
 
 ```sh
 docker compose up --build
 ```
 
-## Export harness
+Open http://localhost:5200. Set `WEB_PORT` to change the host port:
 
-`src/export` turns rendered frames and an audio buffer into an H.264 + AAC MP4,
-entirely in the browser. While the dev server is running, open
-`/dev/export.html` (for example http://localhost:5200/dev/export.html) to
-export a synthetic A/V sync clip, check browser codec support and download the
-result. The page is dev-only: `vite build` does not include it.
+```sh
+WEB_PORT=5300 docker compose up
+```
 
-## Production image
+Compose builds the `dev` stage of the [Dockerfile](Dockerfile) and mounts the
+source for live reload. Dependencies live in a Docker volume. After changing
+`package.json` or the lockfile, rebuild the image and refresh that volume:
 
-The same Dockerfile builds a static bundle served by nginx:
+```sh
+docker compose down --volumes
+docker compose up --build
+```
+
+The Compose port is exposed on all host interfaces for LAN development. Use
+HTTPS when accessing it from another machine to enable secure-context APIs.
+
+## Deployment
+
+The production app is static. It needs no database, server-side credentials, or
+persistent server volume. User projects remain in each user's browser.
+
+### Docker
 
 ```sh
 docker build --target production -t unnamed-video-editor .
-docker run --rm -p 8080:80 unnamed-video-editor
+docker run --detach --name unnamed-video-editor --restart unless-stopped \
+  -p 127.0.0.1:8080:80 unnamed-video-editor
 ```
+
+Open http://localhost:8080 locally. For public access, put an HTTPS reverse proxy
+in front of port 8080. For example, this Caddy configuration obtains and renews
+a certificate when your domain points to the server and ports 80 and 443 are
+reachable:
+
+```caddyfile
+editor.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Replace the example domain with yours. This configuration assumes Caddy runs on
+the host; a containerized proxy should reach the app through its Docker network.
+The Compose service is a development server; use the production image to deploy.
+
+### Static hosting
+
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+```
+
+Publish the entire `dist/` directory at the root of an HTTPS site. Serve `.wasm`
+files as `application/wasm` and JavaScript modules with a JavaScript MIME type.
+Keep worker files and all generated assets. Allow revalidation of `index.html`;
+hashed files under `assets/` can use long-lived immutable caching. Enable gzip or
+Brotli, especially for the FFmpeg WASM asset.
+
+The default build targets `/`. Hosting below a path requires configuring Vite's
+`base` and checking asset and worker URLs. The converter uses the single-threaded
+FFmpeg core, so it does not require COOP/COEP headers.
+
+Keep deployments on a stable origin. Changing the scheme, domain, or port gives
+the browser a separate project library; download backups before moving a site.
+
+## License
+
+Original project code is licensed under the GNU Affero General Public License,
+version 3 or any later version. See [LICENSE](LICENSE) for the full terms.
+
+Dependencies and fonts retain their own licenses. In particular, the FFmpeg core
+is GPL-2.0-or-later, Mediabunny is MPL-2.0, the AAC encoder includes LGPL FFmpeg
+code, and the bundled fonts use the SIL Open Font License. Preserve their license
+notices and satisfy their source-distribution requirements when distributing a
+build. The project license does not replace those licenses.
+
+## Export harness
+
+While the dev server is running, open `/dev/export.html` to export a synthetic
+H.264 + AAC clip, check codec support, and download the result. This page is
+excluded from the production build.
 
 ## Project storage
 
@@ -65,12 +153,14 @@ Reconnect checks the source size and a sampled content signature covering the
 beginning, middle, and end. This detects accidental substitutions without reading
 an entire multi-gigabyte file. It is not a full-file integrity checksum. Legacy
 media without signatures is checked against its name, size, duration, and stream
-metadata instead. A changed linked file needs reconnecting. Relinking a shared
+metadata instead. A changed linked file needs reconnecting. **Relink original**
+(right-click a media item) points an available source at another copy. Relinking a shared
 source affects project duplicates that use that source.
 
 Only generated thumbnails and waveforms enter the new disposable cache. Writes
 and eviction share one IndexedDB transaction and cap it at 128 MiB across tabs.
-**Settings → Clear preview cache** removes them; **Rebuild previews** regenerates a source's previews.
+**Settings → Clear preview cache** removes them; right-click a media item and
+choose **Rebuild previews** to regenerate its previews.
 Old OPFS/IndexedDB source copies remain readable. Reconnecting an original or
 deleting its last saved reference removes that old copy, never the external
 original. Copies retained from older versions are outside the preview budget.
