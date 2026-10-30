@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, settle, trimClipEdge, videoTracks } from './model';
+import { newId, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, settle, trimClipEdge, videoTracks } from './model';
 import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
@@ -201,6 +201,15 @@ export function useProject() {
       },
       /** Moves a clip's start or end edge to sequence time `time`; the other edge stays put. */
       trimEdge: (id: string, edge: 'in' | 'out', time: number) => edit((p) => trimClipEdge(p, id, edge, time)),
+      /** Deletes a track and its clips, clearing any selection that pointed into it. */
+      removeTrack: (id: string) => {
+        const p = projectRef.current;
+        if (!p) return;
+        const next = removeTrack(p, id);
+        if (next === p) return;
+        setProject(next);
+        setUi((u) => reconcileUi(next, u));
+      },
       toggleTrack: (id: string) => edit((p) => {
         const t = p.tracks.find((x) => x.id === id);
         if (!t) return p;

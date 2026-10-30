@@ -56,6 +56,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .gb:hover { background: var(--hover); color: var(--text); }
 .primary { height: 44px; padding: 0 20px; border: 0; border-radius: 9px; background: var(--accent); color: var(--bg); font-weight: 700; display: flex; align-items: center; gap: 8px; text-decoration: none; }
 .primary:hover { color: var(--bg); filter: brightness(1.05); }
+.primary.danger { background: var(--danger); }
 .primary:disabled { opacity: 0.4; cursor: default; filter: none; }
 .link-btn { background: none; border: 0; padding: 0; color: var(--text-dim); text-decoration: underline; text-underline-offset: 3px; }
 

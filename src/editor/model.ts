@@ -370,6 +370,20 @@ export function deleteClips(p: Project, ids: string[]): Project {
   return mapClips(p, (clips) => clips.filter((c) => !gone.has(c.id)));
 }
 
+/** Whether `id` may be removed: every kind keeps at least one track. */
+export function canRemoveTrack(p: Project, id: string): boolean {
+  const t = p.tracks.find((x) => x.id === id);
+  return !!t && p.tracks.some((x) => x.kind === t.kind && x.id !== id);
+}
+
+/** Removes a track with its clips, and their linked partners, unless it is the last of its kind. */
+export function removeTrack(p: Project, id: string): Project {
+  const t = p.tracks.find((x) => x.id === id);
+  if (!t || !canRemoveTrack(p, id)) return p;
+  const next = deleteClips(p, t.clips.map((c) => c.id));
+  return { ...next, tracks: next.tracks.filter((x) => x.id !== id) };
+}
+
 /** Keep track order deterministic without changing user-authored positions. */
 export function settle(p: Project): Project {
   return mapClips(p, (clips) => [...clips].sort((a, b) => a.start - b.start));
