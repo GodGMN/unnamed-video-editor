@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { DragEvent } from 'react';
 import { codecFamily, fmtShortDuration, videoTracks } from '../editor/model';
 import type { Media, Project } from '../editor/model';
 import { Convert, Plus, Trash, Warning } from './icons';
@@ -50,6 +51,9 @@ function clipCount(project: Project, mediaId: string): number {
   return project.tracks.reduce((n, t) => n + (t.kind === 'text' ? 0 : t.clips.filter((c) => c.mediaId === mediaId).length), 0);
 }
 
+/** Whether a drag carries files from outside the page (not a media item or transition). */
+const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
+
 export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, previewing }: Props) {
   const [menu, setMenu] = useState<MediaMenu | null>(null);
   useEffect(() => {
@@ -66,6 +70,8 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
     };
   }, [menu]);
   const [dragOver, setDragOver] = useState(false);
+  // dragenter/dragleave fire for every child crossed, so count them.
+  const dragDepth = useRef(0);
   const media = Object.values(project.media);
   const input = useRef<HTMLInputElement>(null);
   const queue = useRef(Promise.resolve());
@@ -82,7 +88,12 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
   };
 
   return (
-    <aside className="panel media">
+    <aside className="panel media"
+      onDragEnter={(e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDragOver(true); }}
+      onDragOver={(e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+      onDragLeave={(e) => { if (hasFiles(e) && --dragDepth.current === 0) setDragOver(false); }}
+      onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragOver(false); ingest(e.dataTransfer.files); }}>
+      {dragOver && <div className="media-drop">Drop to import</div>}
       <div className="media-head">
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span className="panel-title">Media</span>
@@ -94,15 +105,10 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
           Import
         </button>
       </div>
-      <div
-        className={'dropzone' + (dragOver ? ' over' : '')}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); ingest(e.dataTransfer.files); }}
-      >
-        {pending ? `Importing ${pending} file${pending === 1 ? '' : 's'}…` : 'Drop video or audio files here'}
+      <div role="status" aria-live="polite">
+        {pending > 0 && <p className="media-meta media-status">Importing {pending} file{pending === 1 ? '' : 's'}…</p>}
+        {errors.map((error, i) => <p key={i} className="media-meta error media-status">{error}</p>)}
       </div>
-      <div role="status" aria-live="polite">{errors.map((error, i) => <p key={i} className="media-meta error">{error}</p>)}</div>
       <div className="media-list">
         {media.map((m) => (
           <div key={m.id} className={'media-item' + (m.decodable ? ' playable' : '') + (previewing === m.id ? ' active' : '')} draggable={m.decodable}

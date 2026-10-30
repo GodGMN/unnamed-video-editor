@@ -132,10 +132,10 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .pill { border: 1px solid var(--control); border-radius: 999px; padding: 3px 9px; }
 
 /* Media */
-.media { flex: 1 1 248px; max-width: 280px; }
+.media { position: relative; flex: 1 1 248px; max-width: 280px; }
 .media-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 10px 14px; }
-.dropzone { margin: 0 12px 10px; border: 1px dashed #3a423c; border-radius: 10px; padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px; }
-.dropzone.over { border-color: var(--accent); color: var(--text); }
+.media-drop { position: absolute; inset: 6px; z-index: 5; pointer-events: none; border: 1px dashed var(--accent); border-radius: 10px; background: rgba(198, 240, 191, 0.08); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 12px; font-weight: 500; }
+.media-status { padding: 0 14px 8px; }
 .media-list { display: flex; flex-direction: column; gap: 2px; padding: 0 6px 8px; overflow-y: auto; min-height: 0; }
 .media-item { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 9px; }
 .media-item.playable { cursor: pointer; }
