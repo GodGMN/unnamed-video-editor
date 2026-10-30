@@ -36,6 +36,7 @@ export function validateProject(value: unknown): asserts value is Project {
     for (const k of ['duration', 'size', 'bitrate', 'seed']) number(m[k]);
     positive(m.duration); if (!Number.isSafeInteger(m.size) || Number(m.size) < 0) throw new Error(translate('documentInvalidMediaSize'));
     bool(m.decodable);
+    if (m.still !== undefined) bool(m.still);
     if (m.fingerprint !== undefined) text(m.fingerprint);
     if (m.lastModified !== undefined) number(m.lastModified);
     for (const kind of ['video', 'audio']) {
@@ -64,6 +65,12 @@ export function validateProject(value: unknown): asserts value is Project {
         text(c.mediaId); if (!Object.hasOwn(media, c.mediaId)) throw new Error(translate('documentMissingMedia'));
         number(c.inS); number(c.outS);
         if (Number(c.inS) < 0 || Number(c.outS) <= Number(c.inS)) throw new Error(translate('documentInvalidRange'));
+        const source = object(media[c.mediaId]);
+        // Still images and their animations extend indefinitely on video tracks.
+        // Allow one microsecond of rounding at the end of finite sources.
+        if (!(t.kind === 'video' && source.still === true) && Number(c.outS) - Number(source.duration) > 1e-6) {
+          throw new Error(translate('documentInvalidRange'));
+        }
         if (c.linkId !== null) text(c.linkId); bool(c.linked);
         fields(c, t.kind === 'video' ? VIDEO_CLIP_DEFAULTS : AUDIO_CLIP_DEFAULTS);
         if (t.kind === 'video') {
