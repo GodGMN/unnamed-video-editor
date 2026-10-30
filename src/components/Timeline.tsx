@@ -375,7 +375,7 @@ export function Timeline({ editor }: { editor: Editor }) {
             return (
               <div key={t.id} className="track-head" style={{ height: TRACK_H[t.kind] }} onContextMenu={onTrackMenu(t.id)}>
                 <span className="track-head-label"><span>{t.name}</span><span>{t.label}</span></span>
-                <button className="ib" style={{ width: 28, height: 28, color: off ? 'var(--warn)' : 'var(--text-muted)' }}
+                <button className="ib" style={{ width: 28, ['--h' as string]: '28px', color: off ? 'var(--warn)' : 'var(--text-muted)' }}
                   aria-label={translate('track', { value1: t.kind === 'audio' ? (off ? translate('uiUnmute') : translate('uiMute')) : (off ? translate('uiShow') : translate('uiHide')), value2: t.name })}
                   aria-pressed={off} onClick={() => toggleTrack(t.id)}>
                   {t.kind === 'audio' ? <Volume size={14} /> : <Eye size={14} />}
@@ -408,7 +408,7 @@ export function Timeline({ editor }: { editor: Editor }) {
                 onDoubleClickCapture={splitting ? (e) => e.stopPropagation() : undefined}
                 onPointerMove={splitting ? (e) => onSplitMove(e, t) : undefined}
                 onPointerLeave={splitting ? () => setCut(null) : undefined}
-                data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: isOff(t) ? 0.35 : 1 }}>
+                data-track-id={t.id} style={{ height: TRACK_H[t.kind], ['--track-h' as string]: `${TRACK_H[t.kind]}px`, opacity: isOff(t) ? 0.35 : 1 }}>
                 {t.kind === 'text' && (
                   <>
                     {t.clips.map((c) => <TextClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} onMenu={onContextMenu('text', c.id)} />)}

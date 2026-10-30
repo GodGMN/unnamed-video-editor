@@ -301,8 +301,8 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: MediaClip; src:
         <span className="trim-time">{fmtTime(cs.inS)}</span>
         <div className="trim-bar" style={{ background: src.tone }}>
           <PreviewStrip media={src} width={560} />
-          <div className="trim-shade" style={{ left: 0, width: p(cs.inS), borderRadius: '8px 0 0 8px' }} aria-hidden="true" />
-          <div className="trim-shade" style={{ left: p(cs.outS), right: 0, borderRadius: '0 8px 8px 0' }} aria-hidden="true" />
+          <div className="trim-shade in" style={{ left: 0, width: p(cs.inS) }} aria-hidden="true" />
+          <div className="trim-shade out" style={{ left: p(cs.outS), right: 0 }} aria-hidden="true" />
           <div style={{ position: 'absolute', top: 0, bottom: 0, left: p(cs.inS), width: usePct, borderTop: `2px solid ${accent}`, borderBottom: `2px solid ${accent}`, pointerEvents: 'none' }} aria-hidden="true" />
           <input
             type="range" min={cs.inS} max={cs.outS} step={0.01} value={scrub}
@@ -313,14 +313,14 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: MediaClip; src:
             style={{ position: 'absolute', top: 0, height: '100%', left: p(cs.inS), width: usePct, opacity: 0, cursor: 'pointer', zIndex: 2 }}
           />
           {!outside && <div className="scrub-line" style={{ left: p(scrub) }} aria-hidden="true" />}
-          <button className="trim-handle" aria-label={translate('trimInPointDragToAdjust')} title={translate('dragToSetTheInPoint')}
+          <button className="trim-handle in" aria-label={translate('trimInPointDragToAdjust')} title={translate('dragToSetTheInPoint')}
             onPointerDown={dragHandle('in')}
-            style={{ left: p(cs.inS), marginLeft: -14, borderRadius: '6px 0 0 6px' }}>
+            style={{ left: p(cs.inS), marginLeft: -14 }}>
             <span className="grip" />
           </button>
-          <button className="trim-handle" aria-label={translate('trimOutPointDragToAdjust')} title={translate('dragToSetTheOutPoint')}
+          <button className="trim-handle out" aria-label={translate('trimOutPointDragToAdjust')} title={translate('dragToSetTheOutPoint')}
             onPointerDown={dragHandle('out')}
-            style={{ left: p(cs.outS), borderRadius: '0 6px 6px 0' }}>
+            style={{ left: p(cs.outS) }}>
             <span className="grip" />
           </button>
         </div>
