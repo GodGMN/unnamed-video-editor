@@ -183,7 +183,8 @@ function partnerSelected({ project, ui }: Editor, clip: VideoClip | AudioClip, k
 }
 
 function VideoClipView({ editor, pps, clip: cs, onMenu }: ClipProps<VideoClip>) {
-  const { project, ui, layout, select } = editor;
+  const { project, ui, layout, select, trimClip } = editor;
+  const startDrag = useDrag();
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const l = layout.clips[id];
@@ -191,6 +192,18 @@ function VideoClipView({ editor, pps, clip: cs, onMenu }: ClipProps<VideoClip>) 
   const dur = cs.outS - cs.inS;
   const selected = ui.sel?.kind === 'clip' && ui.sel.id === id;
   const partner = partnerSelected(editor, cs, 'audio');
+
+  // Edge handles trim the clip's source in/out points, clamped to the media like the trim scrubber.
+  const edgeDown = (which: 'in' | 'out') => (e: PointerEvent<HTMLSpanElement>) => {
+    if (e.button !== 0) return;
+    const { inS, outS } = cs;
+    const minDuration = Math.min(0.5, src.duration);
+    const round = (x: number) => Math.round(x * 100) / 100;
+    startDrag(e, (dx) => {
+      if (which === 'in') trimClip(id, { inS: round(Math.max(0, Math.min(outS - minDuration, inS + dx / pps))) });
+      else trimClip(id, { outS: round(Math.min(src.duration, Math.max(inS + minDuration, outS + dx / pps))) });
+    });
+  };
 
   return (
     <button className={'clip' + (partner ? ' partner' : '')}
@@ -209,8 +222,8 @@ function VideoClipView({ editor, pps, clip: cs, onMenu }: ClipProps<VideoClip>) 
       </span>
       {selected && (
         <>
-          <span className="clip-edge" style={{ left: 0 }}><span /></span>
-          <span className="clip-edge" style={{ right: 0 }}><span /></span>
+          <span className="clip-edge" style={{ left: 0 }} title="Drag to trim the start" onPointerDown={edgeDown('in')}><span /></span>
+          <span className="clip-edge" style={{ right: 0 }} title="Drag to trim the end" onPointerDown={edgeDown('out')}><span /></span>
         </>
       )}
     </button>
