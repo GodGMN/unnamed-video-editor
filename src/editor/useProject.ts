@@ -13,6 +13,7 @@ const initialUi: EditorUi = {
   picked: [{ kind: 'clip', id: SEED_SELECTION }],
   focusClip: SEED_SELECTION,
   lockClip: null,
+  source: null,
   tool: 'select',
   menu: null,
   scrub: 7.6,
@@ -29,7 +30,8 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   const picked = ui.picked.filter((x) => findClip(p, x.id));
   if (!picked.length && sel && (sel.kind === 'clip' || sel.kind === 'audio')) picked.push(sel);
   const lockClip = findClip(p, ui.lockClip) ? ui.lockClip : null;
-  return { ...ui, sel, picked, focusClip, lockClip, menu: null };
+  const source = ui.source && p.media[ui.source] ? ui.source : null;
+  return { ...ui, sel, picked, focusClip, lockClip, source, menu: null };
 }
 
 /** Loads the saved project (or the seed) and saves it back after every change. */
@@ -114,14 +116,15 @@ export function useProject() {
       placeMedia: (mediaId: string, trackId: string, time: number) => {
         const id = newId();
         edit((p) => placeMedia(p, mediaId, trackId, time, id));
-        setUi((u) => ({ ...u, focusClip: id, sel: { kind: 'clip', id }, picked: [{ kind: 'clip', id }] }));
+        setUi((u) => ({ ...u, source: null, focusClip: id, sel: { kind: 'clip', id }, picked: [{ kind: 'clip', id }] }));
       },
       select: (sel: Selection) => setUi((u) => {
         const clip = sel.kind === 'clip' || sel.kind === 'audio';
-        return { ...u, sel, menu: null, picked: clip ? [sel] : [], focusClip: clip ? sel.id : u.focusClip };
+        return { ...u, sel, menu: null, source: null, picked: clip ? [sel] : [], focusClip: clip ? sel.id : u.focusClip };
       }),
       /** Ctrl-click: adds a clip to the selection, or removes it if it's already there. */
       togglePick: (clip: ClipSelection) => setUi((u) => {
+        u = { ...u, source: null };
         if (!u.picked.some((x) => x.id === clip.id)) return { ...u, sel: clip, picked: [...u.picked, clip], menu: null, focusClip: clip.id };
         const picked = u.picked.filter((x) => x.id !== clip.id);
         if (u.sel?.id !== clip.id) return { ...u, picked, menu: null };
@@ -133,12 +136,16 @@ export function useProject() {
       setScrub: (scrub: number) => setUi((u) => ({ ...u, scrub })),
       setPlayhead: (playhead: number) => setUi((u) => ({ ...u, playhead: rangeRef.current ? clamp(playhead, rangeRef.current) : playhead })),
       /** Double-click: locks the playhead to a clip's range. */
-      lockTo: (id: string) => setUi((u) => ({ ...u, lockClip: id, menu: null })),
+      lockTo: (id: string) => setUi((u) => ({ ...u, lockClip: id, source: null, menu: null })),
+      /** Plays a Media item in the preview on its own, without touching the timeline. */
+      previewSource: (mediaId: string) => setUi((u) => ({ ...u, source: mediaId })),
+      /** Puts the timeline back in the preview. */
+      closeSource: () => setUi((u) => (u.source ? { ...u, source: null } : u)),
       /** Releases the locked clip so the playhead can roam the whole sequence again. */
       unlock: () => setUi((u) => ({ ...u, lockClip: null, menu: null })),
       /** Right-clicking a clip outside the selection selects just that clip. */
       openMenu: (menu: MenuState) => setUi((u) => ({
-        ...u, menu, sel: { kind: menu.kind, id: menu.id }, focusClip: menu.id,
+        ...u, menu, source: null, sel: { kind: menu.kind, id: menu.id }, focusClip: menu.id,
         picked: u.picked.some((x) => x.id === menu.id) ? u.picked : [{ kind: menu.kind, id: menu.id }],
       })),
       closeMenu: () => setUi((u) => (u.menu ? { ...u, menu: null } : u)),

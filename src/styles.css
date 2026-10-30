@@ -138,6 +138,9 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .dropzone.over { border-color: var(--accent); color: var(--text); }
 .media-list { display: flex; flex-direction: column; gap: 2px; padding: 0 6px 8px; overflow-y: auto; min-height: 0; }
 .media-item { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 9px; }
+.media-item.playable { cursor: pointer; }
+.media-item.playable:hover { background: rgba(255, 255, 255, 0.04); }
+.media-item.active, .media-item.active:hover { background: rgba(198, 240, 191, 0.08); box-shadow: inset 0 0 0 1px rgba(198, 240, 191, 0.35); }
 .media-thumb { position: relative; width: 72px; height: 42px; border-radius: 6px; flex: none; overflow: hidden; }
 .media-thumb .warn { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .media-dur { position: absolute; right: 4px; bottom: 3px; font: 500 10px var(--mono); background: rgba(0, 0, 0, 0.6); color: var(--text); padding: 1px 4px; border-radius: 4px; }
@@ -162,6 +165,10 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .stage-fit { width: 100%; height: 100%; container-type: size; display: flex; align-items: center; justify-content: center; }
 .stage { position: relative; width: min(100cqw, 100cqh * 16 / 9, 760px); aspect-ratio: 16 / 9; background: #000; border-radius: 6px; overflow: hidden; }
 .layer { position: absolute; inset: 0; }
+.source-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.source-video[hidden] { display: none; }
+.source-pill { color: var(--text); border-color: rgba(198, 240, 191, 0.45); max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.back-btn { height: 26px; padding: 0 10px; font-size: 12px; font-weight: 500; gap: 6px; }
 .frame-label { position: absolute; left: 12px; top: 10px; font: 500 11px var(--mono); color: var(--text); background: rgba(0, 0, 0, 0.55); padding: 3px 7px; border-radius: 5px; }
 .overlay-box { position: absolute; inset: 0; display: flex; padding: 5%; }
 .overlay-text { font-weight: 600; letter-spacing: -0.01em; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45); padding: 4px 10px; border-radius: 4px; text-align: center; white-space: pre-line; }
