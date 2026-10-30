@@ -1,4 +1,5 @@
 import { usePlayback } from '../playback/usePlayback';
+import { useSourcePlayer } from '../playback/useSourcePlayer';
 import { PreviewStrip } from '../media/PreviewStrip';
 import { useState } from 'react';
 import type { PointerEvent } from 'react';
@@ -6,7 +7,7 @@ import { findClip, fmtTime } from '../editor/model';
 import type { Clip, Media } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { ChevronLeft, ChevronRight, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
+import { ChevronLeft, ChevronRight, Close, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
 import { Slider } from './Slider';
 
 interface Props {
@@ -20,47 +21,69 @@ export function PreviewPanel({ editor, totalTime }: Props) {
   const [muted, setMuted] = useState(false);
   const silent = muted || volume === 0;
   const playback = usePlayback(editor, silent ? 0 : volume / 100);
+  const source = ui.source ? project.media[ui.source] ?? null : null;
+  const sourcePlayer = useSourcePlayer(source, silent ? 0 : volume / 100);
   const { height: oh } = project.output;
 
   const focus = findClip(project, ui.focusClip);
   const focusMedia = focus && project.media[focus.clip.mediaId];
 
+  // The transport drives whichever is showing: a Media item on its own, or the timeline.
+  const frame = 1 / (source ? source.video?.fps ?? 30 : project.output.fps);
+  const transport = source
+    ? { time: sourcePlayer.time, total: fmtTime(source.duration), playing: sourcePlayer.playing, toggle: sourcePlayer.toggle,
+        seek: sourcePlayer.seek, start: 0, end: source.duration, status: sourcePlayer.status }
+    : { time: ui.playhead, total: totalTime, playing: playback.playing, toggle: playback.toggle,
+        seek: playback.seek, start: editor.range.start, end: editor.range.end, status: playback.status };
+
   return (
     <section className="panel preview">
       <div className="preview-head">
         <span className="panel-title">Preview</span>
-        <div className="preview-pills">
-          <span className="pill">Preview at 540p</span>
-          <span className="pill">{`Export ${oh}p · ${project.output.fps} fps`}</span>
-        </div>
+        {source ? (
+          <div className="preview-pills">
+            <span className="pill source-pill">Source · {source.name}</span>
+            <button className="ib outlined back-btn" onClick={editor.closeSource} title="Show the timeline in the preview again">
+              <Close size={12} strokeWidth={2.2} />
+              Back to timeline
+            </button>
+          </div>
+        ) : (
+          <div className="preview-pills">
+            <span className="pill">Preview at 540p</span>
+            <span className="pill">{`Export ${oh}p · ${project.output.fps} fps`}</span>
+          </div>
+        )}
       </div>
 
       <div className="stage-wrap">
         <div className="stage-fit">
           <div className="stage" style={{ aspectRatio: `${project.output.width} / ${oh}` }}>
             <canvas ref={playback.canvas} width={960} height={Math.round(960 * oh / project.output.width)} aria-label="Timeline preview" style={{ width: '100%', height: '100%', display: 'block' }} />
-            {playback.status && (
+            <video ref={sourcePlayer.video} className="source-video" hidden={!source} playsInline preload="auto" aria-label={source ? `Source preview: ${source.name}` : undefined} />
+            {transport.status && (
               <div role="alert" className="stage-alert">
                 <Warning size={18} strokeWidth={2.2} />
-                <span>{playback.status}</span>
+                <span>{transport.status}</span>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {focus && focusMedia ? <Trim editor={editor} clip={focus.clip} src={focusMedia} /> : <div className="trim" />}
+      {source ? <SourceScrub src={source} time={sourcePlayer.time} seek={sourcePlayer.seek} />
+        : focus && focusMedia ? <Trim editor={editor} clip={focus.clip} src={focusMedia} /> : <div className="trim" />}
 
       <div className="transport-bar">
         <span className="mono" style={{ fontSize: 13, fontWeight: 500, minWidth: 160 }}>
-          {fmtTime(ui.playhead)}<span style={{ color: 'var(--text-muted)' }}> / {totalTime}</span>
+          {fmtTime(transport.time)}<span style={{ color: 'var(--text-muted)' }}> / {transport.total}</span>
         </span>
         <div style={{ flex: '1 1 auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
-          <button className="ib transport" onClick={() => playback.seek(editor.range.start)} aria-label="Go to start"><SkipStart fill="#C8CEC9" /></button>
-          <button className="ib transport" onClick={() => playback.seek(ui.playhead - 1 / project.output.fps)} aria-label="Back one frame"><ChevronLeft stroke="#C8CEC9" strokeWidth={2.2} /></button>
-          <button className="play-btn" onClick={() => void playback.toggle()} aria-label={playback.playing ? 'Pause (Space)' : 'Play (Space)'} title="Play / pause · Space">{playback.playing ? <Pause fill="var(--bg)" /> : <Play fill="var(--bg)" />}</button>
-          <button className="ib transport" onClick={() => playback.seek(ui.playhead + 1 / project.output.fps)} aria-label="Forward one frame"><ChevronRight stroke="#C8CEC9" strokeWidth={2.2} /></button>
-          <button className="ib transport" onClick={() => playback.seek(editor.range.end)} aria-label="Go to end"><SkipEnd fill="#C8CEC9" /></button>
+          <button className="ib transport" onClick={() => transport.seek(transport.start)} aria-label="Go to start"><SkipStart fill="#C8CEC9" /></button>
+          <button className="ib transport" onClick={() => transport.seek(transport.time - frame)} aria-label="Back one frame"><ChevronLeft stroke="#C8CEC9" strokeWidth={2.2} /></button>
+          <button className="play-btn" onClick={() => void transport.toggle()} aria-label={transport.playing ? 'Pause (Space)' : 'Play (Space)'} title="Play / pause · Space">{transport.playing ? <Pause fill="var(--bg)" /> : <Play fill="var(--bg)" />}</button>
+          <button className="ib transport" onClick={() => transport.seek(transport.time + frame)} aria-label="Forward one frame"><ChevronRight stroke="#C8CEC9" strokeWidth={2.2} /></button>
+          <button className="ib transport" onClick={() => transport.seek(transport.end)} aria-label="Go to end"><SkipEnd fill="#C8CEC9" /></button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, justifyContent: 'flex-end' }}>
           <button className="ib transport" aria-label={silent ? 'Unmute preview' : 'Mute preview'} aria-pressed={silent}
@@ -74,6 +97,36 @@ export function PreviewPanel({ editor, totalTime }: Props) {
         </div>
       </div>
     </section>
+  );
+}
+
+/** Scrubber across a whole source previewing on its own. */
+function SourceScrub({ src, time, seek }: { src: Media; time: number; seek: (time: number) => void }) {
+  const p = (s: number) => (s / src.duration * 100).toFixed(2) + '%';
+  return (
+    <div className="trim">
+      <div className="trim-head">
+        <span style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0 }}>
+          <span style={{ fontWeight: 700 }}>Source</span>
+          <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{src.name}</span>
+        </span>
+        <span className="mono" style={{ fontWeight: 500, color: 'var(--text-dim)', flex: 'none' }}>{fmtTime(src.duration)}</span>
+      </div>
+      <div className="trim-row">
+        <span className="trim-time">{fmtTime(0)}</span>
+        <div className="trim-bar" style={{ background: src.tone }}>
+          <PreviewStrip media={src} width={560} />
+          <input type="range" min={0} max={src.duration} step={0.01} value={Math.min(time, src.duration)}
+            onChange={(e) => seek(Number(e.target.value))} aria-label="Playhead within the source"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', margin: 0, opacity: 0, cursor: 'pointer', zIndex: 2 }} />
+          <div className="scrub-line" style={{ left: p(Math.min(time, src.duration)) }} aria-hidden="true" />
+        </div>
+        <span className="trim-time" style={{ textAlign: 'right' }}>{fmtTime(src.duration)}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
+        Previewing the source on its own · the timeline is unchanged
+      </div>
+    </div>
   );
 }
 
