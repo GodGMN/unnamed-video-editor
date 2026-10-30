@@ -571,7 +571,8 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .storage-dialog meter::-webkit-meter-optimum-value { background: var(--accent); }
 .storage-dialog > .gb { align-self: flex-start; height: 36px; font-size: 12px; padding: 0 13px; }
 .storage-dialog .storage-note { padding-top: 12px; border-top: 1px solid var(--line); }
-.project-home-link { font-size: 12px; color: var(--text-muted); }
+.project-home-link { --h: 32px; padding: 0 12px 0 10px; gap: 7px; font-size: 13px; font-weight: 500; color: var(--text-muted); }
+.project-home-link:hover { color: var(--text); }
 @media (max-width: 1350px) { .project-home { grid-template-columns: 210px minmax(0, 1fr); } .home-main { padding: 36px 40px 24px; } .home-sidebar { padding-left: 12px; padding-right: 12px; } .home-sidebar .brand-name { font-size: 12px; } .resume-details { padding: 24px 32px; } }
 @media (max-height: 790px) { .home-main { padding-top: 28px; padding-bottom: 20px; } .home-content { gap: 22px; } .home-resume { height: 220px; } .home-heading h1 { margin: 0; font-size: 28px; } }
 
