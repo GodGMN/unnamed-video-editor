@@ -181,6 +181,15 @@ export interface EditorUi {
 export const PPS = 30; // timeline pixels per second
 export const DEFAULT_TRANSITION: Transition = { type: 'cut', duration: 0.5 };
 
+type ClipDefaults<C> = Omit<C, 'id' | 'mediaId' | 'start' | 'inS' | 'outS' | 'linkId'>;
+/** Property values of a fresh clip; also what the properties panel's reset buttons restore. */
+export const VIDEO_CLIP_DEFAULTS: ClipDefaults<VideoClip> = {
+  linked: true, x: 0, y: 0, scale: 100, rot: 0, fit: 'fit', cropT: 0, cropR: 0, cropB: 0, cropL: 0, transitionOut: null,
+};
+export const AUDIO_CLIP_DEFAULTS: ClipDefaults<AudioClip> = {
+  linked: true, vol: 100, muted: false, fadeIn: 0, fadeOut: 0, curveIn: 0, curveOut: 0,
+};
+
 export const TRANSITION_NAMES: Record<TransitionType, string> = { cut: 'Cut', fade: 'Fade', crossfade: 'Crossfade' };
 export const TRANSITION_HELP: Record<TransitionType, string> = {
   cut: 'Instant switch to the next clip. Default for new clips.',

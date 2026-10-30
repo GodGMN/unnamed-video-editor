@@ -1,4 +1,4 @@
-import { settle } from './model';
+import { AUDIO_CLIP_DEFAULTS, VIDEO_CLIP_DEFAULTS, settle } from './model';
 import type { AudioClip, Media, Project, Transition, VideoClip } from './model';
 
 /*
@@ -39,13 +39,6 @@ const media: Media[] = [
   },
 ];
 
-const videoBase: Omit<VideoClip, 'id' | 'mediaId' | 'start' | 'inS' | 'outS' | 'linkId'> = {
-  linked: true, x: 0, y: 0, scale: 100, rot: 0, fit: 'fit', cropT: 0, cropR: 0, cropB: 0, cropL: 0, transitionOut: null,
-};
-const audioBase: Omit<AudioClip, 'id' | 'mediaId' | 'start' | 'inS' | 'outS' | 'linkId'> = {
-  linked: true, vol: 100, muted: false, fadeIn: 0, fadeOut: 0, curveIn: 0, curveOut: 0,
-};
-
 interface PairSpec {
   id: string;
   mediaId: string;
@@ -62,8 +55,8 @@ interface PairSpec {
 function pair(s: PairSpec): [VideoClip, AudioClip] {
   const common = { mediaId: s.mediaId, start: s.start ?? 0, inS: s.inS, outS: s.outS, linkId: s.id, linked: s.linked ?? true };
   return [
-    { ...videoBase, ...common, id: `${s.id}-v`, transitionOut: s.transitionOut ?? null, ...s.video },
-    { ...audioBase, ...common, id: `${s.id}-a`, ...s.audio },
+    { ...VIDEO_CLIP_DEFAULTS, ...common, id: `${s.id}-v`, transitionOut: s.transitionOut ?? null, ...s.video },
+    { ...AUDIO_CLIP_DEFAULTS, ...common, id: `${s.id}-a`, ...s.audio },
   ];
 }
 
