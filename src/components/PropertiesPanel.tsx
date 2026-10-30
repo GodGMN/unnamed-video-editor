@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useRef, useState } from 'react';
-import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, MISSING_MEDIA, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
+import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, dbToFader, faderToDb, fmtDb, MISSING_MEDIA, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
 import type { AudioClip, Fades, FitMode, TextAnchor, TextClip, TransitionType, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { Dropper, Mute, Waveform } from './icons';
@@ -183,7 +183,8 @@ function AudioClipProps({ editor, clip: cs }: { editor: Editor; clip: AudioClip 
             {cs.muted ? 'Muted' : 'Mute'}
           </button>
         </div>
-        <Slider label="Volume" value={cs.vol} unit="%" defaultValue={AUDIO_CLIP_DEFAULTS.vol} min={0} max={200} onChange={(v) => updateClip(id, { vol: v })} />
+        <Slider label="Volume" value={cs.gainDb} unit="dB" defaultValue={AUDIO_CLIP_DEFAULTS.gainDb} min={GAIN_MIN_DB} max={GAIN_MAX_DB}
+          taper={{ toPos: dbToFader, fromPos: faderToDb }} format={fmtDb} onChange={(v) => updateClip(id, { gainDb: Math.round(v * 10) / 10 })} />
       </div>
       <FadesSection clip={cs} what="audio" style={{ borderTop: 0, paddingTop: 14 }} />
     </div>
