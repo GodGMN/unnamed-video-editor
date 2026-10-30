@@ -25,6 +25,14 @@ need a reload. After changing `package.json` or the lockfile, rebuild:
 docker compose up --build
 ```
 
+## Export harness
+
+`src/export` turns rendered frames and an audio buffer into an H.264 + AAC MP4,
+entirely in the browser. While the dev server is running, open
+`/dev/export.html` (for example http://localhost:5200/dev/export.html) to
+export a synthetic A/V sync clip, check browser codec support and download the
+result. The page is dev-only: `vite build` does not include it.
+
 ## Production image
 
 The same Dockerfile builds a static bundle served by nginx:
