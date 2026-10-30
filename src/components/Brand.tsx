@@ -1,6 +1,6 @@
 import { LogoPlay } from './icons';
 
-export const APP_NAME = 'Unnamed Video Editor';
+export const APP_NAME = '[Unnamed Video Editor]';
 
 export function Brand({ large = false }: { large?: boolean }) {
   return (
