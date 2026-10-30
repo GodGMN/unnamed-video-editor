@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, MISSING_MEDIA, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextItem, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
 import type { AudioClip, FitMode, TextAnchor, TextItem, TransitionType, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { Dropper, Mute, Waveform } from './icons';
+import { ColorPopover } from './ColorPicker';
 import { NumberField } from './NumberField';
 import { Slider } from './Slider';
 
@@ -225,27 +226,11 @@ function TimeField({ value, onChange }: { value: number; onChange: (v: number) =
   );
 }
 
-/** A `#RRGGBB` text field that commits when the typed text is a valid hex color. */
-function HexField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const commit = () => {
-    const m = draft?.trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
-    if (m) onChange('#' + (m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1]).toUpperCase());
-    setDraft(null);
-  };
-  return (
-    <input className="fld mono" type="text" aria-label="Hex color" spellCheck={false} style={{ width: 112 }}
-      value={draft ?? value.toUpperCase()} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') commit();
-        if (e.key === 'Escape') setDraft(null);
-      }} />
-  );
-}
-
 function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
   const updateText = (patch: Partial<TextItem>) => editor.updateText(tx.id, patch);
   const custom = !SWATCHES.some(([, hex]) => hex === tx.color.toUpperCase());
+  const pickerAnchor = useRef<HTMLButtonElement>(null);
+  const [picking, setPicking] = useState(false);
   return (
     <div className="props-body" style={{ padding: 14, gap: 14 }}>
       <label className="field-label" style={{ gap: 6 }}>Text
@@ -261,12 +246,12 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
             <button key={name} className="swatch" style={{ background: hex }} aria-label={name}
               aria-pressed={tx.color.toUpperCase() === hex} onClick={() => updateText({ color: hex })} />
           ))}
-          <label className={'swatch custom' + (custom ? ' on' : '')} title="Custom color">
+          <button ref={pickerAnchor} className="swatch custom" aria-label="Custom color" title="Custom color"
+            aria-pressed={custom} aria-expanded={picking} onClick={() => setPicking((v) => !v)}>
             <Dropper size={14} stroke={custom ? tx.color : 'var(--text-soft)'} />
-            <input type="color" aria-label="Custom color" value={tx.color.toLowerCase()} onChange={(e) => updateText({ color: e.target.value.toUpperCase() })} />
-          </label>
+          </button>
         </div>
-        <HexField value={tx.color} onChange={(color) => updateText({ color })} />
+        {picking && <ColorPopover anchor={pickerAnchor} value={tx.color} onChange={(color) => updateText({ color })} onClose={() => setPicking(false)} />}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
