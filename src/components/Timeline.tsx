@@ -1,10 +1,11 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, findClip, partnersOf, pickedPair, clipDuration, clipEnd, snapClipStart } from '../editor/model';
+import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, curveName, findClip, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
 import type { AudioClip, ClipSelection, Project, TextItem, TransitionType, Tool, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
+import { MEDIA_MIME, mediaDrag } from '../media/drag';
 import { CutLine, Crossfade, Cursor, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
 
 const TEXT_TRACK_H = 44;
@@ -112,8 +113,10 @@ export function Timeline({ editor }: { editor: Editor }) {
   const [snapping, setSnapping] = useState(true);
   // The video clip whose transition a dragged transition would replace, for drop highlighting.
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  // Where a clip dragged in from the media panel would land.
+  const [ghost, setGhost] = useState<{ trackId: string; start: number; duration: number; name: string; insert: boolean } | null>(null);
   useEffect(() => {
-    const clear = () => setDropTarget(null);
+    const clear = () => { setDropTarget(null); setGhost(null); };
     window.addEventListener('dragend', clear);
     return () => window.removeEventListener('dragend', clear);
   }, []);
@@ -151,10 +154,27 @@ export function Timeline({ editor }: { editor: Editor }) {
       const target = transitionTarget(e, t);
       setDropTarget(target);
       if (target) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }
-    } else if (t.kind !== 'text' && e.dataTransfer.types.includes('application/x-editor-media')) {
+    } else if (e.dataTransfer.types.includes(MEDIA_MIME)) {
+      const media = mediaDrag.id ? project.media[mediaDrag.id] : undefined;
+      if (t.kind === 'text' || !acceptsMedia(t, media)) { setGhost(null); return; }
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
+      const insert = t.kind === 'video' && t.magnetic;
+      const start = mediaDropStart(t, mediaTime(e, t, media.duration));
+      if (ghost?.trackId !== t.id || ghost.start !== start || ghost.duration !== media.duration)
+        setGhost({ trackId: t.id, start, duration: media.duration, name: media.name, insert });
     }
+  };
+  // The pointer's time on the track; off magnetic tracks the clip snaps to nearby edges and the playhead.
+  const mediaTime = (e: DragEvent<HTMLDivElement>, t: Track, duration: number) => {
+    const time = Math.max(0, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps);
+    if (!snapping || (t.kind === 'video' && t.magnetic)) return time;
+    const targets = [0, ui.playhead];
+    for (const track of project.tracks) {
+      if (track.kind === 'text') for (const item of track.items) targets.push(item.start, item.start + item.duration);
+      else for (const clip of track.clips) targets.push(clip.start, clipEnd(clip));
+    }
+    return snapClipStart(time, duration, targets, pps);
   };
   const onTrackDrop = (e: DragEvent<HTMLDivElement>, t: Track) => {
     e.preventDefault();
@@ -167,8 +187,9 @@ export function Timeline({ editor }: { editor: Editor }) {
       select({ kind: 'trans', id: target });
       return;
     }
-    const id = e.dataTransfer.getData('application/x-editor-media');
-    if (id) editor.placeMedia(id, t.id, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps);
+    setGhost(null);
+    const media = project.media[e.dataTransfer.getData(MEDIA_MIME)];
+    if (t.kind !== 'text' && acceptsMedia(t, media)) editor.placeMedia(media.id, t.id, mediaTime(e, t, media.duration));
   };
 
   const onTextDown = (item: TextItem) => (e: PointerEvent<HTMLButtonElement>) => {
@@ -257,7 +278,7 @@ export function Timeline({ editor }: { editor: Editor }) {
               const insets = t.kind === 'text' ? null : overlapInsets(t.clips);
               return (
               <div key={t.id} className="track" onDragOver={(e) => onTrackDragOver(e, t)} onDrop={(e) => onTrackDrop(e, t)}
-                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null); }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { setDropTarget(null); setGhost(null); } }}
                 data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
                 {t.kind === 'text' && t.items.map((x) => (
                   <button key={x.id} className="text-clip" style={{ left: x.start * pps + 1, width: x.duration * pps - 2 }}
@@ -285,6 +306,12 @@ export function Timeline({ editor }: { editor: Editor }) {
                       <span key={o.from.id} className="overlap-band audio" style={{ left: o.start * pps + 1, width: (o.end - o.start) * pps - 2 }} aria-hidden="true" />
                     ))}
                   </>
+                )}
+                {ghost?.trackId === t.id && (
+                  <div className={'drop-ghost' + (ghost.insert ? ' insert' : '')} aria-hidden="true"
+                    style={{ left: ghost.start * pps, width: Math.max(2, ghost.duration * pps) }}>
+                    <span>{ghost.name}</span>
+                  </div>
                 )}
               </div>
               );
