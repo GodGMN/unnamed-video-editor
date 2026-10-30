@@ -7,9 +7,9 @@ import { seedProject } from '../editor/seed';
 import { clearProject, createProject, listProjects, loadProject, selectProject, updateProjectDetails } from '../editor/storage';
 import type { ProjectEntry } from '../editor/storage';
 import { removeMediaFiles } from '../media/files';
-import { useMediaPreview } from '../media/PreviewStrip';
 import { pickFiles } from '../media/links';
 import type { PickedFile } from '../media/links';
+import { renderPoster } from '../projects/poster';
 import { downloadProject, openProjectFile, packageProject, reconnectPackage } from '../projects/portable';
 import { ActionMenu } from './ActionMenu';
 import { Brand } from './Brand';
@@ -18,14 +18,17 @@ import { SettingsDialog } from './SettingsDialog';
 import { ChevronDown, ChevronRight, Clock, Film, LibraryGrid, Play, Plus, Search, Cog, Star } from './icons';
 
 type Filter = 'all' | 'recent' | 'favorites';
-function artworkId(project: Project) {
-  return project.tracks.flatMap(t => t.kind === 'video' ? t.clips.map(c => c.mediaId) : []).find(id => project.media[id]?.video) ?? Object.values(project.media).find(m => m.video)?.id ?? '';
-}
 function ProjectArtwork({ project, hero = false }: { project: Project; hero?: boolean }) {
-  const preview = useMediaPreview(artworkId(project));
-  const thumbnail = hero ? preview?.cover ?? preview?.thumbnails[0] : preview?.thumbnails[0];
+  const [poster, setPoster] = useState<string | null>();
+  const [revision, setRevision] = useState(0);
+  useEffect(() => { const refresh = () => setRevision(n => n + 1); window.addEventListener('media-preview-change', refresh); return () => window.removeEventListener('media-preview-change', refresh); }, []);
+  useEffect(() => {
+    let live = true;
+    renderPoster(project, hero ? 960 : 240).then(src => { if (live) setPoster(src); }, error => { console.warn(error); if (live) setPoster(null); });
+    return () => { live = false; };
+  }, [project, hero, revision]);
   return <div className={`project-artwork ${hero ? 'hero-artwork' : ''}`}>
-    {thumbnail ? <img src={thumbnail} alt="" /> : <div className="project-artwork-placeholder" aria-hidden="true"><span className="artwork-orbit" /><Film size={hero ? 56 : 24} strokeWidth={1} /><span className="artwork-lines"><i /><i /><i /><i /></span></div>}
+    {poster ? <><img className="artwork-backdrop" src={poster} alt="" /><img src={poster} alt="" /></> : poster === null && <div className="project-artwork-placeholder" aria-hidden="true"><span className="artwork-orbit" /><Film size={hero ? 56 : 24} strokeWidth={1} /><span className="artwork-lines"><i /><i /><i /><i /></span></div>}
   </div>;
 }
 function dateLabel(time: number) {
