@@ -10,6 +10,7 @@ import { ColorPopover, HexField } from './ColorPicker';
 import { NumberField } from './NumberField';
 import { Slider } from './Slider';
 import { Tabs } from './Tabs';
+import { useFieldDraft } from './useFieldDraft';
 
 const TITLES = () => ({ clip: translate('videoClip'), audio: translate('audioClip'), trans: translate('transition'), text: translate('textOverlay') } as const);
 
@@ -27,10 +28,10 @@ export function PropertiesPanel({ editor }: { editor: Editor }) {
   return (
     <aside className="panel props">
       <div className="props-head"><span className="panel-title">{sel ? TITLES()[sel.kind] : translate('properties')}</span></div>
-      {sel?.kind === 'clip' && video && <VideoClipProps editor={editor} clip={video} tab={videoTab} onTab={setVideoTab} />}
-      {audio && <AudioClipProps editor={editor} clip={audio} />}
-      {sel?.kind === 'trans' && video && <TransitionProps editor={editor} clip={video} />}
-      {text && <TextProps editor={editor} item={text} />}
+      {sel?.kind === 'clip' && video && <VideoClipProps key={video.id} editor={editor} clip={video} tab={videoTab} onTab={setVideoTab} />}
+      {audio && <AudioClipProps key={audio.id} editor={editor} clip={audio} />}
+      {sel?.kind === 'trans' && video && <TransitionProps key={video.id} editor={editor} clip={video} />}
+      {text && <TextProps key={text.id} editor={editor} item={text} />}
     </aside>
   );
 }
@@ -299,12 +300,10 @@ const H_NAMES = { get l() { return translate('leftAnchor'); }, get c() { return 
 /** A `mm:ss.xx` text field that commits when the typed text parses as a time. */
 function TimeField({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   useT();
-  const [draft, setDraft] = useState<string | null>(null);
-  const commit = () => {
-    const v = draft === null ? null : parseTime(draft);
-    if (v !== null) onChange(v);
-    setDraft(null);
-  };
+  const { draft, setDraft, commit } = useFieldDraft((text) => {
+    const v = parseTime(text);
+    if (v !== null && v !== value) onChange(v);
+  });
   return (
     <input className="fld" type='text' value={draft ?? fmtTime(value)}
       onChange={(e) => setDraft(e.target.value)} onBlur={commit}
