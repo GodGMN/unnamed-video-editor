@@ -4,7 +4,7 @@ import { VIDEO_CLIP_DEFAULTS, AUDIO_CLIP_DEFAULTS, moveClip } from '../src/edito
 
 const clip = (id, start, linkId = null) => ({ ...VIDEO_CLIP_DEFAULTS, id, start, mediaId: 'm', inS: 0, outS: 5, linkId, linked: !!linkId });
 const project = () => ({ name: 'Test', media: {}, output: { width: 1920, height: 1080, fps: 30 }, tracks: [
-  { kind: 'text', id: 't', name: 'T1', label: '', hidden: false, items: [] },
+  { kind: 'text', id: 't', name: 'T1', label: '', hidden: false, clips: [] },
   { kind: 'video', id: 'v2', name: 'V2', label: '', hidden: false, magnetic: false, clips: [clip('c', 20)] },
   { kind: 'video', id: 'v1', name: 'V1', label: '', hidden: false, magnetic: false, clips: [clip('a', 0, 'a'), clip('b', 5)] },
   { kind: 'audio', id: 'a1', name: 'A1', label: '', muted: false, clips: [{ ...AUDIO_CLIP_DEFAULTS, ...clip('a-audio', 0, 'a'), linked: true }] },
@@ -30,4 +30,16 @@ test('picked clips move tracks together, and the group stops at the edge track',
   const up = moveClip(project(), 'b', 6, ['a'], -1);
   assert.deepEqual(ids(up, 'v2'), ['a@1', 'b@6', 'c@20']);
   assert.deepEqual(ids(up, 'a1'), ['a-audio@1']);
+});
+
+test('a text clip moves to another text track and stays out of the video tracks', () => {
+  const text = (id, start) => ({ id, content: id, size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, start, duration: 3 });
+  const p = project();
+  p.tracks.unshift({ kind: 'text', id: 't0', name: 'T0', label: '', hidden: false, clips: [] });
+  p.tracks[1].clips.push(text('x', 4));
+  const q = moveClip(p, 'x', 6, ['b'], -1);
+  assert.deepEqual(ids(q, 't0'), ['x@6']);
+  assert.deepEqual(ids(q, 't'), []);
+  assert.deepEqual(ids(q, 'v1'), ['a@0', 'b@7']);
+  assert.deepEqual(ids(moveClip(p, 'x', 4, [], 5), 't'), ['x@4']);
 });

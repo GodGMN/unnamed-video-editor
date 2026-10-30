@@ -1,5 +1,5 @@
 import { clipEnd } from '../editor/model';
-import type { AudioClip, Clip, Project } from '../editor/model';
+import type { AudioClip, MediaClip, Project } from '../editor/model';
 import { readMediaFile } from '../media/files';
 import { audioGain, renderFrame } from './compositor';
 import { FrameCache } from './frameCache';
@@ -63,7 +63,7 @@ export class PlaybackEngine {
     this.latest = request;
     const { project, time, playing } = request;
     const active = new Set<string>();
-    const upcoming: { clip: Clip; audio: boolean }[] = [];
+    const upcoming: { clip: MediaClip; audio: boolean }[] = [];
     for (const track of project.tracks) {
       if (track.kind === 'text' || (track.kind === 'video' ? track.hidden : track.muted)) continue;
       for (const clip of track.clips) {
@@ -91,7 +91,7 @@ export class PlaybackEngine {
     this.draw();
   }
 
-  private prepare(clip: Clip, audio: boolean, time: number, playing: boolean) {
+  private prepare(clip: MediaClip, audio: boolean, time: number, playing: boolean) {
     let entry = this.entries.get(clip.id);
     if (entry && entry.mediaId !== clip.mediaId) { this.release(clip.id); entry = undefined; }
     if (!entry) {

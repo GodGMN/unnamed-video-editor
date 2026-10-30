@@ -23,6 +23,12 @@ export function NumberField({ value, onChange, step = 1, min = -Infinity, max = 
   const ticks = useRef<HTMLSpanElement>(null);
   // Typed text that isn't a number yet (e.g. a lone `-`), so the controlled input doesn't snap it back.
   const [draft, setDraft] = useState<string | null>(null);
+  // Drop the draft when the value changes from outside (a preset, a reset), so the field shows the new value.
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    if (draft !== null && Number(draft) !== value) setDraft(null);
+  }
   const decimals = (String(step).split('.')[1] ?? '').length;
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
   const commit = (v: number) => onChange(clamp(Number((Math.round(v / step) * step).toFixed(decimals))));
