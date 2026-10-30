@@ -40,18 +40,13 @@ export function PreviewPanel({ editor, totalTime }: Props) {
     <section className="panel preview">
       <div className="preview-head">
         <span className="panel-title">Preview</span>
-        {source ? (
+        {source && (
           <div className="preview-pills">
             <span className="pill source-pill">Source · {source.name}</span>
             <button className="ib outlined back-btn" onClick={editor.closeSource} title="Show the timeline in the preview again">
               <Close size={12} strokeWidth={2.2} />
               Back to timeline
             </button>
-          </div>
-        ) : (
-          <div className="preview-pills">
-            <span className="pill">Preview at 540p</span>
-            <span className="pill">{`Export ${oh}p · ${project.output.fps} fps`}</span>
           </div>
         )}
       </div>
