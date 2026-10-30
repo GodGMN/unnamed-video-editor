@@ -1,3 +1,4 @@
+import { t as translate } from './i18n/core';
 import { useEffect, useState } from 'react';
 import { fmtTime, videoTracks } from './editor/model';
 import type { Media, Project } from './editor/model';
@@ -81,7 +82,7 @@ function EditorApp({ id, initial, onHome }: { id: string; initial: Project; onHo
         void editor.flush().then(() => onHome(editor.project), e => setNavigationError(String(e)));
       }} onSettings={() => setSettings(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onShowConversion={(id, name) => setConverting({ id, name })} />
-      {navigationError && <div role="alert" className="editor-navigation-error">{navigationError}<button onClick={() => setNavigationError('')} aria-label="Dismiss error">×</button></div>}
+      {navigationError && <div role="alert" className="editor-navigation-error">{navigationError}<button onClick={() => setNavigationError('')} aria-label={translate('projectHomeDismissError')}>×</button></div>}
       {converted.error && <p role="alert" className="error">{converted.error}</p>}
       <div className="workspace">
         <MediaPanel onBusy={setPendingImports} onReconnect={() => setMediaRevision(n => n + 1)} onImport={editor.addMedia} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
@@ -123,9 +124,9 @@ export function App() {
     initialProject.then(p => { if (live) { setActive(p); setInitialized(true); } }, e => { initialProject = undefined; if (live) setError(String(e)); });
     return () => { live = false; };
   }, []);
-  if (error) return <div role="alert" className="startup-error">Could not open project storage: {error}<button className="gb" onClick={() => location.reload()}>Retry</button></div>;
+  if (error) return <div role="alert" className="startup-error">{translate('projectHomeCouldNotOpenProjectStorage')}{error}<button className="gb" onClick={() => location.reload()}>{translate('projectHomeRetry')}</button></div>;
   if (width < MIN_WIDTH) return <DesktopOnly width={width} />;
-  if (!initialized) return <p role="status">Opening projects…</p>;
+  if (!initialized) return <p role="status">{translate('projectHomeOpeningProjects')}</p>;
   return screen === 'home' || !active
     ? <ProjectLibrary lastOpenedId={active?.id ?? ''} onOpen={(id, project) => { setActive({ id, project }); setScreen('editor'); }} />
     : <EditorApp key={active.id} id={active.id} initial={active.project} onHome={project => { setActive({ id: active.id, project }); setScreen('home'); }} />;

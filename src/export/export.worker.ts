@@ -1,3 +1,4 @@
+import { t as translate, setLocale } from '../i18n/core';
 // Encodes frames and audio posted by `exportMp4` into an in-memory MP4 (H.264 + AAC).
 // Messages are handled strictly in order; see protocol.ts for the shapes.
 
@@ -26,7 +27,7 @@ import type {
 // The project compiles against the DOM lib, so describe just the worker scope we use.
 const scope = self as unknown as {
   postMessage(msg: FromWorker, transfer: Transferable[]): void;
-  onmessage: ((e: MessageEvent<ToWorker>) => void) | null;
+  onmessage: ((e: MessageEvent<ToWorker & { locale?: string }>) => void) | null;
 };
 
 class WorkerError extends Error {
@@ -51,6 +52,7 @@ const post = (msg: FromWorker, transfer: Transferable[] = []) => scope.postMessa
 
 scope.onmessage = (e) => {
   const msg = e.data;
+  if (msg.locale) setLocale(msg.locale);
   if (failed) {
     if (msg.type === 'frame') msg.frame.close();
     return;
@@ -95,11 +97,11 @@ async function resolveAac(sampleRate: number, numberOfChannels: number): Promise
 async function start(settings: EncodeSettings, audio: PlanarAudio | null) {
   const { width, height, fps } = settings;
   if (typeof VideoEncoder === 'undefined') {
-    throw new WorkerError('unsupported-video', 'This browser has no WebCodecs VideoEncoder.');
+    throw new WorkerError('unsupported-video', translate('thisBrowserHasNoWebCodecsVideoEncoder'));
   }
   const videoQuality = new Quality(settings.videoQuality);
   if (!await canEncodeVideo('avc', { width, height, frameRate: fps, quality: videoQuality })) {
-    throw new WorkerError('unsupported-video', `This browser can't encode H.264 at ${width}×${height}.`);
+    throw new WorkerError('unsupported-video', translate('thisBrowserCanTEncodeH264At', { value1: width, value2: height }));
   }
 
   let aac: AacEncoderKind | null = null;
@@ -107,7 +109,7 @@ async function start(settings: EncodeSettings, audio: PlanarAudio | null) {
     aac = await resolveAac(audio.sampleRate, audio.channels.length);
     if (!aac) {
       throw new WorkerError('unsupported-audio',
-        `This browser can't encode AAC at ${audio.sampleRate} Hz with ${audio.channels.length} channel(s).`);
+        translate('thisBrowserCanTEncodeAACAtHzWith', { value1: audio.sampleRate, value2: audio.channels.length }));
     }
   }
 
@@ -133,7 +135,7 @@ async function start(settings: EncodeSettings, audio: PlanarAudio | null) {
 }
 
 async function addFrame(index: number, frame: VideoFrame) {
-  if (!job) throw new Error('Frame received before start.');
+  if (!job) throw new Error(translate('frameReceivedBeforeStart'));
   const { fps } = job.settings;
   const sample = new VideoSample(frame, { timestamp: index / fps, duration: 1 / fps });
   try {
@@ -173,7 +175,7 @@ async function addAudioUntil(seconds: number) {
 }
 
 async function finish() {
-  if (!job) throw new Error('Finish received before start.');
+  if (!job) throw new Error(translate('finishReceivedBeforeStart'));
   await addAudioUntil(Infinity);
   post({ type: 'finalizing' });
   await job.output.finalize();

@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+import { t as translate } from '../i18n/core';
 import { useEffect, useRef, useState } from 'react';
 import { Brand } from './Brand';
 import { Cog, Download, Maximize, Minimize, Pencil, Redo, Undo } from './icons';
@@ -21,10 +23,11 @@ interface Props {
 }
 
 function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
+  useT();
   const job = useConversionJob();
   if (!job) return null;
   const p = job.state.status === 'running' ? Math.round(progressPercent(job.state.progress, job.source.duration)) : job.state.status === 'done' ? 100 : 0;
-  const label = job.state.status === 'running' ? `Converting ${job.sourceName}` : job.state.status === 'done' ? `Save ${job.sourceName}` : 'Conversion stopped';
+  const label = job.state.status === 'running' ? translate('converting2', { value1: job.sourceName }) : job.state.status === 'done' ? `Save ${job.sourceName}` : 'Conversion stopped';
   return (
     <>
       <button className="ib conversion" onClick={() => onShow(job.mediaId, job.sourceName)} title={`${label} · ${p}%`}>
@@ -41,6 +44,7 @@ function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
 
 /** Click to edit the name in place; Enter or leaving the field saves, Escape cancels. */
 function ProjectName({ name, onRename }: { name: string; onRename: Props['onRename'] }) {
+  useT();
   const [draft, setDraft] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
   const commit = () => {
@@ -62,14 +66,14 @@ function ProjectName({ name, onRename }: { name: string; onRename: Props['onRena
   }, [editing]);
   if (draft === null) {
     return (
-      <button className="ib project-name" onClick={() => setDraft(name)} aria-label={`Rename project ${name}`} title="Rename project">
+      <button className="ib project-name" onClick={() => setDraft(name)} aria-label={translate('renameProject', { value1: name })} title={translate('renameProject2')}>
         <span className="project-name-text">{name}</span>
         <Pencil size={13} stroke="#8C948E" />
       </button>
     );
   }
   return (
-    <input ref={field} className="fld project-name-field" type="text" aria-label="Project name" spellCheck={false} maxLength={80}
+    <input ref={field} className="fld project-name-field" type="text" aria-label={translate('projectName')} spellCheck={false} maxLength={80}
       autoFocus onFocus={(e) => e.target.select()}
       value={draft} size={Math.max(draft.length, 8)} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
       onKeyDown={(e) => {
@@ -80,33 +84,33 @@ function ProjectName({ name, onRename }: { name: string; onRename: Props['onRena
 }
 
 export function TopBar({ onProjects, saveState, onSave, projectName, onRename, clipCount, totalTime, onExport, onSettings, onShowConversion }: Props) {
+  useT();
   const [fullscreen, toggleFullscreen] = useFullscreen(page);
   return (
     <header className="topbar">
       <Brand />
       <div className="vsep" />
-      <button className="ib project-home-link" onClick={onProjects}>Projects</button>
+      <button className="ib project-home-link" onClick={onProjects}>{translate('projectHomeProjects')}</button>
       <ProjectName name={projectName} onRename={onRename} />
-      <span className="count">{clipCount} clips · {totalTime}</span>
+      <span className="count">{translate('clipCount', { count: clipCount, time: totalTime })}</span>
       <span className={saveState.startsWith('Save failed') ? 'error save-status' : 'save-status'} role="status">{saveState}</span>
-      {saveState.startsWith('Save failed') && <button className="gb" onClick={onSave}>Retry save</button>}
+      {saveState.startsWith('Save failed') && <button className="gb" onClick={onSave}>{translate('projectHomeRetrySave')}</button>}
       <div className="spacer" />
       <ConversionProgress onShow={onShowConversion} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <button className="ib square" aria-label="Undo (Ctrl+Z)" title="Undo · Ctrl+Z"><Undo stroke="#C8CEC9" /></button>
-        <button className="ib square" aria-label="Redo (Ctrl+Shift+Z)" title="Redo · Ctrl+Shift+Z"><Redo stroke="#C8CEC9" /></button>
+        <button className="ib square" aria-label={translate('undoCtrlZ')} title={translate('undoCtrlZ2')}><Undo stroke="#C8CEC9" /></button>
+        <button className="ib square" aria-label={translate('redoCtrlShiftZ')} title={translate('redoCtrlShiftZ2')}><Redo stroke="#C8CEC9" /></button>
         <button className="ib square" onClick={toggleFullscreen} aria-pressed={fullscreen}
-          aria-label={fullscreen ? 'Exit full screen (F11)' : 'Full screen (F11)'} title={fullscreen ? 'Exit full screen · F11' : 'Full screen · F11'}>
+          aria-label={fullscreen ? translate('exitFullScreenF11') : translate('fullScreenF11')} title={fullscreen ? translate('exitFullScreenF112') : translate('fullScreenF112')}>
           {fullscreen ? <Minimize stroke="#C8CEC9" /> : <Maximize stroke="#C8CEC9" />}
         </button>
-        <button className="ib square" onClick={onSettings} aria-label="Settings" title="Settings">
+        <button className="ib square" onClick={onSettings} aria-label={translate('settings')} title={translate('settings')}>
           <Cog stroke="#C8CEC9" />
         </button>
       </div>
       <button className="export-btn" onClick={onExport}>
         <Download size={15} strokeWidth={2.2} />
-        Export
-      </button>
+        {translate('export')}</button>
     </header>
   );
 }

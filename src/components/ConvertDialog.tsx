@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useT } from '../i18n';
+import { t as translate, formatNumber } from '../i18n/core';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ArrowRight } from './icons';
 import { Alert, Choice, Dialog, Note, Progress, ResultCard } from './Dialog';
@@ -25,11 +27,12 @@ const mmss = (s: number) => {
   const t = Math.max(0, Math.round(s));
   return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 };
-const mb = (bytes: number) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} MB`;
-const fpsLabel = (fps: number) => `${Math.round(fps * 100) / 100} fps`;
+const mb = (bytes: number) => translate('mb', { value1: formatNumber((bytes / 1e6), { minimumFractionDigits: bytes < 1e7 ? 1 : 0, maximumFractionDigits: bytes < 1e7 ? 1 : 0 }) });
+const fpsLabel = (fps: number) => translate('fps', { value1: Math.round(fps * 100) / 100 });
 const outName = (name: string) => name.replace(/\.[^.]+$/, '') + '.mp4';
 
 export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
+  useT();
   const job = useConversionJob();
   // Reopened during a background job: cancelling should land back on the same file and settings.
   const [file, setFile] = useState<File | null>(job?.file ?? null);
@@ -65,14 +68,14 @@ export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
   }, [file]);
 
   const info = probe?.file === file ? probe?.info : undefined;
-  const resOptions = useMemo(() => {
+  const resOptions = (() => {
     if (!info) return [];
     const short = Math.min(info.width, info.height);
-    const opts: { key: Res; label: string; sub: string }[] = [{ key: 'keep', label: 'Original', sub: `${info.width}×${info.height}` }];
-    if (short > 1080) opts.push({ key: '1080', label: '1080p', sub: 'Recommended' });
-    if (short > 720) opts.push({ key: '720', label: '720p', sub: 'Fastest' });
+    const opts: { key: Res; label: string; sub: string }[] = [{ key: 'keep', label: translate('original'), sub: `${info.width}×${info.height}` }];
+    if (short > 1080) opts.push({ key: '1080', label: '1080p', sub: translate('recommended') });
+    if (short > 720) opts.push({ key: '720', label: '720p', sub: translate('fastest') });
     return opts;
-  }, [info]);
+  })();
   const activeRes = resOptions.some((o) => o.key === res) ? res : 'keep';
   const options: ConvertOptions = { shortSide: SHORT_SIDE[activeRes], fps: matchFps ? PROJECT_FPS : null };
 
@@ -88,63 +91,61 @@ export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
   const name = file?.name ?? fileName;
   const error = probe?.file === file ? probe?.error : undefined;
   const subtitle = info?.decodable
-    ? 'This browser can already play this file, but an MP4 copy still works everywhere.'
-    : `This browser can’t play ${info?.videoCodec.split(' ')[0] ?? 'this'} video. We can make an MP4 copy it can edit.`;
+    ? translate('thisBrowserCanAlreadyPlayThisFileButAn')
+    : translate('thisBrowserCanTPlayVideoWeCanMake', { value1: info?.videoCodec.split(' ')[0] ?? translate('uiThis') });
 
   return (
-    <Dialog id="cv-title" title={`Convert ${name}`} subtitle={subtitle} warn={!!error} width={560} onClose={onClose}>
+    <Dialog id="cv-title" title={translate('convert', { value1: name })} subtitle={subtitle} warn={!!error} width={560} onClose={onClose}>
       <div className="dialog-body">
-        {!file && !missing && <Note>Reading {fileName}…</Note>}
+        {!file && !missing && <Note>{translate('reading2', { value1: fileName })}</Note>}
 
         {!file && missing && (
           <>
-            <Note>This project has no stored copy of <strong>{fileName}</strong>. Choose it on this computer to convert it. It is read in place and never uploaded.</Note>
-            <FilePicker onPick={setFile} label="Choose file…" />
+            <Note>{translate('thisProjectHasNoStoredCopyOf')}{' '}<strong>{fileName}</strong>{translate('chooseItOnThisComputerToConvertItIt')}</Note>
+            <FilePicker onPick={setFile} label={translate('chooseFile')} />
           </>
         )}
 
         {file && error && (
           <>
-            <Alert title="Couldn’t read this file">{error}</Alert>
-            <FilePicker onPick={setFile} label="Choose another file…" />
+            <Alert title={translate('couldnTReadThisFile')}>{error}</Alert>
+            <FilePicker onPick={setFile} label={translate('chooseAnotherFile')} />
           </>
         )}
 
-        {file && !info && !error && <Note>Reading {file.name}…</Note>}
+        {file && !info && !error && <Note>{translate('reading3', { value1: file.name })}</Note>}
 
         {file && info && (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 28px minmax(0, 1fr)', gap: 8 }}>
               <div className="file-card source">
-                <span className="eyebrow">Source</span>
+                <span className="eyebrow">{translate('source')}</span>
                 <span style={{ fontWeight: 700 }}>{file.name}</span>
                 <span>{info.container} · {info.videoCodec}<br />{info.width}×{info.height} · {fpsLabel(info.fps)}<br />{mmss(info.duration)} · {mb(file.size)}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-hidden="true">
-                <ArrowRight size={18} stroke="var(--text-muted)" />
+                <ArrowRight size={18} stroke='var(--text-muted)' />
               </div>
               <OutputCard name={outName(file.name)} info={info} options={options} />
             </div>
 
-            {resOptions.length > 1 && <Choice label="Resolution" value={activeRes} onChange={setRes} options={resOptions} />}
+            {resOptions.length > 1 && <Choice label={translate('resolution')} value={activeRes} onChange={setRes} options={resOptions} />}
 
             <div className="rows">
               {info.fps > PROJECT_FPS + 0.5 && (
-                <Toggle title="Match project frame rate" sub={`${Math.round(info.fps)} → ${PROJECT_FPS} fps. Smaller file, faster to convert.`} checked={matchFps} onChange={setMatchFps} />
+                <Toggle title={translate('matchProjectFrameRate')} sub={translate('fpsSmallerFileFasterToConvert', { value1: Math.round(info.fps), value2: PROJECT_FPS })} checked={matchFps} onChange={setMatchFps} />
               )}
-              <Toggle title="Add to timeline when done" sub="Placed at the end of V1." checked={addToTimeline} onChange={setAddToTimeline} />
+              <Toggle title={translate('addToTimelineWhenDone')} sub={translate('placedAtTheEndOfV1')} checked={addToTimeline} onChange={setAddToTimeline} />
             </div>
 
             <Note>
-              Runs on this device; nothing is uploaded. The first conversion downloads the converter once (about 32 MB).
-              Expect it to take several times the clip’s length. Your original file stays as it is.
-            </Note>
+              {translate('runsOnThisDeviceNothingIsUploadedTheFirst')}</Note>
           </>
         )}
 
         <div className="dialog-actions">
-          <button className="gb" onClick={onClose}>Cancel</button>
-          <button className="primary" disabled={!file || !info} onClick={() => file && info && start(file, info, options)}>Convert</button>
+          <button className="gb" onClick={onClose}>{translate('cancel')}</button>
+          <button className="primary" disabled={!file || !info} onClick={() => file && info && start(file, info, options)}>{translate('convert2')}</button>
         </div>
       </div>
     </Dialog>
@@ -152,12 +153,13 @@ export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
 }
 
 function OutputCard({ name, info, options }: { name: string; info: SourceInfo; options: ConvertOptions }) {
+  useT();
   const out = outputSpec(info, options);
   return (
     <div className="file-card">
-      <span className="eyebrow">New copy</span>
+      <span className="eyebrow">{translate('newCopy')}</span>
       <span style={{ fontWeight: 700 }}>{name}</span>
-      <span>MP4 · H.264{info.hasAudio ? ' + AAC' : ''}<br />{out.width}×{out.height} · {fpsLabel(out.fps)}<br />{mmss(info.duration)}</span>
+      <span>{"MP4 · H.264"}{info.hasAudio ? ' + AAC' : ''}<br />{out.width}×{out.height} · {fpsLabel(out.fps)}<br />{mmss(info.duration)}</span>
     </div>
   );
 }
@@ -169,6 +171,7 @@ function JobView({ job, onClose, onCancel, onFinish, onRetry720 }: {
   onFinish: () => void;
   onRetry720: () => void;
 }) {
+  useT();
   const { state, source, out } = job;
   const name = outName(job.sourceName);
   const codecs = `H.264${source.hasAudio ? ' + AAC' : ''}`;
@@ -186,22 +189,22 @@ function JobView({ job, onClose, onCancel, onFinish, onRetry720 }: {
     const pct = progressPercent(state.progress, source.duration);
     const conv: StageStatus = stage === 'load' ? 'wait' : stage === 'convert' ? 'active' : 'done';
     const stages: { label: string; status: StageStatus; note: string }[] = [
-      { label: 'Load converter', status: stage === 'load' ? 'active' : 'done', note: stage === 'load' ? 'loading' : 'ready' },
-      { label: 'Convert video and audio', status: conv, note: conv === 'wait' ? '—' : `${Math.round(pct)}%` },
-      { label: 'Save MP4', status: stage === 'save' ? 'active' : 'wait', note: '—' },
+      { label: translate('loadConverter'), status: stage === 'load' ? 'active' : 'done', note: stage === 'load' ? translate('uiLoading') : translate('uiReady') },
+      { label: translate('convertVideoAndAudio'), status: conv, note: conv === 'wait' ? '—' : `${Math.round(pct)}%` },
+      { label: translate('saveMP4'), status: stage === 'save' ? 'active' : 'wait', note: '—' },
     ];
     const left = speed > 0 ? (source.duration - mediaTime) / speed : null;
-    const leftText = left === null ? 'Working out how long this will take.'
-      : left < 60 ? 'Less than a minute left.' : `About ${Math.round(left / 60)} min left.`;
+    const leftText = left === null ? translate('workingOutHowLongThisWillTake')
+      : left < 60 ? translate('lessThanAMinuteLeft') : translate('aboutMinLeft', { value1: Math.round(left / 60) });
     return (
-      <Dialog id="cv-title" title="Converting" subtitle={`Making ${name} on your device.`} width={560} onClose={onClose}>
+      <Dialog id="cv-title" title={translate('converting')} subtitle={translate('makingOnYourDevice', { value1: name })} width={560} onClose={onClose}>
         <div className="dialog-body" style={{ paddingTop: 24 }}>
-          <Progress pct={pct} label="Conversion progress" stages={stages}
-            detail={`${mmss(mediaTime)} / ${mmss(source.duration)}${speed > 0 ? ` · ${speed.toFixed(2)}× speed` : ''}`}
-            note={`${leftText} You can keep editing — conversion runs in the background.`} />
+          <Progress pct={pct} label={translate('conversionProgress')} stages={stages}
+            detail={`${mmss(mediaTime)} / ${mmss(source.duration)}${speed > 0 ? translate('speed', { value1: formatNumber(speed, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }) : ''}`}
+            note={translate('youCanKeepEditingConversionRunsInTheBackground', { value1: leftText })} />
           <div className="dialog-actions">
-            <button className="gb" onClick={onCancel}>Cancel</button>
-            <button className="gb" onClick={onClose}>Keep editing</button>
+            <button className="gb" onClick={onCancel}>{translate('cancel')}</button>
+            <button className="gb" onClick={onClose}>{translate('keepEditing')}</button>
           </div>
         </div>
       </Dialog>
@@ -210,14 +213,14 @@ function JobView({ job, onClose, onCancel, onFinish, onRetry720 }: {
 
   if (state.status === 'done') {
     return (
-      <Dialog id="cv-title" title="Ready to edit" subtitle="The MP4 is available for this session. Save it to your computer to keep it." width={560} onClose={onClose}>
+      <Dialog id="cv-title" title={translate('readyToEdit')} subtitle={translate('projectHomeTheMP4IsAvailableForThisSessionSaveItToYourComputerToKeepIt')} width={560} onClose={onClose}>
         <div className="dialog-body">
           <ResultCard tone="#2E3A45" name={name}
             meta={`${out.width}×${out.height} · ${fpsLabel(out.fps)} · ${mmss(source.duration)} · ${mb(state.output.size)} · ${codecs}`}
-            extra={<span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Converted in {mmss(state.elapsed)} · {(source.duration / state.elapsed).toFixed(2)}× speed</span>} />
+            extra={<span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{translate('convertedInSpeed', { value1: mmss(state.elapsed), value2: formatNumber((source.duration / state.elapsed), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}</span>} />
           <div className="dialog-actions split">
-            {url ? <a className="link-btn" href={url} download={name}>Save MP4 to my computer</a> : <span />}
-            <button className="primary" onClick={onFinish}>Back to editing</button>
+            {url ? <a className="link-btn" href={url} download={name}>{translate('projectHomeSaveMP4ToMyComputer')}</a> : <span />}
+            <button className="primary" onClick={onFinish}>{translate('backToEditing')}</button>
           </div>
         </div>
       </Dialog>
@@ -226,19 +229,17 @@ function JobView({ job, onClose, onCancel, onFinish, onRetry720 }: {
 
   const oom = state.outOfMemoryAt !== undefined;
   return (
-    <Dialog id="cv-title" title="Conversion stopped" subtitle={oom ? 'Your browser ran out of memory.' : 'Something went wrong while converting.'} warn width={560} onClose={onClose}>
+    <Dialog id="cv-title" title={translate('conversionStopped')} subtitle={oom ? translate('yourBrowserRanOutOfMemory') : translate('somethingWentWrongWhileConverting')} warn width={560} onClose={onClose}>
       <div className="dialog-body">
         {oom ? (
-          <Alert title={`Ran out of memory at ${mmss(state.outOfMemoryAt!)}`}>
-            Converting {out.height}p at {fpsLabel(out.fps)} needs more memory than this tab has. A smaller resolution usually works. Nothing in your project changed.
-          </Alert>
+          <Alert title={translate('ranOutOfMemoryAt', { value1: mmss(state.outOfMemoryAt!) })}>{translate('convertingPAtNeedsMoreMemoryThanThisTabHas', { value1: out.height, value2: fpsLabel(out.fps) })}</Alert>
         ) : (
-          <Alert title="The converter couldn’t finish">{state.message} Nothing in your project changed.</Alert>
+          <Alert title={translate('theConverterCouldnTFinish')}>{translate('nothingInYourProjectChanged2', { value1: state.message })}</Alert>
         )}
         <div className="dialog-actions">
-          <button className="gb" onClick={onCancel}>Close</button>
+          <button className="gb" onClick={onCancel}>{translate('close')}</button>
           {oom && Math.min(out.width, out.height) > 720 && (
-            <button className="primary" onClick={onRetry720}>Try again at 720p</button>
+            <button className="primary" onClick={onRetry720}>{translate('tryAgainAt720p')}</button>
           )}
         </div>
       </div>
@@ -247,6 +248,7 @@ function JobView({ job, onClose, onCancel, onFinish, onRetry720 }: {
 }
 
 function FilePicker({ onPick, label }: { onPick: (f: File) => void; label: string }) {
+  useT();
   return (
     <label className="gb" style={{ alignSelf: 'flex-start', cursor: 'pointer' }}>
       {label}
@@ -257,6 +259,7 @@ function FilePicker({ onPick, label }: { onPick: (f: File) => void; label: strin
 }
 
 function Toggle({ title, sub, checked, onChange }: { title: string; sub: ReactNode; checked: boolean; onChange: (v: boolean) => void }) {
+  useT();
   return (
     <label style={{ cursor: 'pointer', padding: '12px 14px' }}>
       <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

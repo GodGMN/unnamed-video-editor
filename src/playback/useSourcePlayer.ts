@@ -1,3 +1,4 @@
+import { t as translate } from '../i18n/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Media } from '../editor/model';
 import { readMediaFile } from '../media/files';
@@ -19,11 +20,11 @@ export function useSourcePlayer(media: Media | null, volume: number) {
     let cancelled = false;
     readMediaFile(id).then((file) => {
       if (cancelled) return;
-      if (!file) { setStatus(`Source file "${name}" is missing. Import your own media to preview it.`); return; }
+      if (!file) { setStatus(translate('sourceFileIsMissingImportYourOwnMediaTo2', { value1: name })); return; }
       url = URL.createObjectURL(file);
       element.src = url;
-    }, (error: unknown) => { if (!cancelled) setStatus(error instanceof Error ? error.message : 'Media could not be loaded.'); });
-    const onError = () => setStatus(element.error?.message || 'This file could not be decoded.');
+    }, (error: unknown) => { if (!cancelled) setStatus(error instanceof Error ? error.message : translate('mediaCouldNotBeLoaded')); });
+    const onError = () => setStatus(element.error?.message || translate('thisFileCouldNotBeDecoded'));
     const onEnded = () => setPlaying(false);
     element.addEventListener('error', onError);
     element.addEventListener('ended', onEnded);
@@ -60,7 +61,7 @@ export function useSourcePlayer(media: Media | null, volume: number) {
       if (element.ended || element.currentTime >= element.duration) element.currentTime = 0;
       await element.play();
       setPlaying(true);
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Playback could not start.'); }
+    } catch (error) { setStatus(error instanceof Error ? error.message : translate('playbackCouldNotStart')); }
   }, [id]);
 
   const seek = useCallback((to: number) => {
@@ -100,10 +101,10 @@ export function useStillSource(media: Media | null) {
     let cancelled = false;
     readMediaFile(id).then((file) => {
       if (cancelled) return;
-      if (!file) { setStatus(`Source file "${name}" is missing. Import your own media to preview it.`); return; }
+      if (!file) { setStatus(translate('sourceFileIsMissingImportYourOwnMediaTo2', { value1: name })); return; }
       created = URL.createObjectURL(file);
       setUrl(created);
-    }, (error: unknown) => { if (!cancelled) setStatus(error instanceof Error ? error.message : 'Media could not be loaded.'); });
+    }, (error: unknown) => { if (!cancelled) setStatus(error instanceof Error ? error.message : translate('mediaCouldNotBeLoaded')); });
     return () => { cancelled = true; if (created) URL.revokeObjectURL(created); };
   }, [id, name]);
 

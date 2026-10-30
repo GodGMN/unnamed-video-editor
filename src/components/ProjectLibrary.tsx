@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+import { t as translate } from '../i18n/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project } from '../editor/model';
 import { fmtShortDuration, layoutTimeline } from '../editor/model';
@@ -39,6 +41,7 @@ function blankProject(): Project {
 }
 
 export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string; onOpen: (id: string, project: Project) => void }) {
+  useT();
   const [entries, setEntries] = useState<ProjectEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -98,13 +101,13 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
     for (const id of Object.keys(entry.project.media)) if (!referenced.has(id)) await removeMediaFiles(id).catch(e => console.warn('Could not clean up unreferenced media', e));
   };
   const actions = (entry: ProjectEntry) => [
-    { label: 'Rename', run: () => { setName(entry.project.name); setRename(entry); } },
+    { label: translate('projectHomeRename'), run: () => { setName(entry.project.name); setRename(entry); } },
     { label: entry.favorite ? 'Remove from favorites' : 'Add to favorites', run: () => void run('Updating favorite…', async () => { await updateProjectDetails(entry.id, { favorite: !entry.favorite }); await refresh(); }) },
-    { label: 'Duplicate', run: () => void run('Duplicating project…', async () => { const p = await loadProject(entry.id); if (!p) throw new Error('Project no longer exists.'); await create({ ...p, name: `${p.name} copy` }); }) },
-    { label: 'Download project', separator: true, run: () => downloadProject(entry.project) },
-    { label: 'Package with media', run: () => void run('Packaging media…', async () => { const c = new AbortController(); controller.current = c; try { await packageProject(entry.project, c.signal); } finally { controller.current = null; } }) },
-    { label: 'Reconnect package', run: () => reconnect(entry) },
-    { label: 'Delete project', separator: true, danger: true, run: () => setDeleting(entry) },
+    { label: translate('duplicate'), run: () => void run('Duplicating project…', async () => { const p = await loadProject(entry.id); if (!p) throw new Error('Project no longer exists.'); await create({ ...p, name: `${p.name} copy` }); }) },
+    { label: translate('projectHomeDownloadProject'), separator: true, run: () => downloadProject(entry.project) },
+    { label: translate('projectHomePackageWithMedia'), run: () => void run('Packaging media…', async () => { const c = new AbortController(); controller.current = c; try { await packageProject(entry.project, c.signal); } finally { controller.current = null; } }) },
+    { label: translate('projectHomeReconnectPackage'), run: () => reconnect(entry) },
+    { label: translate('projectHomeDeleteProject2'), separator: true, danger: true, run: () => setDeleting(entry) },
   ];
   const favoriteCount = entries.filter(e => e.favorite).length;
   const last = entries.find(e => e.id === lastOpenedId) ?? entries[0];
@@ -114,48 +117,48 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
     const matching = subset.filter(e => e.project.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
     return [...matching].sort((a, b) => sort === 'name' ? a.project.name.localeCompare(b.project.name) : sort === 'created' ? b.createdAt - a.createdAt : b.updatedAt - a.updatedAt);
   }, [entries, filter, query, sort]);
-  const filterName = filter === 'favorites' ? 'Favorites' : filter === 'recent' ? 'Recently edited' : 'All projects';
+  const filterName = filter === 'favorites' ? translate('projectHomeFavorites') : filter === 'recent' ? 'Recently edited' : translate('projectHomeAllProjects');
 
   return <div className="project-home">
     <aside className="home-sidebar">
       <Brand />
-      <div className="home-nav-label">Library</div>
-      <nav aria-label="Project library">
-        {([{ key: 'all', label: 'All projects', icon: LibraryGrid, count: entries.length }, { key: 'recent', label: 'Recent', icon: Clock, count: Math.min(entries.length, 8) }, { key: 'favorites', label: 'Favorites', icon: Star, count: favoriteCount }] as const).map(item => <button key={item.key} className={`home-nav ${filter === item.key ? 'active' : ''}`} aria-current={filter === item.key ? 'page' : undefined} onClick={() => { setFilter(item.key); setQuery(''); }}><item.icon size={18} /><span>{item.label}</span><small>{item.count}</small></button>)}
+      <div className="home-nav-label">{translate('projectHomeLibrary')}</div>
+      <nav aria-label={translate('projectHomeProjectLibrary')}>
+        {([{ key: 'all', label: translate('projectHomeAllProjects'), icon: LibraryGrid, count: entries.length }, { key: 'recent', label: translate('recent'), icon: Clock, count: Math.min(entries.length, 8) }, { key: 'favorites', label: translate('projectHomeFavorites'), icon: Star, count: favoriteCount }] as const).map(item => <button key={item.key} className={`home-nav ${filter === item.key ? 'active' : ''}`} aria-current={filter === item.key ? 'page' : undefined} onClick={() => { setFilter(item.key); setQuery(''); }}><item.icon size={18} /><span>{item.label}</span><small>{item.count}</small></button>)}
       </nav>
-      <div className="home-sidebar-bottom"><button className="home-nav" onClick={() => setSettings(true)}><Cog size={18} /><span>Settings</span></button><p><i />Saved on this device</p></div>
+      <div className="home-sidebar-bottom"><button className="home-nav" onClick={() => setSettings(true)}><Cog size={18} /><span>{translate('settings')}</span></button><p><i />{translate('projectHomeSavedOnThisDevice')}</p></div>
     </aside>
     <main className="home-main">
       <div className="home-content">
-        <header className="home-heading"><div><h1>Welcome back<span>.</span></h1><p>Pick up your edit or start something new.</p></div><div className="home-create"><button className="home-primary" disabled={!!busy || loading} onClick={() => void run('Creating project…', () => create(blankProject()))}><Plus size={17} />New project</button><ActionMenu label="More creation options" disabled={!!busy || loading} actions={[{ label: 'Import project file', run: importProject }]}><ChevronDown size={17} /></ActionMenu></div></header>
-        {last && <section className="home-resume" aria-label="Last opened project">
+        <header className="home-heading"><div><h1>{translate('projectHomeWelcomeBack')}<span>.</span></h1><p>{translate('projectHomePickUpYourEditOrStartSomethingNew')}</p></div><div className="home-create"><button className="home-primary" disabled={!!busy || loading} onClick={() => void run('Creating project…', () => create(blankProject()))}><Plus size={17} />{translate('projectHomeNewProject')}</button><ActionMenu label={translate('projectHomeMoreCreationOptions')} disabled={!!busy || loading} actions={[{ label: translate('projectHomeImportProjectFile'), run: importProject }]}><ChevronDown size={17} /></ActionMenu></div></header>
+        {last && <section className="home-resume" aria-label={translate('projectHomeLastOpenedProject')}>
           <ProjectArtwork project={last.project} hero />
-          <div className="resume-details"><span className="home-eyebrow">Last opened</span><h2 title={last.project.name}>{last.project.name}</h2><p>{durations.get(last.id) ? `${fmtShortDuration(durations.get(last.id)!)} · ` : ''}Edited {dateLabel(last.updatedAt).toLocaleLowerCase()}</p><button className="home-primary" disabled={!!busy} onClick={() => void run('Opening project…', () => open(last.id))}><Play size={15} />Continue editing</button></div>
+          <div className="resume-details"><span className="home-eyebrow">{translate('projectHomeLastOpened')}</span><h2 title={last.project.name}>{last.project.name}</h2><p>{durations.get(last.id) ? `${fmtShortDuration(durations.get(last.id)!)} · ` : ''}{translate('projectHomeEdited')}{' '}{dateLabel(last.updatedAt).toLocaleLowerCase()}</p><button className="home-primary" disabled={!!busy} onClick={() => void run('Opening project…', () => open(last.id))}><Play size={15} />{translate('projectHomeContinueEditing')}</button></div>
           <div className="resume-menu"><ActionMenu label={`Actions for ${last.project.name}`} actions={actions(last)} disabled={!!busy} /></div>
         </section>}
-        {!loading && !entries.length && <section className="home-first-project"><Film size={44} strokeWidth={1} /><h2>A fresh start</h2><p>Create a project to start editing, or import a project file from the New project menu.</p></section>}
+        {!loading && !entries.length && <section className="home-first-project"><Film size={44} strokeWidth={1} /><h2>{translate('projectHomeAFreshStart')}</h2><p>{translate('projectHomeCreateAProjectToStartEditingOrImportAProjectFileFromTheNewProjectMenu')}</p></section>}
         <section className="home-projects" aria-labelledby="project-list-title">
-          <div className="home-list-heading"><h2 id="project-list-title">{filterName}<span>{filtered.length}</span></h2><div className="home-search"><Search size={17} /><input ref={search} aria-label="Search projects" placeholder={`Search ${entries.length} projects…`} value={query} onChange={e => setQuery(e.target.value)} /><kbd>⌘ K</kbd></div><select aria-label="Sort projects" value={sort} onChange={e => setSort(e.target.value)}><option value="updated">Last edited</option><option value="name">Name A–Z</option><option value="created">Date created</option></select></div>
-          <div className="home-project-list" role="list" aria-label="Projects">
+          <div className="home-list-heading"><h2 id="project-list-title">{filterName}<span>{filtered.length}</span></h2><div className="home-search"><Search size={17} /><input ref={search} aria-label={translate('projectHomeSearchProjects')} placeholder={`Search ${entries.length} projects…`} value={query} onChange={e => setQuery(e.target.value)} /><kbd>⌘ K</kbd></div><select aria-label={translate('projectHomeSortProjects')} value={sort} onChange={e => setSort(e.target.value)}><option value="updated">{translate('projectHomeLastEdited')}</option><option value="name">{translate('projectHomeNameAZ')}</option><option value="created">{translate('projectHomeDateCreated')}</option></select></div>
+          <div className="home-project-list" role="list" aria-label={translate('projectHomeProjects')}>
             {filtered.map(entry => <article key={entry.id} className="home-project-row" role="listitem">
               <button className="project-open" disabled={!!busy} aria-label={`Open ${entry.project.name}`} onClick={() => void run('Opening project…', () => open(entry.id))}>
                 <ProjectArtwork project={entry.project} /><span className="project-row-name"><strong><span>{entry.project.name}</span>{entry.favorite && <Star size={12} fill="currentColor" />}</strong><small>{durations.get(entry.id) ? `${fmtShortDuration(durations.get(entry.id)!)} · ${entry.project.output.width} × ${entry.project.output.height}` : 'Empty project'}</small></span><time dateTime={new Date(entry.updatedAt).toISOString()}>{dateLabel(entry.updatedAt)}</time><ChevronRight size={16} />
               </button>
               <ActionMenu label={`Actions for ${entry.project.name}`} actions={actions(entry)} disabled={!!busy} />
             </article>)}
-            {loading && <div className="home-empty" role="status">Loading your projects…</div>}
-            {!loading && !filtered.length && entries.length > 0 && <div className="home-empty"><Search size={28} strokeWidth={1} /><h3>{query ? 'No matching projects' : 'No favorites yet'}</h3><p>{query ? 'Try a different name or clear your search.' : 'Add a project to favorites from its menu to find it here.'}</p>{query && <button className="home-text-button" onClick={() => setQuery('')}>Clear search</button>}</div>}
+            {loading && <div className="home-empty" role="status">{translate('projectHomeLoadingYourProjects')}</div>}
+            {!loading && !filtered.length && entries.length > 0 && <div className="home-empty"><Search size={28} strokeWidth={1} /><h3>{query ? 'No matching projects' : 'No favorites yet'}</h3><p>{query ? 'Try a different name or clear your search.' : 'Add a project to favorites from its menu to find it here.'}</p>{query && <button className="home-text-button" onClick={() => setQuery('')}>{translate('projectHomeClearSearch')}</button>}</div>}
           </div>
-          <footer className="home-list-footer"><span>{query ? `${filtered.length} matching ${filtered.length === 1 ? 'project' : 'projects'}` : `${entries.length} ${entries.length === 1 ? 'project' : 'projects'} on this device`}</span><span>Your originals stay where you keep them.</span></footer>
+          <footer className="home-list-footer"><span>{query ? `${filtered.length} matching ${filtered.length === 1 ? 'project' : 'projects'}` : `${entries.length} ${entries.length === 1 ? 'project' : 'projects'} on this device`}</span><span>{translate('projectHomeYourOriginalsStayWhereYouKeepThem')}</span></footer>
         </section>
-        {error && <div role="alert" className="home-error">{error}<button onClick={() => setError('')} aria-label="Dismiss error">×</button></div>}
-        {busy && <div role="status" className="home-operation">{busy}{controller.current && <button className="home-text-button" onClick={() => controller.current?.abort()}>Cancel</button>}</div>}
+        {error && <div role="alert" className="home-error">{error}<button onClick={() => setError('')} aria-label={translate('projectHomeDismissError')}>×</button></div>}
+        {busy && <div role="status" className="home-operation">{busy}{controller.current && <button className="home-text-button" onClick={() => controller.current?.abort()}>{translate('cancel')}</button>}</div>}
       </div>
     </main>
-    <input ref={importInput} aria-label="Import project file" type="file" accept=".json,.uvepack" hidden onChange={e => { const file = e.target.files?.[0]; if (file) void run('Opening project…', () => importFile({ file })); e.target.value = ''; }} />
-    <input ref={reconnectInput} aria-label="Reconnect package" type="file" accept=".uvepack" hidden onChange={e => { const file = e.target.files?.[0], target = reconnectTarget.current; if (file && target) void run('Reconnecting media…', async () => { await reconnectPackage(target.project, { file }); await refresh(); }); e.target.value = ''; }} />
+    <input ref={importInput} aria-label={translate('projectHomeImportProjectFile')} type="file" accept=".json,.uvepack" hidden onChange={e => { const file = e.target.files?.[0]; if (file) void run('Opening project…', () => importFile({ file })); e.target.value = ''; }} />
+    <input ref={reconnectInput} aria-label={translate('projectHomeReconnectPackage')} type="file" accept=".uvepack" hidden onChange={e => { const file = e.target.files?.[0], target = reconnectTarget.current; if (file && target) void run('Reconnecting media…', async () => { await reconnectPackage(target.project, { file }); await refresh(); }); e.target.value = ''; }} />
     {settings && <SettingsDialog output={last?.project.output ?? { width: 1920, height: 1080 }} onClose={() => setSettings(false)} />}
-    {rename && <Dialog id="rename-project" title="Rename project" subtitle="Choose a name you can find later." width={440} onClose={() => { if (!busy) setRename(null); }}><form className="dialog-body" onSubmit={e => { e.preventDefault(); const next = name.trim(); if (next) void run('Renaming project…', async () => { await updateProjectDetails(rename.id, { name: next }); await refresh(); setRename(null); }); }}><label className="field-label">Project name<input className="fld" aria-label="Project name" autoFocus onFocus={e => e.target.select()} maxLength={80} value={name} onChange={e => setName(e.target.value)} /></label>{error && <p role="alert" className="error">{error}</p>}<div className="dialog-actions"><button type="button" className="gb" disabled={!!busy} onClick={() => setRename(null)}>Cancel</button><button className="primary" disabled={!!busy || !name.trim()}>Save name</button></div></form></Dialog>}
-    {deleting && <Dialog id="delete-project" title="Delete project?" subtitle={deleting.project.name} warn width={450} onClose={() => { if (!busy) setDeleting(null); }}><div className="dialog-body"><p>This removes the saved edit from this browser. Your original media stays on disk. Download a backup first if you want to keep the project.</p>{error && <p role="alert" className="error">{error}</p>}<div className="dialog-actions"><button className="gb" disabled={!!busy} onClick={() => setDeleting(null)}>Keep project</button><button className="home-delete" disabled={!!busy} onClick={() => void run('Deleting project…', () => remove(deleting))}>Delete project</button></div></div></Dialog>}
+    {rename && <Dialog id="rename-project" title={translate('renameProject2')} subtitle={translate('projectHomeChooseANameYouCanFindLater')} width={440} onClose={() => { if (!busy) setRename(null); }}><form className="dialog-body" onSubmit={e => { e.preventDefault(); const next = name.trim(); if (next) void run('Renaming project…', async () => { await updateProjectDetails(rename.id, { name: next }); await refresh(); setRename(null); }); }}><label className="field-label">{translate('projectName')}<input className="fld" aria-label={translate('projectName')} autoFocus onFocus={e => e.target.select()} maxLength={80} value={name} onChange={e => setName(e.target.value)} /></label>{error && <p role="alert" className="error">{error}</p>}<div className="dialog-actions"><button type="button" className="gb" disabled={!!busy} onClick={() => setRename(null)}>{translate('cancel')}</button><button className="primary" disabled={!!busy || !name.trim()}>{translate('projectHomeSaveName')}</button></div></form></Dialog>}
+    {deleting && <Dialog id="delete-project" title={translate('projectHomeDeleteProject')} subtitle={deleting.project.name} warn width={450} onClose={() => { if (!busy) setDeleting(null); }}><div className="dialog-body"><p>{translate('projectHomeThisRemovesTheSavedEditFromThisBrowserYourOriginalMediaStaysOnDiskDownloadABackupFirstIfYouWantToKeepTheProject')}</p>{error && <p role="alert" className="error">{error}</p>}<div className="dialog-actions"><button className="gb" disabled={!!busy} onClick={() => setDeleting(null)}>{translate('projectHomeKeepProject')}</button><button className="home-delete" disabled={!!busy} onClick={() => void run('Deleting project…', () => remove(deleting))}>{translate('projectHomeDeleteProject2')}</button></div></div></Dialog>}
   </div>;
 }

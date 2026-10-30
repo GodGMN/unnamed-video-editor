@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+import { t as translate, formatNumber } from '../i18n/core';
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { codecFamily, fmtShortDuration, videoTracks } from '../editor/model';
@@ -12,10 +14,10 @@ import { reconnectMedia } from '../projects/portable';
 import { PreviewStrip } from '../media/PreviewStrip';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
 
-const TRANSITIONS = [
-  { type: 'crossfade', name: 'Cross dissolve', swatch: 'linear-gradient(90deg, #35503F, #4A5B6E)' },
-  { type: 'fade', name: 'Fade to black', swatch: 'linear-gradient(90deg, #35503F, #0B0D0C)' },
-];
+const TRANSITIONS = () => ([
+  { type: 'crossfade', name: translate('crossDissolve'), swatch: 'linear-gradient(90deg, #35503F, #4A5B6E)' },
+  { type: 'fade', name: translate('fadeToBlack'), swatch: 'linear-gradient(90deg, #35503F, #0B0D0C)' },
+]);
 
 interface Props {
   onBusy: (busy: boolean) => void;
@@ -32,24 +34,23 @@ interface Props {
 
 interface MediaMenu { id: string; left: number; top: number }
 
-const TIMES = ['', 'once', 'twice', 'three times'];
 
 /** The one-line summary under a media item's name. */
 function mediaMeta(project: Project, m: Media): string {
   const v = m.video;
-  if (!m.decodable) return `${v ? codecFamily(v.codec) : 'This format'} isn’t supported by this browser.`;
-  if (!v) return m.audio ? `Audio · ${codecFamily(m.audio.codec)}` : m.container;
+  if (!m.decodable) return translate('isnTSupportedByThisBrowser', { value1: v ? codecFamily(v.codec) : translate('uiThisFormat') });
+  if (!v) return m.audio ? translate('audio', { value1: codecFamily(m.audio.codec) }) : m.container;
 
   const tracks = videoTracks(project);
   const uses = tracks.flatMap((t) => t.clips.filter((c) => c.mediaId === m.id).map(() => t));
   const { width: ow, height: oh } = project.output;
   const main = tracks.find((t) => t.magnetic);
   const note =
-    uses.length > 1 ? `used ${TIMES[uses.length] ?? `${uses.length} times`}`
-    : v.width > ow || v.height > oh ? 'scaled to output'
-    : uses.length === 1 && uses[0] !== main ? `on ${uses[0].name}`
+    uses.length > 1 ? translate('usedTimes', { count: uses.length })
+    : v.width > ow || v.height > oh ? translate('scaledToOutput')
+    : uses.length === 1 && uses[0] !== main ? translate('on', { value1: uses[0].name })
     : m.still ? m.container : codecFamily(v.codec);
-  return `${v.width}×${v.height} · ${m.animation ? 'Animated' : m.still ? 'Image' : `${Math.round(v.fps)} fps`} · ${note}`;
+  return `${v.width}×${v.height} · ${m.animation ? translate('animated') : m.still ? translate('image') : translate('fps', { value1: Math.round(v.fps) })} · ${note}`;
 }
 
 /** How many timeline clips (video and audio) play this source. */
@@ -61,6 +62,7 @@ function clipCount(project: Project, mediaId: string): number {
 const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
 
 export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, onPreview, onRemove, previewing }: Props) {
+  useT();
   const [menu, setMenu] = useState<MediaMenu | null>(null);
   useEffect(() => {
     if (!menu) return;
@@ -128,30 +130,29 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
       onDragOver={(e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
       onDragLeave={(e) => { if (hasFiles(e) && --dragDepth.current === 0) setDragOver(false); }}
       onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragOver(false); ingest(Array.from(e.dataTransfer.files, file => ({ file }))); }}>
-      {dragOver && <div className="media-drop">Drop to import</div>}
+      {dragOver && <div className="media-drop">{translate('dropToImport')}</div>}
       <div className="media-head">
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span className="panel-title">Media</span>
+          <span className="panel-title">{translate('media')}</span>
           <span className="count">{media.length}</span>
         </div>
-        <input ref={input} type="file" multiple accept="video/*,audio/*,image/*,.mov,.mkv" aria-label="Import media files" hidden onChange={(e) => { if (e.target.files) ingest(Array.from(e.target.files, file => ({ file }))); e.target.value = ''; }} />
+        <input ref={input} type="file" multiple accept="video/*,audio/*,image/*,.mov,.mkv" aria-label={translate('importMediaFiles')} hidden onChange={(e) => { if (e.target.files) ingest(Array.from(e.target.files, file => ({ file }))); e.target.value = ''; }} />
         <button onClick={() => {
           if (!window.showOpenFilePicker) input.current?.click();
           else void pickFiles().then(ingest).catch(failed);
-        }} className="ib outlined" style={{ height: 30, padding: '0 10px', fontSize: 12, fontWeight: 500 }}>
+        }} className="ib outlined" style={{ ['--h' as string]: '30px', padding: '0 10px', fontSize: 12, fontWeight: 500 }}>
           <Plus size={13} strokeWidth={2.2} />
-          Import
-        </button>
+          {translate('import')}</button>
       </div>
       <div role="status" aria-live="polite">
-        {pending > 0 && <p className="media-meta media-status">Importing {pending} file{pending === 1 ? '' : 's'}…</p>}
+        {pending > 0 && <p className="media-meta media-status">{translate('importingFiles', { count: pending })}</p>}
         {errors.map((error, i) => <p key={i} className="media-meta error media-status">{error}</p>)}
       </div>
       <p className="hint" style={{ padding: '0 16px 10px' }}>{window.showOpenFilePicker ? 'Import links originals. Dropped files need reconnecting after reload.' : 'Files stay on your disk. Reconnect them after reopening this page.'}</p>
       <div className="media-list">
         {media.map((m) => (
           <div key={m.id} className={'media-item' + (m.decodable ? ' playable' : '') + (previewing === m.id ? ' active' : '')} draggable={m.decodable}
-            title={m.decodable ? 'Click to preview · drag onto the timeline' : undefined}
+            title={m.decodable ? translate('clickToPreviewDragOntoTheTimeline') : undefined}
             onClick={() => { if (m.decodable) onPreview(m.id); }}
             onDragStart={(e) => { e.dataTransfer.setData(MEDIA_MIME, m.id); e.dataTransfer.effectAllowed = 'copy'; mediaDrag.id = m.id; }}
             onDragEnd={() => { mediaDrag.id = null; }}
@@ -162,7 +163,7 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
             <div className="media-thumb" style={{ background: m.tone }}>
               <PreviewStrip media={m} width={100} />
               {!m.decodable && <div className="warn"><Warning stroke="var(--warn-icon)" /></div>}
-              <span className="media-dur">{m.animation ? `${m.animation.toFixed(1)}s loop` : m.still ? 'Still' : m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
+              <span className="media-dur">{m.animation ? translate('sLoop', { value1: formatNumber(m.animation, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : m.still ? translate('still') : m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
             </div>
             <div className="media-text">
               <span className="media-name">{m.name}</span>
@@ -170,14 +171,13 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
               <span className="hint">{available[m.id] === false ? 'Reconnect needed' : sourceKinds[m.id] === 'linked' ? 'Linked original' : sourceKinds[m.id] === 'session' ? 'Session only' : sourceKinds[m.id] === 'legacy' ? 'Stored copy' : 'Checking source'}</span>
               <div className="media-reconnect" onClick={e => e.stopPropagation()}>
                 {window.showOpenFilePicker ? <button className="gb" onClick={() => void pickFiles().then(files => { if (files[0]) return reconnect(m, files[0]); }).catch(failed)}>{available[m.id] ? 'Relink original' : 'Reconnect'}</button> : <label className="gb">{available[m.id] ? 'Relink original' : 'Reconnect'}<input aria-label={`Reconnect ${m.name}`} type="file" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void reconnect(m, { file: f }); e.target.value = ''; }} /></label>}
-                {available[m.id] === false && sourceKinds[m.id] === 'linked' && <button className="gb" onClick={() => void requestSourcePermission(m.id).then(granted => { if (!granted) throw new Error('Select the original file with Reconnect.'); setRevision(n => n + 1); onReconnect(); }).catch(failed)}>Restore access</button>}
+                {available[m.id] === false && sourceKinds[m.id] === 'linked' && <button className="gb" onClick={() => void requestSourcePermission(m.id).then(granted => { if (!granted) throw new Error('Select the original file with Reconnect.'); setRevision(n => n + 1); onReconnect(); }).catch(failed)}>{translate('projectHomeRestoreAccess')}</button>}
               </div>
-              {available[m.id] && <button className="convert-btn" onClick={e => { e.stopPropagation(); setPending(n => n + 1); void readMediaFile(m.id).then(async f => { if (f) await regeneratePreview(m, f); setRevision(n => n + 1); onReconnect(); }).catch(failed).finally(() => setPending(n => n - 1)); }}>Rebuild previews</button>}
+              {available[m.id] && <button className="convert-btn" onClick={e => { e.stopPropagation(); setPending(n => n + 1); void readMediaFile(m.id).then(async f => { if (f) await regeneratePreview(m, f); setRevision(n => n + 1); onReconnect(); }).catch(failed).finally(() => setPending(n => n - 1)); }}>{translate('projectHomeRebuildPreviews')}</button>}
               {!m.decodable && (
                 <button className="convert-btn" onClick={() => onConvert(m)}>
                   <Convert size={12} strokeWidth={2.2} />
-                  Convert to MP4
-                </button>
+                  {translate('convertToMP4')}</button>
               )}
             </div>
           </div>
@@ -191,21 +191,21 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
             <span className="menu-label">{project.media[menu.id].name}</span>
             <button role="menuitem" className="ib danger" autoFocus onClick={() => { onRemove(menu.id); setMenu(null); }}>
               <Trash size={14} />
-              <span>Delete from project</span>
+              <span>{translate('deleteFromProject')}</span>
             </button>
-            {clips > 0 && <span className="menu-label menu-note">Also removes {clips} clip{clips === 1 ? '' : 's'} from the timeline.</span>}
+            {clips > 0 && <span className="menu-label menu-note">{translate('alsoRemovesClips', { count: clips })}</span>}
           </div>
         );
       })()}
       <div className="transitions">
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-          <span className="panel-title">Transitions</span>
-          <span className="count">{TRANSITIONS.length}</span>
+          <span className="panel-title">{translate('transitions')}</span>
+          <span className="count">{TRANSITIONS().length}</span>
         </div>
         <div className="transition-grid">
-          {TRANSITIONS.map((t) => (
+          {TRANSITIONS().map((t) => (
             // A div, not a button: Firefox won't start a drag from a button.
-            <div key={t.name} className="transition-card" draggable title="Drag onto an overlap between two clips"
+            <div key={t.name} className="transition-card" draggable title={translate('dragOntoAnOverlapBetweenTwoClips')}
               onDragStart={e => { e.dataTransfer.setData('application/x-timeline-transition', t.type); e.dataTransfer.effectAllowed = 'copy'; document.body.classList.add('dragging-transition'); }}
               onDragEnd={() => document.body.classList.remove('dragging-transition')}>
               <span style={{ background: t.swatch }} />
@@ -213,7 +213,7 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
             </div>
           ))}
         </div>
-        <span className="hint" style={{ lineHeight: 1.4 }}>Overlap two clips, then drag a transition onto their overlap.</span>
+        <span className="hint" style={{ lineHeight: 1.4 }}>{translate('overlapTwoClipsThenDragATransitionOntoTheir')}</span>
       </div>
     </aside>
   );
