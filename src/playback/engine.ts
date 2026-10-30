@@ -5,7 +5,7 @@ import { audioGain, renderFrame } from './compositor';
 import { FrameCache } from './frameCache';
 
 interface Player { element: HTMLAudioElement; url: string; gain: GainNode | null; source: MediaElementAudioSourceNode | null; ready: boolean; busy: boolean; wantedPlaying: boolean }
-interface Entry { mediaId: string; used: number; frames: FrameCache | null; audio: Player | null; disposed: boolean }
+interface Entry { mediaId: string; used: number; frames: FrameCache | null; audio: Player | null; disposed: boolean; abort: AbortController }
 interface Request { project: Project; time: number; playing: boolean; volume: number }
 /** Why a source can't play: its file is gone, or it failed to decode. */
 type Unavailable = { missing: true } | { missing: false; error: string };
@@ -26,20 +26,23 @@ function unavailableMessage(problems: Map<string, Unavailable>, project: Project
   return errors.join(' ');
 }
 
-function waitFor(element: HTMLMediaElement, event: string, action: () => void) {
+function waitFor(element: HTMLMediaElement, event: string, action: () => void, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error('Media decoding timed out.')), 8000);
     const loaded = () => finish();
+    const aborted = () => finish(new DOMException('Media preparation cancelled.', 'AbortError'));
     const failed = () => finish(new Error(element.error?.message || 'This file could not be decoded.'));
     function finish(error?: Error) {
       clearTimeout(timer);
       element.removeEventListener(event, loaded);
       element.removeEventListener('error', failed);
+      signal.removeEventListener('abort', aborted);
       if (error) reject(error); else resolve();
     }
     element.addEventListener(event, loaded, { once: true });
     element.addEventListener('error', failed, { once: true });
-    action();
+    signal.addEventListener('abort', aborted, { once: true });
+    if (signal.aborted) aborted(); else action();
   });
 }
 
@@ -92,11 +95,11 @@ export class PlaybackEngine {
   }
 
   private prepare(clip: MediaClip, audio: boolean, time: number, playing: boolean) {
+    if (this.unavailable.has(clip.mediaId)) return;
     let entry = this.entries.get(clip.id);
     if (entry && entry.mediaId !== clip.mediaId) { this.release(clip.id); entry = undefined; }
     if (!entry) {
-      if (this.unavailable.has(clip.mediaId)) return;
-      entry = { mediaId: clip.mediaId, used: ++this.serial, frames: null, audio: null, disposed: false };
+      entry = { mediaId: clip.mediaId, used: ++this.serial, frames: null, audio: null, disposed: false, abort: new AbortController() };
       this.entries.set(clip.id, entry);
       const created = entry;
       void this.load(created, audio).then(() => {
@@ -122,13 +125,14 @@ export class PlaybackEngine {
         const player: Player = { element, url, gain: null, source: null, ready: false, busy: false, wantedPlaying: false };
         entry.audio = player;
         element.preload = 'auto'; element.muted = true;
-        await waitFor(element, 'loadeddata', () => { element.src = url; element.load(); });
+        await waitFor(element, 'loadeddata', () => { element.src = url; element.load(); }, entry.abort.signal);
         if (!entry.disposed) player.ready = true;
       }
     } catch (error) { if (!entry.disposed) this.fail(entry, error); }
   }
 
   private fail(entry: Entry, error: unknown) {
+    if (entry.audio) { entry.audio.wantedPlaying = false; entry.audio.element.pause(); }
     this.unavailable.set(entry.mediaId, { missing: false, error: error instanceof Error ? error.message : 'Unknown error.' });
     this.scheduleDraw();
   }
@@ -153,7 +157,7 @@ export class PlaybackEngine {
     const drift = Math.abs(element.currentTime - target);
     if (drift > (playing && !element.paused ? 0.25 : 0.002)) {
       player.busy = true;
-      void waitFor(element, 'seeked', () => { element.currentTime = Math.min(element.duration - 0.001, target); })
+      void waitFor(element, 'seeked', () => { element.currentTime = Math.min(element.duration - 0.001, target); }, entry.abort.signal)
         .then(async () => {
           // Start from the prepared position rather than chasing a moving target while still paused.
           if (!entry.disposed && player.wantedPlaying) {
@@ -199,6 +203,7 @@ export class PlaybackEngine {
     const entry = this.entries.get(id);
     if (!entry) return;
     entry.disposed = true;
+    entry.abort.abort();
     entry.frames?.dispose();
     if (entry.audio) {
       const { element, source, gain, url } = entry.audio;

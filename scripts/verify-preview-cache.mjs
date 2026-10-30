@@ -40,6 +40,14 @@ try {
     const seek = pixel();
     update(0.123);
     await wait(() => pixel()[0] > 240, 'seek back');
+    // A completed decoder must restart when an idle scrub moves backward outside its frame window.
+    const { FrameCache } = await import('/src/playback/frameCache.ts');
+    const isolated = new FrameCache(file, () => {}, (e) => { throw e; });
+    isolated.request(1.7, false);
+    await wait(() => isolated.frame(1.7, false), 'isolated forward seek');
+    isolated.request(0.1, false);
+    await wait(() => isolated.frame(0.1, false), 'idle backward seek');
+    isolated.dispose();
     const exact = engine.entries.get('red').frames;
     await wait(() => exact.frame(0.123, false), 'frame containing a non-boundary timestamp');
     // Exercise real high-fps sequential decode, checking that prefetch never evicts the current frame.

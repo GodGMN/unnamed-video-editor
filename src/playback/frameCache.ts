@@ -13,6 +13,7 @@ export class FrameCache {
   private wanted = 0;
   private through = 0;
   private generation = 0;
+  private iteratorGeneration = -1;
   private busy = false;
   private disposed = false;
   private ended = false;
@@ -57,7 +58,7 @@ export class FrameCache {
 
   private async fill() {
     this.busy = true;
-    let generation = this.generation;
+    let generation = this.iteratorGeneration;
     try {
       const sink = await this.sink;
       while (!this.disposed && !this.ended) {
@@ -65,6 +66,7 @@ export class FrameCache {
           await this.iterator?.return();
           if (this.disposed) break;
           generation = this.generation;
+          this.iteratorGeneration = generation;
           this.clear();
           // getCanvas returns the frame containing a timestamp, including a seek between frame boundaries.
           const first = await sink.getCanvas(this.wanted);
@@ -88,7 +90,7 @@ export class FrameCache {
       if (!this.disposed) { this.ended = true; this.failed(error); }
     } finally {
       this.busy = false;
-      if (!this.disposed && generation !== this.generation) void this.fill();
+      if (!this.disposed && !this.ended && generation !== this.generation) void this.fill();
     }
   }
 
