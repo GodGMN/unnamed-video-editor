@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, linkClips, DEFAULT_TRANSITION, clipEnd, deleteItems, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, trimTextItem, videoTracks } from './model';
+import { newId, placeMedia, linkClips, addTextItem, deleteItems, duplicateClip, splitClip, splitTextItem, DEFAULT_TRANSITION, clipEnd, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, trimTextItem, videoTracks } from './model';
 import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
@@ -181,6 +181,22 @@ export function useProject() {
       /** Links a video and an audio clip so they move and trim together. */
       linkClips: (videoId: string, audioId: string) => edit((p) => linkClips(p, videoId, audioId, newId())),
       updateText: (id: string, patch: Partial<TextItem>) => edit((p) => patchTextItem(p, id, patch)),
+      /** Cuts a clip, and its linked partners, at a sequence time. */
+      splitClip: (id: string, time: number) => edit((p) => splitClip(p, id, time, newId())),
+      splitText: (id: string, time: number) => edit((p) => splitTextItem(p, id, time, newId())),
+      /** Adds a text item at `time` and selects it so it opens in the properties panel. */
+      addText: (time: number) => {
+        const id = newId();
+        edit((p) => addTextItem(p, time, id));
+        setUi((u) => ({ ...u, sel: { kind: 'text', id }, picked: [], menu: null }));
+      },
+      /** Copies a clip, and its linked partners, and selects the copy. */
+      duplicateClip: (id: string) => {
+        const copyId = newId();
+        const kind = projectRef.current && findClip(projectRef.current, id)?.track.kind === 'audio' ? 'audio' : 'clip';
+        edit((p) => duplicateClip(p, id, copyId));
+        setUi((u) => ({ ...u, sel: { kind, id: copyId }, picked: [{ kind, id: copyId }], focusClip: copyId, menu: null }));
+      },
       /** Moves a text item's start or end edge to `time`; the other edge stays put. */
       trimText: (id: string, edge: 'in' | 'out', time: number) => edit((p) => trimTextItem(p, id, edge, time)),
       toggleTrack: (id: string) => edit((p) => {
