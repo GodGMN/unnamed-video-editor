@@ -9,7 +9,7 @@ const project = () => ({ name: 'Test', output: { width: 1920, height: 1080, fps:
     { kind: 'video', id: 'v', name: 'V1', label: '', hidden: false, magnetic: true,
       clips: [{ ...VIDEO_CLIP_DEFAULTS, ...base('va', 'a', 0) }, { ...VIDEO_CLIP_DEFAULTS, ...base('vb', 'b', 5) }] },
     { kind: 'audio', id: 'au', name: 'A1', label: '', muted: false, clips: [{ ...AUDIO_CLIP_DEFAULTS, ...base('aa', 'a', 0) }] },
-    { kind: 'text', id: 't', name: 'T1', label: '', hidden: false, items: [] },
+    { kind: 'text', id: 't', name: 'T1', label: '', hidden: false, clips: [] },
   ] });
 
 test('removing media drops the source and every clip that plays it', () => {
