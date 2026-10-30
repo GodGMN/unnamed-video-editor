@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { DEFAULT_TRANSITION, findClip, findTextItem, findVideoClip, layoutTimeline, patchClip, patchTextItem, patchTrack, settle, videoTracks } from './model';
-import type { AudioClip, EditorUi, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
+import { newId, placeMedia, DEFAULT_TRANSITION, findClip, findTextItem, findVideoClip, layoutTimeline, patchClip, patchTextItem, patchTrack, settle, videoTracks } from './model';
+import type { AudioClip, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
 
@@ -67,6 +67,12 @@ export function useProject() {
   const actions = useMemo(() => {
     const edit = (fn: (p: Project) => Project) => setProject((p) => (p ? settle(fn(p)) : p));
     return {
+      addMedia: (media: Media) => edit((p) => ({ ...p, media: { ...p.media, [media.id]: media } })),
+      placeMedia: (mediaId: string, trackId: string, time: number) => {
+        const id = newId();
+        edit((p) => placeMedia(p, mediaId, trackId, time, id));
+        setUi((u) => ({ ...u, focusClip: id, sel: { kind: 'clip', id } }));
+      },
       select: (sel: Selection) => setUi((u) => ({
         ...u, sel, menu: null, focusClip: sel.kind === 'clip' || sel.kind === 'audio' ? sel.id : u.focusClip,
       })),

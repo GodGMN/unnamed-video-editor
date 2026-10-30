@@ -1,6 +1,7 @@
+import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, filmstrip, findClip, partnersOf } from '../editor/model';
+import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, audioFor, curveName, findClip, partnersOf } from '../editor/model';
 import type { AudioClip, Tool, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
@@ -145,7 +146,9 @@ export function Timeline({ editor }: { editor: Editor }) {
             <div className="ruler" onPointerDown={onRulerDown}>{ticks}</div>
 
             {project.tracks.map((t) => (
-              <div key={t.id} className="track" style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
+              <div key={t.id} className="track" onDragOver={(e) => { if (t.kind !== 'text' && e.dataTransfer.types.includes('application/x-editor-media')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+                onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('application/x-editor-media'); if (id) editor.placeMedia(id, t.id, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps); }}
+                data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
                 {t.kind === 'text' && t.items.map((x) => (
                   <button key={x.id} className="text-clip" style={{ left: x.start * pps + 1, width: x.duration * pps - 2 }}
                     aria-label={`Text overlay: ${x.content}`}
@@ -207,9 +210,7 @@ function VideoClipView({ editor, pps, clip: cs, onMenu }: ClipProps<VideoClip>) 
       aria-pressed={selected}
       onClick={() => select({ kind: 'clip', id })}
       onContextMenu={onMenu}>
-      <span className="strip" aria-hidden="true">
-        {filmstrip(width, src.seed).map((a, i) => <span key={i} style={{ background: `rgba(255,255,255,${a.toFixed(3)})` }} />)}
-      </span>
+      <PreviewStrip media={src} width={width} inS={cs.inS + l.vs - cs.start} outS={cs.inS + l.ve - cs.start} />
       <span className="clip-label">
         <span>
           {cs.linked && <Link size={11} stroke="#D8DED9" strokeWidth={2.4} style={{ flex: 'none' }} />}
@@ -267,9 +268,12 @@ function AudioClipView({ editor, pps, clip: cs, onMenu }: ClipProps<AudioClip>) 
   const partner = partnerSelected(editor, cs, 'clip');
   const half = (cs.outS - cs.inS) / 2;
 
+  const preview = useMediaPreview(src.id);
   const bars = [];
   for (let k = 0, n = Math.max(0, Math.floor((width - 24) / 4)); k < n; k++) {
-    const v = Math.abs(Math.sin(k * 0.61 + src.seed) * Math.cos(k * 0.17 + src.seed * 2.3));
+    const n = Math.max(1, Math.floor((width - 24) / 4));
+    const time = cs.inS + l.vs - cs.start + k / n * span;
+    const v = preview?.peaks[Math.min(preview.peaks.length - 1, Math.floor(time / src.duration * preview.peaks.length))] ?? 0;
     bars.push(cs.muted ? 2 : Math.max(2, Math.min(40, Math.round((4 + v * 34) * Math.min(2, cs.vol / 100)))));
   }
 

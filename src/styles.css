@@ -210,7 +210,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .track-head-label { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
 .track-head-label > :first-child { font-size: 12px; font-weight: 600; color: #e4e9e5; }
 .track-head-label > :last-child { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tl-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+.tl-scroll { flex: 1 1 auto; min-width: 0; overflow-x: scroll; }
 .ruler { position: relative; height: 28px; cursor: ew-resize; touch-action: none; user-select: none; border-bottom: 1px solid var(--line); overflow: hidden; }
 .tick { position: absolute; bottom: 0; width: 1px; background: var(--control-hover); }
 .tick-label { position: absolute; top: 5px; font: 500 10px var(--mono); color: var(--text-muted); }
