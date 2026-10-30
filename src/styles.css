@@ -229,9 +229,11 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .audio-badge .unlinked { font-family: var(--sans); color: var(--warn); }
 .fade-handle { position: absolute; top: -6px; width: 20px; height: 20px; padding: 0; border: 0; background: transparent; cursor: ew-resize; touch-action: none; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .fade-handle > span { width: 10px; height: 10px; border-radius: 3px; background: var(--text-bright); border: 2px solid var(--accent); }
-.vol-edge { position: absolute; top: -4px; height: 9px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 1; }
-.vol-edge::after { content: ''; position: absolute; left: 0; right: 0; top: 3px; height: 2px; border-radius: 1px; background: var(--text-bright); opacity: 0; transition: opacity 0.12s; }
-.vol-edge:hover::after, .vol-edge:active::after, .vol-edge:focus-visible::after { opacity: 1; }
+.vol-headroom { position: absolute; left: 0; right: 0; top: 0; border-radius: 8px 8px 0 0; background: rgba(12, 14, 13, 0.45); backdrop-filter: grayscale(1) brightness(0.55); pointer-events: none; }
+.vol-line { position: absolute; left: 0; right: 0; height: 12px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 1; }
+.vol-line::after { content: ''; position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: var(--accent); box-shadow: 0 0 0 1px rgba(12, 14, 13, 0.5); }
+.vol-line.muted::after { background: var(--warn); }
+.vol-line:hover::after, .vol-line:active::after, .vol-line:focus-visible::after { top: 4px; height: 4px; background: var(--text-bright); }
 .curve-handle { position: absolute; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; cursor: ns-resize; touch-action: none; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .curve-handle > span { width: 9px; height: 9px; border-radius: 999px; background: var(--accent); border: 2px solid var(--bg); box-sizing: content-box; }
 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-bright); z-index: 3; pointer-events: none; }
