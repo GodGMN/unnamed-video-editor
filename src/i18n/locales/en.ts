@@ -509,5 +509,10 @@ export const en = {
   "projectHomeMiBLimit": "MiB limit",
   "projectHomePreviewCacheUsage": "Preview cache usage",
   "projectHomeProjectEditsAndMediaLinksAreSavedInThisBrowserKeepADownloadedProjectOrAPackageAsABackup": "Project edits and media links are saved in this browser. Keep a downloaded project or a package as a backup.",
-  "projectHomeRetrySave": "Retry save"
+  "projectHomeRetrySave": "Retry save",
+  "transformTab": "Transform",
+  "infoTab": "Info",
+  "videoClipSettings": "Video clip settings",
+  "keyIsOn": "Key is on",
+  "clipIsCropped": "Clip is cropped"
 };
