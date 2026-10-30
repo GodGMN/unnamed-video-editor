@@ -9,6 +9,8 @@ import '@fontsource/jetbrains-mono/500.css';
 import './styles.css';
 import { App } from './App';
 
+document.addEventListener('contextmenu', (event) => event.preventDefault(), { capture: true });
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

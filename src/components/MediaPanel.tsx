@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { MediaItem } from '../editor/model';
+import { codecFamily, fmtShortDuration, videoTracks } from '../editor/model';
+import type { Media, Project } from '../editor/model';
 import { Convert, Plus, Warning } from './icons';
 
 const TRANSITIONS = [
@@ -10,12 +11,33 @@ const TRANSITIONS = [
 ];
 
 interface Props {
-  media: MediaItem[];
-  onConvert: (item: MediaItem) => void;
+  project: Project;
+  onConvert: (media: Media) => void;
 }
 
-export function MediaPanel({ media, onConvert }: Props) {
+const TIMES = ['', 'once', 'twice', 'three times'];
+
+/** The one-line summary under a media item's name. */
+function mediaMeta(project: Project, m: Media): string {
+  const v = m.video;
+  if (!m.decodable) return `${v ? codecFamily(v.codec) : 'This format'} isn’t supported by this browser.`;
+  if (!v) return m.audio ? `Audio · ${codecFamily(m.audio.codec)}` : m.container;
+
+  const tracks = videoTracks(project);
+  const uses = tracks.flatMap((t) => t.clips.filter((c) => c.mediaId === m.id).map(() => t));
+  const { width: ow, height: oh } = project.output;
+  const main = tracks.find((t) => t.magnetic);
+  const note =
+    uses.length > 1 ? `used ${TIMES[uses.length] ?? `${uses.length} times`}`
+    : v.width > ow || v.height > oh ? 'scaled to output'
+    : uses.length === 1 && uses[0] !== main ? `on ${uses[0].name}`
+    : codecFamily(v.codec);
+  return `${v.width}×${v.height} · ${Math.round(v.fps)} fps · ${note}`;
+}
+
+export function MediaPanel({ project, onConvert }: Props) {
   const [dragOver, setDragOver] = useState(false);
+  const media = Object.values(project.media);
 
   return (
     <aside className="panel media">
@@ -39,15 +61,15 @@ export function MediaPanel({ media, onConvert }: Props) {
       </div>
       <div className="media-list">
         {media.map((m) => (
-          <div key={m.name} className="media-item">
+          <div key={m.id} className="media-item">
             <div className="media-thumb" style={{ background: m.tone }}>
-              {m.error && <div className="warn"><Warning stroke="var(--warn-icon)" /></div>}
-              <span className="media-dur">{m.dur}</span>
+              {!m.decodable && <div className="warn"><Warning stroke="var(--warn-icon)" /></div>}
+              <span className="media-dur">{m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
             </div>
             <div className="media-text">
               <span className="media-name">{m.name}</span>
-              <span className={'media-meta' + (m.error ? ' error' : '')}>{m.meta}</span>
-              {m.error && (
+              <span className={'media-meta' + (m.decodable ? '' : ' error')}>{mediaMeta(project, m)}</span>
+              {!m.decodable && (
                 <button className="convert-btn" onClick={() => onConvert(m)}>
                   <Convert size={12} strokeWidth={2.2} />
                   Convert to MP4
