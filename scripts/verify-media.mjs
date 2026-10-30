@@ -20,6 +20,7 @@ try {
   const item = page.locator('.media-item').filter({ hasText: 'sample.mp4' });
   await item.waitFor();
   assert.match(await item.innerText(), /320×180/);
+  await item.locator('img').first().waitFor();
   assert.ok(await item.locator('img').count() > 0, 'Real thumbnail generated');
   const drag = await page.evaluateHandle(() => new DataTransfer());
   await item.dispatchEvent('dragstart', { dataTransfer: drag });
