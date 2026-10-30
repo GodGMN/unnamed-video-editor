@@ -2,7 +2,8 @@ import { clipEnd } from '../editor/model';
 import type { AudioClip, MediaClip, Project } from '../editor/model';
 import { readMediaFile } from '../media/files';
 import { audioGain, renderFrame } from './compositor';
-import { FrameCache, StillFrame } from './frameCache';
+import { imageType } from '../media/animation';
+import { AnimatedFrame, FrameCache, StillFrame } from './frameCache';
 import type { Frames } from './frameCache';
 
 interface Player { element: HTMLAudioElement; url: string; gain: GainNode | null; source: MediaElementAudioSourceNode | null; ready: boolean; busy: boolean; wantedPlaying: boolean }
@@ -119,8 +120,10 @@ export class PlaybackEngine {
       if (entry.disposed) return;
       if (!file) { this.unavailable.set(entry.mediaId, { missing: true }); return; }
       if (!audio) {
-        const Source = this.latest?.project.media[entry.mediaId]?.still ? StillFrame : FrameCache;
-        entry.frames = new Source(file, () => this.scheduleDraw(), (error) => this.fail(entry, error));
+        const media = this.latest?.project.media[entry.mediaId];
+        const changed = () => this.scheduleDraw(), failed = (error: unknown) => this.fail(entry, error);
+        entry.frames = media?.animation ? new AnimatedFrame(file, imageType(media.container), changed, failed)
+          : media?.still ? new StillFrame(file, changed, failed) : new FrameCache(file, changed, failed);
       } else {
         const element = document.createElement('audio');
         const url = URL.createObjectURL(file);

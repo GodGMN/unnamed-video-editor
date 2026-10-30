@@ -158,7 +158,9 @@ function StillInfo({ src }: { src: Media }) {
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
-        Still image · drag it onto a video track · it shows for {src.duration} s, then trim it to any length
+        {src.animation
+          ? `Animation · ${src.animation.toFixed(2)} s loop · drag it onto a video track · it loops for as long as the clip lasts`
+          : `Still image · drag it onto a video track · it shows for ${src.duration} s, then trim it to any length`}
       </div>
     </div>
   );
@@ -188,7 +190,7 @@ function StillTrim({ editor, clip: cs, src }: { editor: Editor; clip: MediaClip;
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
-        Still image · drag either edge on the timeline to show it for longer or shorter
+        {src.animation ? `Animation · loops every ${src.animation.toFixed(2)} s` : 'Still image'} · drag either edge on the timeline to show it for longer or shorter
       </div>
     </div>
   );

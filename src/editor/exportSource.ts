@@ -3,6 +3,7 @@ import type { ExportSource } from '../components/ExportDialog';
 import { audioTracks, clipEnd, videoTracks } from './model';
 import type { Project, TimelineLayout } from './model';
 import { readMediaFile } from '../media/files';
+import { AnimationReader, imageType, openAnimation } from '../media/animation';
 import { audioGain, renderFrame } from '../playback/compositor';
 import type { RenderReply, RenderRequest } from './renderProtocol';
 
@@ -27,12 +28,16 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
       await document.fonts.load('700 72px Figtree');
       signal.throwIfAborted();
       const stills = new Map<string, ImageBitmap>();
+      // One reader per clip, so overlapping clips of the same animation don't fight over its frame.
+      const animations = new Map<string, AnimationReader>();
       const worker = new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
       let pending: { resolve: (reply: RenderReply) => void; reject: (error: Error) => void } | null = null;
       const dispose = () => {
         worker.terminate();
         stills.forEach((image) => image.close());
         stills.clear();
+        animations.forEach((reader) => reader.dispose());
+        animations.clear();
         pending?.reject(new DOMException('Export stopped.', 'AbortError'));
         pending = null;
         signal.removeEventListener('abort', dispose);
@@ -51,8 +56,16 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
       });
       try {
         await request({ type: 'init', project: p, files });
+        for (const track of videoTracks(p)) for (const clip of track.clips) {
+          const media = p.media[clip.mediaId];
+          if (track.hidden || !media?.animation) continue;
+          const animation = await openAnimation(files[clip.mediaId], imageType(media.container));
+          if (!animation) throw new Error(`Cannot decode the animation "${media.name}" in this browser.`);
+          if (signal.aborted) { animation.decoder.close(); signal.throwIfAborted(); }
+          animations.set(clip.id, new AnimationReader(animation));
+        }
         for (const id of ids) {
-          if (!p.media[id]?.still) continue;
+          if (!p.media[id]?.still || p.media[id].animation) continue;
           const image = await createImageBitmap(files[id]).catch(() => { throw new Error(`Cannot decode the image "${p.media[id].name}".`); });
           if (signal.aborted) { image.close(); signal.throwIfAborted(); }
           stills.set(id, image);
@@ -68,7 +81,11 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
             if (reply.type !== 'frame') throw new Error('Unexpected decoder reply.');
             try {
               signal.throwIfAborted();
-              const images = new Map(reply.frames.map((f) => [f.clipId, f.image]));
+              const images = new Map<string, CanvasImageSource>(reply.frames.map((f) => [f.clipId, f.image]));
+              for (const [id, reader] of animations) {
+                const clip = videoTracks(p).flatMap((t) => t.clips).find((c) => c.id === id)!;
+                if (time >= clip.start && time < clipEnd(clip)) images.set(id, await reader.at(clip.inS + time - clip.start));
+              }
               renderFrame(p, time, ctx, (clip) => images.get(clip.id) ?? stills.get(clip.mediaId) ?? null);
               return canvas;
             } finally { reply.frames.forEach((f) => f.image.close()); }

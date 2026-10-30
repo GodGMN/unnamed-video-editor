@@ -45,6 +45,8 @@ export interface Media {
    * Its clips can be trimmed to any length.
    */
   still?: boolean;
+  /** For an animated still, the length of one loop in seconds; its clips repeat it to fill their length. */
+  animation?: number;
   /** Thumbnail background colour; also the clip colour on the timeline. */
   tone: string;
   /** Seed for the placeholder filmstrip and waveform until real ones are generated. */
@@ -207,6 +209,8 @@ export interface EditorUi {
 export const PPS = 30; // timeline pixels per second
 /** How long a still image shows when dropped on the timeline, in seconds. */
 export const STILL_DURATION = 5;
+/** How long an animation dropped on the timeline lasts: whole loops, at least `STILL_DURATION`. */
+export const animationDuration = (loop: number) => Math.round(Math.ceil(STILL_DURATION / loop - 1e-9) * loop * 1e6) / 1e6;
 export const DEFAULT_TRANSITION: Transition = { type: 'cut', duration: 0.5 };
 
 type ClipDefaults<C> = Omit<C, 'id' | 'mediaId' | 'start' | 'inS' | 'outS' | 'linkId'>;

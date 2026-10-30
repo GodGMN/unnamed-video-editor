@@ -1,5 +1,7 @@
 import { ALL_FORMATS, BlobSource, CanvasSink, Input } from 'mediabunny';
 import type { WrappedCanvas } from 'mediabunny';
+import { frameAt, openAnimation } from '../media/animation';
+import type { Animation } from '../media/animation';
 
 const FRAME_LIMIT = 12;
 const LOOKAHEAD = 0.25;
@@ -36,6 +38,41 @@ export class StillFrame implements Frames {
     this.disposed = true;
     this.image?.close();
     this.image = null;
+  }
+}
+
+/** Most memory an animation's preview frames may take; bigger ones decode at a smaller size. */
+const ANIMATION_BYTES = 256 * 1024 * 1024;
+
+/** An animated image decoded once at preview size, looping forever. */
+export class AnimatedFrame implements Frames {
+  private images: ImageBitmap[] = [];
+  private timing: Pick<Animation, 'starts' | 'loop'> | null = null;
+  private disposed = false;
+
+  constructor(file: File, type: string, changed: () => void, failed: (error: unknown) => void) {
+    const images: ImageBitmap[] = [];
+    openAnimation(file, type, async (frame, _, count) => {
+      if (this.disposed) return;
+      const { displayWidth: w, displayHeight: h } = frame;
+      const fit = Math.min(1, Math.sqrt(ANIMATION_BYTES / (count * w * h * 4)));
+      const resizeWidth = Math.max(1, Math.round(Math.min(previewWidth(w, h), w * fit)));
+      images.push(await createImageBitmap(frame, { resizeWidth, resizeHeight: Math.max(1, Math.round(resizeWidth * h / w)), resizeQuality: 'high' }));
+    }).then((animation) => {
+      animation?.decoder.close();
+      if (this.disposed || !animation) { images.forEach((i) => i.close()); if (!this.disposed) failed(new Error('This animation could not be decoded.')); return; }
+      this.images = images;
+      this.timing = animation;
+      changed();
+    }, (error: unknown) => { images.forEach((i) => i.close()); if (!this.disposed) failed(error); });
+  }
+
+  request() {}
+  frame(time: number) { return this.timing ? this.images[frameAt(this.timing, time)] : null; }
+  dispose() {
+    this.disposed = true;
+    this.images.forEach((i) => i.close());
+    this.images = [];
   }
 }
 

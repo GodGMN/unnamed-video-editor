@@ -1,11 +1,14 @@
 import { ALL_FORMATS, AudioBufferSink, BlobSource, CanvasSink, Input } from 'mediabunny';
-import { STILL_DURATION, newId } from '../editor/model';
+import { STILL_DURATION, animationDuration, newId } from '../editor/model';
 import type { Media } from '../editor/model';
 import { removeMediaFiles, writeMediaFile, writePreview } from './files';
 import type { MediaPreview } from './files';
+import { imageType, openAnimation } from './animation';
 
-const FORMAT_LABELS: Record<string, string> = { jpg: 'JPEG', 'x-icon': 'ICO', 'vnd.microsoft.icon': 'ICO', 'x-ms-bmp': 'BMP' };
-const IMAGE_EXTENSIONS = /\.(png|jpe?g|webp|gif|avif|bmp|ico)$/i;
+const FORMAT_LABELS: Record<string, string> = { jpg: 'JPEG', apng: 'APNG', 'x-icon': 'ICO', 'vnd.microsoft.icon': 'ICO', 'x-ms-bmp': 'BMP' };
+const IMAGE_EXTENSIONS = /\.(a?png|jpe?g|webp|gif|avif|bmp|ico)$/i;
+/** Most thumbnails kept across one loop of an animation. */
+const ANIMATION_THUMBNAILS = 12;
 
 const isImageFile = (file: File) => file.type.startsWith('image/') || IMAGE_EXTENSIONS.test(file.name);
 
@@ -23,14 +26,22 @@ async function importStill(file: File): Promise<Media> {
   const id = newId();
   try {
     const format = (file.type.startsWith('image/') ? file.type.slice(6) : file.name.split('.').pop() ?? '').toLowerCase();
+    const container = FORMAT_LABELS[format] ?? format.toUpperCase();
+    const thumbnails: string[] = [];
+    const animation = await openAnimation(file, imageType(container), (frame, i, count) => {
+      if (Math.floor(i * ANIMATION_THUMBNAILS / count) !== Math.floor((i - 1) * ANIMATION_THUMBNAILS / count))
+        thumbnails.push(thumbnail(frame, frame.displayWidth, frame.displayHeight));
+    }).catch(() => null);
+    animation?.decoder.close();
     const media: Media = {
-      id, name: file.name, container: FORMAT_LABELS[format] ?? format.toUpperCase(),
-      duration: STILL_DURATION, size: file.size, bitrate: 0,
-      video: { codec: 'image', width: image.width, height: image.height, fps: 0 }, audio: null,
-      decodable: true, tone: '#4A4433', seed: 0, still: true,
+      id, name: file.name, container,
+      duration: animation ? animationDuration(animation.loop) : STILL_DURATION, size: file.size, bitrate: 0,
+      video: { codec: 'image', width: image.width, height: image.height, fps: animation ? animation.starts.length / animation.loop : 0 }, audio: null,
+      decodable: true, tone: '#4A4433', seed: 0, still: true, ...(animation && { animation: animation.loop }),
     };
+    if (!animation) thumbnails.push(thumbnail(image, image.width, image.height));
     await writeMediaFile(id, file);
-    try { await writePreview(id, { thumbnails: [thumbnail(image, image.width, image.height)], peaks: [] }); }
+    try { await writePreview(id, { thumbnails, peaks: [] }); }
     catch (error) { await removeMediaFiles(id).catch(() => undefined); throw error; }
     return media;
   } finally { image.close(); }

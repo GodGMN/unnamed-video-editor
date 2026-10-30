@@ -151,7 +151,8 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
         <span className="eyebrow">Source info</span>
         <dl className="info-list">
           {(src.still ? [
-            ['File', src.name], ['Format', `${src.container} image`], ['Resolution', `${inf.width}×${inf.height}`], ['Size', fmtSize(src.size)],
+            ['File', src.name], ['Format', `${src.container} ${src.animation ? 'animation' : 'image'}`], ['Resolution', `${inf.width}×${inf.height}`],
+            ...(src.animation ? [['Loop', `${src.animation.toFixed(2)} s · ${Math.round(src.animation * inf.fps)} frames`]] : []), ['Size', fmtSize(src.size)],
           ] : [
             ['File', src.name], ['Container', src.container], ['Video', src.video ? codecName(src.video.codec) : '—'],
             ['Resolution', src.video ? `${inf.width}×${inf.height}` : '—'], ['Frame rate', src.video ? fmtFps(inf.fps) : '—'],

@@ -43,7 +43,7 @@ function mediaMeta(project: Project, m: Media): string {
     : v.width > ow || v.height > oh ? 'scaled to output'
     : uses.length === 1 && uses[0] !== main ? `on ${uses[0].name}`
     : m.still ? m.container : codecFamily(v.codec);
-  return `${v.width}×${v.height} · ${m.still ? 'Image' : `${Math.round(v.fps)} fps`} · ${note}`;
+  return `${v.width}×${v.height} · ${m.animation ? 'Animated' : m.still ? 'Image' : `${Math.round(v.fps)} fps`} · ${note}`;
 }
 
 /** How many timeline clips (video and audio) play this source. */
@@ -123,7 +123,7 @@ export function MediaPanel({ project, onConvert, onImport, onPreview, onRemove, 
             <div className="media-thumb" style={{ background: m.tone }}>
               <PreviewStrip media={m} width={100} />
               {!m.decodable && <div className="warn"><Warning stroke="var(--warn-icon)" /></div>}
-              <span className="media-dur">{m.still ? 'Still' : m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
+              <span className="media-dur">{m.animation ? `${m.animation.toFixed(1)}s loop` : m.still ? 'Still' : m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
             </div>
             <div className="media-text">
               <span className="media-name">{m.name}</span>

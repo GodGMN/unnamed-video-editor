@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AUDIO_CLIP_DEFAULTS, VIDEO_CLIP_DEFAULTS, linkClips, pickedPair, placeMedia, trimClipEdge } from '../src/editor/model.ts';
+import { AUDIO_CLIP_DEFAULTS, VIDEO_CLIP_DEFAULTS, animationDuration, linkClips, pickedPair, placeMedia, trimClipEdge } from '../src/editor/model.ts';
+import { frameAt } from '../src/media/animation.ts';
 
 const still = { id: 's', name: 'logo.png', container: 'PNG', duration: 5, size: 1, bitrate: 0, video: { codec: 'image', width: 800, height: 600, fps: 0 }, audio: null, decodable: true, tone: '#000', seed: 0, still: true };
 const project = (clips = []) => ({ name: 'Test', output: { width: 1920, height: 1080, fps: 30 }, media: { s: still },
@@ -35,4 +36,15 @@ test('stills cannot be linked to audio', () => {
   const p = project([clip()]);
   assert.equal(linkClips(p, 'c', 'au', 'L'), p);
   assert.equal(pickedPair(p, [{ kind: 'clip', id: 'c' }, { kind: 'audio', id: 'au' }]), null);
+});
+
+test('an animation drops in as whole loops lasting at least five seconds', () => {
+  assert.equal(animationDuration(0.6), 5.4);
+  assert.equal(animationDuration(1), 5);
+  assert.equal(animationDuration(7.5), 7.5);
+});
+
+test('animation frames loop past the end and before the start', () => {
+  const timing = { starts: [0, 0.2, 0.4], loop: 0.6 };
+  assert.deepEqual([0, 0.1, 0.2, 0.5, 0.6, 0.7, 1.3, -0.1].map((t) => frameAt(timing, t)), [0, 0, 1, 2, 0, 0, 0, 2]);
 });
