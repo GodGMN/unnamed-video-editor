@@ -93,6 +93,12 @@ try {
   assert.equal(await page.locator('.home-project-row').count(),0);
   await page.screenshot({path:`${dir}/empty-library.png`});
   await page.getByRole('button',{name:'New project',exact:true}).click();await page.getByRole('button',{name:'Rename project Untitled project',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Projects',exact:true}).click();await page.getByRole('heading', {name:'A fresh start',exact:true}).waitFor();
+  assert.equal(await page.evaluate(async () => (await (await import('/src/editor/storage.ts')).listProjects()).length),0);
+  await page.getByRole('button',{name:'New project',exact:true}).click();await page.getByRole('button',{name:'Rename project Untitled project',exact:true}).click();
+  await page.keyboard.press('ControlOrMeta+a');await page.keyboard.type('First edit');await page.keyboard.press('Enter');await page.getByRole('status').filter({hasText:/^Saved$/}).waitFor();
+  await page.getByRole('button',{name:'Projects',exact:true}).click();await page.locator('.home-project-row').filter({hasText:'First edit'}).waitFor();
+  assert.equal(await page.locator('.home-project-row').count(),1);
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({result:'PASS',projects:40,checks:['independent scrolling','consolidated actions','search','favorites persistence','rename','alphabetical sort','unclipped menu at bottom','keyboard navigation and Escape','settings cache clear','empty search state','resume opens correct project','flush before returning home','last opened survives reload','delete cancel and confirm','1280×720 layout','empty library survives reload','new project from empty state'],evidence:dir},null,2));
+  console.log(JSON.stringify({result:'PASS',projects:40,checks:['independent scrolling','consolidated actions','search','favorites persistence','rename','alphabetical sort','unclipped menu at bottom','keyboard navigation and Escape','settings cache clear','empty search state','resume opens correct project','flush before returning home','last opened survives reload','delete cancel and confirm','1280×720 layout','empty library survives reload','new project from empty state','untouched new project is not saved','edited new project is saved'],evidence:dir},null,2));
 } finally { await browser.close(); }
