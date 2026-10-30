@@ -1,6 +1,6 @@
 import { useT } from '../i18n';
 import { t as translate, formatNumber } from '../i18n/core';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useRef, useState } from 'react';
 import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, dbToFader, faderToDb, fmtDb, MISSING_MEDIA, NO_KEY, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
 import type { AudioClip, ChromaKey, Fades, FitMode, TextAnchor, TextClip, TransitionType, VideoClip } from '../editor/model';
@@ -9,8 +9,11 @@ import { Dropper, Mute, Waveform } from './icons';
 import { ColorPopover, HexField } from './ColorPicker';
 import { NumberField } from './NumberField';
 import { Slider } from './Slider';
+import { Tabs } from './Tabs';
 
 const TITLES = () => ({ clip: translate('videoClip'), audio: translate('audioClip'), trans: translate('transition'), text: translate('textOverlay') } as const);
+
+type VideoTab = 'transform' | 'crop' | 'key' | 'timing' | 'info';
 
 export function PropertiesPanel({ editor }: { editor: Editor }) {
   useT();
@@ -19,10 +22,12 @@ export function PropertiesPanel({ editor }: { editor: Editor }) {
   const video = sel?.kind === 'clip' || sel?.kind === 'trans' ? findVideoClip(project, sel.id) : null;
   const audio = sel?.kind === 'audio' ? findAudioClip(project, sel.id) : null;
   const text = sel?.kind === 'text' ? findTextClip(project, sel.id) : null;
+  // Kept here so the tab stays put while you click between clips.
+  const [videoTab, setVideoTab] = useState<VideoTab>('transform');
   return (
     <aside className="panel props">
       <div className="props-head"><span className="panel-title">{sel ? TITLES()[sel.kind] : translate('properties')}</span></div>
-      {sel?.kind === 'clip' && video && <VideoClipProps editor={editor} clip={video} />}
+      {sel?.kind === 'clip' && video && <VideoClipProps editor={editor} clip={video} tab={videoTab} onTab={setVideoTab} />}
       {audio && <AudioClipProps editor={editor} clip={audio} />}
       {sel?.kind === 'trans' && video && <TransitionProps editor={editor} clip={video} />}
       {text && <TextProps editor={editor} item={text} />}
@@ -67,7 +72,7 @@ function FadesSection({ clip: cs, what, style }: { clip: Fades; what: 'video' | 
   );
 }
 
-function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip }) {
+function VideoClipProps({ editor, clip: cs, tab, onTab }: { editor: Editor; clip: VideoClip; tab: VideoTab; onTab: (tab: VideoTab) => void }) {
   useT();
   const { project, layout, updateVideoClip } = editor;
   const id = cs.id;
@@ -80,21 +85,29 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
   const fits: [FitMode, string][] = [['fit', translate('fit')], ['fill', translate('fill')], ['custom', translate('custom')]];
   const dur = cs.outS - cs.inS;
 
-  return (
-    <div className="props-body">
-      <div className="props-clip">
-        <div className="props-swatch" style={{ background: src.tone }} />
-        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <span className="media-name" style={{ fontSize: 13 }}>{src.name}</span>
-          <span className="hint" style={{ lineHeight: 1.4 }}>{translate('startsAtOnTheTimeline', { value1: fmtTime(layout.clips[id].start) })}</span>
-        </div>
-      </div>
+  const tabs: { id: VideoTab; label: ReactNode }[] = [
+    { id: 'transform', label: translate('transformTab') },
+    { id: 'crop', label: <>{translate('crop')}{(cs.cropT || cs.cropR || cs.cropB || cs.cropL) > 0 && <span className="tab-dot" title={translate('clipIsCropped')} />}</> },
+    { id: 'key', label: <>{translate('key')}{cs.key.enabled && <span className="tab-dot" title={translate('keyIsOn')} />}</> },
+    { id: 'timing', label: translate('timing') },
+    { id: 'info', label: translate('infoTab') },
+  ];
 
+  return <>
+    <div className="props-clip">
+      <div className="props-swatch" style={{ background: src.tone }} />
+      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span className="media-name" style={{ fontSize: 13 }}>{src.name}</span>
+        <span className="hint" style={{ lineHeight: 1.4 }}>{translate('startsAtOnTheTimeline', { value1: fmtTime(layout.clips[id].start) })}</span>
+      </div>
+    </div>
+    <Tabs tabs={tabs} value={tab} onChange={onTab} label={translate('videoClipSettings')} className="props-body">
+      {tab === 'transform' && <>
       <div className="props-section">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span className="eyebrow">{translate('positionScale')}</span>
           <button className="ib" style={{ ['--h' as string]: '26px', padding: '0 8px', fontSize: 11, color: 'var(--text-dim)' }}
-            onClick={() => upd({ fit: 'fit', x: 0, y: 0, scale: 100, rot: 0, cropT: 0, cropR: 0, cropB: 0, cropL: 0 })}>
+            onClick={() => upd({ fit: 'fit', x: 0, y: 0, scale: 100, rot: 0 })}>
             {translate('reset')}</button>
         </div>
         <div className="seg" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }} role="group" aria-label={translate('frameFit')}>
@@ -112,11 +125,15 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
         <Slider label={translate('scale')} value={cs.scale} unit={'%'} defaultValue={VIDEO_CLIP_DEFAULTS.scale} min={25} max={300} onChange={(v) => upd({ scale: v, fit: 'custom' })} />
         <Slider label={translate('rotation')} value={cs.rot} unit={"°"} defaultValue={VIDEO_CLIP_DEFAULTS.rot} min={-180} max={180} onChange={(v) => upd({ rot: v, fit: 'custom' })} />
       </div>
+      </>}
 
+      {tab === 'crop' && <>
       <div className="props-section">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span className="eyebrow">{translate('crop')}</span>
-          <span className="hint">{translate('pxOfSource')}</span>
+          <span className="eyebrow">{translate('crop')} <span className="hint" style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>· {translate('pxOfSource')}</span></span>
+          <button className="ib" style={{ ['--h' as string]: '26px', padding: '0 8px', fontSize: 11, color: 'var(--text-dim)' }}
+            onClick={() => upd({ cropT: 0, cropR: 0, cropB: 0, cropL: 0 })}>
+            {translate('reset')}</button>
         </div>
         <div className="crop-grid">
           <span />
@@ -138,9 +155,11 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
           <span />
         </div>
       </div>
+      </>}
 
-      <KeySection editor={editor} clip={cs} />
+      {tab === 'key' && <KeySection editor={editor} clip={cs} />}
 
+      {tab === 'timing' && <>
       <FadesSection clip={cs} what={'video'} />
 
       <div className="props-section" style={{ gap: 10 }}>
@@ -156,8 +175,9 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
           <Stat label={translate('length')} value={formatNumber(dur, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' s'} />
         </div>
       </div>
+      </>}
 
-      <div className="props-section" style={{ gap: 8 }}>
+      {tab === 'info' && <div className="props-section" style={{ gap: 8 }}>
         <span className="eyebrow">{translate('sourceInfo')}</span>
         <dl className="info-list">
           {(src.still ? [
@@ -172,9 +192,9 @@ function VideoClipProps({ editor, clip: cs }: { editor: Editor; clip: VideoClip 
             <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>
           ))}
         </dl>
-      </div>
-    </div>
-  );
+      </div>}
+    </Tabs>
+  </>;
 }
 
 /** Chroma key: removes one colour so the tracks underneath show through. */
