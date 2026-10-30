@@ -1,0 +1,4 @@
+# Runewire MCP configs (contain a personal API key — never commit)
+.mcp.json
+opencode.json
+.codex/config.toml
