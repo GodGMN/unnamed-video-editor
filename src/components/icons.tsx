@@ -33,6 +33,7 @@ export const SkipStart = (p: IconProps) => <Fill {...p}><path d="M5 5h2v14H5zM19
 export const SkipEnd = (p: IconProps) => <Fill {...p}><path d="M17 5h2v14h-2zM5 5v14l11-7z" /></Fill>;
 export const ChevronLeft = (p: IconProps) => <Stroke {...p}><path d="M15 6l-6 6 6 6" /></Stroke>;
 export const ChevronRight = (p: IconProps) => <Stroke {...p}><path d="M9 6l6 6-6 6" /></Stroke>;
+export const ChevronDown = (p: IconProps) => <Stroke {...p}><path d="M6 9l6 6 6-6" /></Stroke>;
 export const Volume = (p: IconProps) => <Stroke {...p}><path d="M11 5L6 9H3v6h3l5 4z" /><path d="M15.5 8.5a5 5 0 010 7" /></Stroke>;
 export const Mute = (p: IconProps) => <Stroke {...p}><path d="M11 5L6 9H3v6h3l5 4z" /><path d="M22 9l-6 6M16 9l6 6" /></Stroke>;
 export const Waveform = (p: IconProps) => <Stroke {...p}><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" /></Stroke>;
