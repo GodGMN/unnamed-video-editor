@@ -98,6 +98,20 @@ try {
     checks.push('Quota failure with a handle is not retried and preserves the previous source');
   } finally { await cdp.send('Storage.overrideQuotaForOrigin', { origin }); }
 
+  await page.locator('.media-item[data-source="ready"]').filter({ hasText: 'original.mp4' }).waitFor();
+  checks.push('Imports stay available after reload');
+  const relink = async file => {
+    await item.click({ button: 'right' });
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('menuitem', { name: 'Relink original' }).click();
+    await (await chooser).setFiles(file);
+  };
+  await relink({ name: 'original.mp4', mimeType: 'video/mp4', buffer: Buffer.alloc(bytes.length) });
+  await page.getByRole('status').filter({ hasText: /does not match/ }).waitFor();
+  checks.push('Rejects same-name same-size wrong source');
+  await relink(fixture);
+  await page.locator('.media-item[data-source="ready"]').filter({ hasText: 'original.mp4' }).waitFor();
+  checks.push('Relink from the media menu restores source and previews');
   await returnHome(page);
   await projectAction(page, 'Untitled project', 'Duplicate');
   await page.getByRole('button', { name: 'Rename project Untitled project copy' }).waitFor();
@@ -125,7 +139,7 @@ try {
   await projectAction(page, 'Untitled project', 'Reconnect package');
   await page.locator('input[aria-label="Reconnect package"]').setInputFiles(packagePath);
   await openEditor(page);
-  await page.locator('.media-item').filter({ hasText: 'original.mp4' }).getByText('Stored copy', { exact: true }).waitFor();
+  await page.locator('.media-item[data-source="ready"]').filter({ hasText: 'original.mp4' }).waitFor();
   assert.equal(await page.evaluate(async id => (await (await import('/src/media/files.ts')).readMediaFile(id))?.size, restored.id), bytes.length);
   checks.push('Reconnect package restores current project media after reload');
   const rollback = await page.evaluate(async bytes => {

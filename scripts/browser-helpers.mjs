@@ -16,3 +16,10 @@ export async function returnHome(page) {
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
   await page.locator('.project-home').waitFor();
 }
+/** Waits for a media item's source check, reconnecting `file` if the source is missing. */
+export async function ensureSource(page, name, file) {
+  const item = page.locator('.media-item[data-source]').filter({ hasText: name });
+  await item.waitFor();
+  if (await item.getAttribute('data-source') === 'missing') await page.locator(`input[aria-label="Reconnect ${name}"]`).setInputFiles(file);
+  await page.locator('.media-item[data-source="ready"]').filter({ hasText: name }).waitFor();
+}

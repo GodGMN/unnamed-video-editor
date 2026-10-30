@@ -490,7 +490,8 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .snap-guide { position: absolute; top: 0; bottom: 0; width: 0; margin-left: -1px; border-left: 2px dashed var(--accent); pointer-events: none; z-index: 6; }
 
 .save-status { font-size: 11px; color: var(--text-muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.media-reconnect { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.media-reconnect { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 6px; }
+.media-reconnect .gb { --h: 26px; padding: 0 10px; font-size: 11px; }
 .startup-error { padding: 32px; }
 
 /* Project home: the last edit first, then one searchable, independently scrolling library. */
