@@ -41,15 +41,20 @@ try {
   await openEditor(page);
   await page.reload();
   await openEditor(page);
-  await page.locator(`input[aria-label="Reconnect original.mp4"]`).waitFor({ state: 'attached' });
-  const missing = await page.evaluate(async id => (await import('/src/media/files.ts')).readMediaFile(id), source.media.id);
-  assert.equal(missing, null); checks.push('Session imports require reconnect after reload');
-  await page.locator('input[aria-label="Reconnect original.mp4"]').setInputFiles({ name: 'original.mp4', mimeType: 'video/mp4', buffer: Buffer.alloc(bytes.length) });
+  await page.locator('.media-item[data-source="ready"]').filter({ hasText: 'original.mp4' }).waitFor();
+  checks.push('Imports stay available after reload');
+  const relink = async file => {
+    await item.click({ button: 'right' });
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('menuitem', { name: 'Relink original' }).click();
+    await (await chooser).setFiles(file);
+  };
+  await relink({ name: 'original.mp4', mimeType: 'video/mp4', buffer: Buffer.alloc(bytes.length) });
   await page.getByRole('status').filter({ hasText: /does not match/ }).waitFor();
   checks.push('Rejects same-name same-size wrong source');
-  await page.locator('input[aria-label="Reconnect original.mp4"]').setInputFiles(fixture);
-  await item.and(page.locator('[data-source="ready"]')).waitFor();
-  checks.push('Reconnect restores source and previews');
+  await relink(fixture);
+  await page.locator('.media-item[data-source="ready"]').filter({ hasText: 'original.mp4' }).waitFor();
+  checks.push('Relink from the media menu restores source and previews');
   await returnHome(page);
   await projectAction(page, 'Untitled project', 'Duplicate');
   await page.getByRole('button', { name: 'Rename project Untitled project copy' }).waitFor();

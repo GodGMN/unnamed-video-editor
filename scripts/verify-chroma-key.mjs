@@ -1,4 +1,4 @@
-import { openEditor } from './browser-helpers.mjs';
+import { openEditor, ensureSource } from './browser-helpers.mjs';
 // Run Vite, then PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs TEST_URL=http://127.0.0.1:5269 node scripts/verify-chroma-key.mjs
 // Optional ARTIFACT_DIR keeps the screenshots.
 import assert from 'node:assert/strict';
@@ -108,8 +108,7 @@ try {
   await page.reload();
   await openEditor(page);
   for (const [name, path] of [['greenscreen.mp4', fg], ['backdrop.mp4', bg]]) {
-    await page.locator(`input[aria-label="Reconnect ${name}"]`).setInputFiles(path);
-    await page.locator('.media-item').filter({ hasText: name }).and(page.locator('[data-source="ready"]')).waitFor();
+    await ensureSource(page, name, path);
   }
   const stage = page.locator('canvas[aria-label="Timeline preview"]');
   await stage.waitFor();

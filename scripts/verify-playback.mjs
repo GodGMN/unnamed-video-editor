@@ -1,4 +1,4 @@
-import { openEditor } from './browser-helpers.mjs';
+import { openEditor, ensureSource } from './browser-helpers.mjs';
 // Start Vite, then run with PLAYWRIGHT_MODULE and optional TEST_URL.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -44,8 +44,7 @@ try {
  });
  await page.reload();
   await openEditor(page);
- await page.locator('input[aria-label="Reconnect playback.mp4"]').setInputFiles(file);
- await page.locator('.media-item').filter({ hasText: 'playback.mp4' }).and(page.locator('[data-source="ready"]')).waitFor();
+ await ensureSource(page, 'playback.mp4', file);
  await page.getByRole('button', { name: 'Go to start', exact: true }).click();
  await page.waitForFunction(() => {
    const c = document.querySelector('canvas');
@@ -174,8 +173,7 @@ try {
  });
  await page.reload();
   await openEditor(page);
- await page.locator('input[aria-label="Reconnect playback.mp4"]').setInputFiles(file);
- await page.locator('.media-item').filter({ hasText: 'playback.mp4' }).and(page.locator('[data-source="ready"]')).waitFor();
+ await ensureSource(page, 'playback.mp4', file);
  await page.getByRole('button', { name: 'Go to start', exact: true }).click();
  // Seeks in real 1080p footage outlast a frame. Delay them so that holds for this tiny test file too.
  await page.evaluate(() => {
