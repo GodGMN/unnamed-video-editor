@@ -4,12 +4,12 @@ import { usePlayback } from '../playback/usePlayback';
 import { useSourcePlayer, useStillSource } from '../playback/useSourcePlayer';
 import { PreviewStrip } from '../media/PreviewStrip';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MouseEvent, PointerEvent } from 'react';
-import { clipEnd, findMediaClip, findVideoClip, fmtTime } from '../editor/model';
+import type { CSSProperties, MouseEvent, PointerEvent } from 'react';
+import { ASPECTS, aspectOf, clipEnd, findMediaClip, findVideoClip, fmtTime } from '../editor/model';
 import type { Media, MediaClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { Checker, ChevronLeft, ChevronRight, Close, Dropper, Maximize, Minimize, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
+import { Check, Checker, ChevronDown, ChevronLeft, ChevronRight, Close, Dropper, Maximize, Minimize, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
 import { NumberField } from './NumberField';
 import { Slider } from './Slider';
 import { previewSize, useSettings } from '../settings';
@@ -28,12 +28,11 @@ export function PreviewPanel({ editor, totalTime }: Props) {
   const [grid, setGrid] = useState(false);
   const silent = muted || volume === 0;
   const preview = previewSize(project.output, useSettings().previewResolution);
-  const playback = usePlayback(editor, silent ? 0 : volume / 100, grid, preview.height);
+  const playback = usePlayback(editor, silent ? 0 : volume / 100, grid, preview);
   const source = ui.source ? project.media[ui.source] ?? null : null;
   const still = source?.still ? source : null;
   const sourcePlayer = useSourcePlayer(still ? null : source, silent ? 0 : volume / 100);
   const stillSource = useStillSource(still);
-  const { height: oh } = project.output;
   const panel = useRef<HTMLElement>(null);
   const [fullscreen, toggleFullscreen] = useFullscreen(useCallback(() => panel.current, []));
   const onFullscreen = (e: MouseEvent<HTMLButtonElement>) => {
@@ -59,19 +58,21 @@ export function PreviewPanel({ editor, totalTime }: Props) {
     <section className="panel preview" ref={panel}>
       <div className="preview-head">
         <span className="panel-title">{translate('preview')}</span>
-        {source && (
-          <div className="preview-pills">
+        <div className="preview-pills">
+          {source && <>
             <span className="pill source-pill">{translate('source3', { value1: source.name })}</span>
             <button className="ib outlined back-btn" onClick={editor.closeSource} title={translate('showTheTimelineInThePreviewAgain')}>
               <Close size={12} strokeWidth={2.2} />
-              {translate('backToTimeline')}</button>
-          </div>
-        )}
+              {translate('backToTimeline')}
+            </button>
+          </>}
+          <AspectMenu editor={editor} />
+        </div>
       </div>
 
       <div className="stage-wrap">
         <div className="stage-fit">
-          <div className={grid && !source ? 'stage grid' : 'stage'} style={{ aspectRatio: `${project.output.width} / ${oh}` }}>
+          <div className={grid && !source ? 'stage grid' : 'stage'} style={{ '--ar': project.output.width / project.output.height } as CSSProperties}>
             <canvas ref={playback.canvas} width={preview.width} height={preview.height} aria-label={translate('timelinePreview')} style={{ width: '100%', height: '100%', display: 'block' }} />
             {!source && ui.keyPick && <KeyPicker editor={editor} clipId={ui.keyPick} sample={playback.sample} />}
             <video ref={sourcePlayer.video} className="source-video" hidden={!source || !!still} playsInline preload="auto" aria-label={source && !still ? translate('sourcePreview', { value1: source.name }) : undefined} />
@@ -125,6 +126,53 @@ export function PreviewPanel({ editor, totalTime }: Props) {
         </div>
       </div>
     </section>
+  );
+}
+
+/** The output frame's shape. Sources with another shape follow each clip's fit, which letterboxes by default. */
+function AspectMenu({ editor }: { editor: Editor }) {
+  useT();
+  const { width, height } = editor.project.output;
+  const current = aspectOf(editor.project.output);
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('blur', close);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('blur', close);
+    };
+  }, [open]);
+  return (
+    <div className="aspect" ref={root}>
+      <button className="ib outlined aspect-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}
+        aria-label={translate('outputAspectDescription', { ratio: current?.key ?? translate('custom'), width: String(width), height: String(height) })} title={translate('outputAspectRatio')}>
+        {current?.key ?? translate('custom')}<span className="mono">{width}×{height}</span>
+        <ChevronDown size={12} strokeWidth={2.2} />
+      </button>
+      {open && (
+        <div role="menu" aria-label={translate('outputAspectRatio')} className="menu">
+          <span className="menu-label">{translate('outputFrameShape')}</span>
+          {ASPECTS.map((a) => {
+            const scale = 14 / Math.max(a.w, a.h);
+            return (
+              <button key={a.key} role="menuitemradio" aria-checked={a === current} className="ib"
+                onClick={() => { editor.setAspect(a); setOpen(false); }}>
+                <span className="aspect-icon" aria-hidden="true"><span style={{ width: a.w * scale, height: a.h * scale }} /></span>
+                <span className="aspect-label">{a.key}<span className="aspect-use">{a.use}</span></span>
+                {a === current && <Check size={14} stroke="var(--accent)" strokeWidth={2.4} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

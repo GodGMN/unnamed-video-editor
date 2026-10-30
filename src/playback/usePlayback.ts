@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Editor } from '../editor/useProject';
 import { PlaybackEngine } from './engine';
 
-/** `resolution` is the canvas height; decoders follow it. */
-export function usePlayback(editor: Editor, volume: number, transparent: boolean, resolution: number) {
+/** `width`×`height` is the canvas size; decoders follow it. */
+export function usePlayback(editor: Editor, volume: number, transparent: boolean, { width, height }: { width: number; height: number }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const engine = useRef<PlaybackEngine | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -18,12 +18,12 @@ export function usePlayback(editor: Editor, volume: number, transparent: boolean
     return () => { instance.dispose(); engine.current = null; };
   }, []);
 
-  const sized = useRef(resolution);
+  const sized = useRef(`${width}×${height}`);
   useEffect(() => {
-    if (sized.current === resolution) return;
-    sized.current = resolution;
+    if (sized.current === `${width}×${height}`) return;
+    sized.current = `${width}×${height}`;
     engine.current?.resize();
-  }, [resolution]);
+  }, [width, height]);
 
   const clock = useRef({ time: editor.ui.playhead, started: performance.now() });
   const position = useRef(editor.ui.playhead);

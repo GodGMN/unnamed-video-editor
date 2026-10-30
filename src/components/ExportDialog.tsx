@@ -1,7 +1,7 @@
 import { useT } from '../i18n';
 import { t as translate, formatNumber } from '../i18n/core';
 import { useEffect, useRef, useState } from 'react';
-import { fmtTime } from '../editor/model';
+import { exportSize, fmtTime } from '../editor/model';
 import { ExportError, exportMp4, probeExportSupport } from '../export';
 import type { ExportErrorCode, ExportOptions, ExportResult, SupportReport } from '../export';
 import { Download } from './icons';
@@ -16,6 +16,8 @@ export interface ExportSource {
   /** Sequence length in seconds. */
   duration: number;
   fps: number;
+  /** The project's frame; export sizes keep its ratio. */
+  output: { width: number; height: number };
   prepare: (width: number, height: number, sampleRate: number, signal: AbortSignal) => Promise<{
     renderFrame: ExportOptions['renderFrame'];
     audio: AudioBuffer | null;
@@ -25,7 +27,6 @@ export interface ExportSource {
 
 const SAMPLE_RATE = 48000;
 const CHANNELS = 2;
-const SIZES: Record<Res, [number, number]> = { '720': [1280, 720], '1080': [1920, 1080] };
 
 const COPY: Record<Step, [string, string]> = {
   get settings(): [string, string] { return [translate('exportVideo'), translate('renderedOnThisDeviceNothingIsUploaded')]; },
@@ -64,7 +65,9 @@ interface Props {
 
 export function ExportDialog({ projectSlug, source, onClose }: Props) {
   useT();
-  const { fps } = source;
+  const { fps, output } = source;
+  /** Each resolution is the short side of the frame, so 1080p at 9:16 is 1080×1920. */
+  const size = (r: Res) => exportSize(output, Number(r));
   const [step, setStep] = useState<Step>('settings');
   const [res, setRes] = useState<Res>('1080');
   const [support, setSupport] = useState<SupportReport | 'failed' | null>(null);
@@ -73,7 +76,7 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
   const [failure, setFailure] = useState<Failure | null>(null);
   const controller = useRef<AbortController | null>(null);
   const [title, subtitle] = COPY[step];
-  const [width, height] = SIZES[res];
+  const { width, height } = size(res);
   const totalFrames = Math.max(1, Math.round(source.duration * fps));
 
   useEffect(() => {
@@ -141,8 +144,8 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
       {step === 'settings' && (
         <div className="dialog-body" style={{ paddingTop: 22 }}>
           <Choice label={translate('resolution')} value={res} onChange={setRes} options={[
-            { key: '720', label: '720p', sub: '1280×720' },
-            { key: '1080', label: '1080p', sub: '1920×1080' },
+            { key: '720', label: '720p', sub: dims(size('720')) },
+            { key: '1080', label: '1080p', sub: dims(size('1080')) },
           ]} />
           <div className="rows">
             <div><span className="k">{translate('format')}</span><span className="v">{"MP4 · H.264 + AAC"}</span></div>
@@ -171,7 +174,7 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
       {step === 'done' && result && (
         <div className="dialog-body" style={{ paddingTop: 22 }}>
           <ResultCard tone="#35503F" name={`${projectSlug}-${result.res}p.mp4`}
-            meta={translate('h264AAC', { value1: SIZES[result.res].join('×'), value2: fmtTime(result.out.frameCount / fps), value3: fmtBytes(result.out.blob.size) })}
+            meta={translate('h264AAC', { value1: dims(size(result.res)), value2: fmtTime(result.out.frameCount / fps), value3: fmtBytes(result.out.blob.size) })}
             extra={<span className="mono" style={{ color: 'var(--text-muted)', fontSize: 11 }}>{codecLine(result.out)}</span>} />
           <div className="dialog-actions split">
             <button className="link-btn" onClick={() => setStep('settings')}>{translate('exportAgain')}</button>
@@ -238,6 +241,7 @@ function timeLeft(p: RenderState) {
   return translate('aboutSLeft', { value1: Math.max(1, Math.round(elapsed / p.fraction - elapsed)) });
 }
 
+const dims = ({ width, height }: { width: number; height: number }) => `${width}×${height}`;
 const fmtBytes = (n: number) => (n >= 1e6 ? translate('mb', { value1: formatNumber((n / 1e6), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : translate('kb', { value1: Math.max(1, Math.round(n / 1e3)) }));
 
 /** e.g. `avc1.640028 · mp4a.40.2 (bundled encoder)`. */

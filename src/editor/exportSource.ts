@@ -12,6 +12,7 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
   return {
     duration: layout.end,
     fps: project.output.fps,
+    output: project.output,
     async prepare(width, height, sampleRate, signal) {
       const p = structuredClone(project);
       const ids = new Set([

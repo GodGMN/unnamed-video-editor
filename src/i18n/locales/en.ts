@@ -448,5 +448,14 @@ export const en = {
   "bitrateValue": "{value1} Mb/s",
   "leftAnchor": "left",
   "rightAnchor": "right",
-  "centerAnchor": "center"
+  "centerAnchor": "center",
+  "outputAspectRatio": "Output aspect ratio",
+  "outputAspectDescription": "Output aspect ratio: {ratio}, {width}×{height}",
+  "outputFrameShape": "Output frame · export keeps this shape",
+  "landscapeUse": "Landscape · YouTube",
+  "verticalUse": "Vertical · Shorts, Reels, TikTok",
+  "squareUse": "Square",
+  "portraitUse": "Portrait · feed posts",
+  "classicUse": "Classic",
+  "cinemaUse": "Cinema widescreen"
 };
