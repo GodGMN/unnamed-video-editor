@@ -2,3 +2,6 @@
 .mcp.json
 opencode.json
 .codex/config.toml
+node_modules
+dist
+.worktrees/

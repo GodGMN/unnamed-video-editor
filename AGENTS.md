@@ -13,7 +13,18 @@ gitignored and must never be committed.
 Workflow:
 1. Read the task with get_task.
 2. Move it to doing with update_task before implementation.
-3. Implement and verify the change.
-4. Open a PR referencing the task (Refs #<taskId>) with manual test notes,
-   or post the test plan with create_task_comment.
-5. Ensure the task reaches qa with update_task when finished.
+3. Create a git worktree for the task, branched off main, inside
+   `.worktrees/` in this repo (gitignored), e.g.
+   `git worktree add .worktrees/<taskId>-<slug> -b <taskId>-<slug> main`.
+   Do all work in that worktree, never directly on main.
+4. Implement and verify the change.
+5. Merge the latest main into your branch, then open a PR against main
+   referencing the task (Refs #<taskId>) with manual test notes, or post
+   the test plan with create_task_comment.
+6. Present evidence of the change in the thread (screenshots or other
+   pictures when it applies) and move the task to qa with update_task.
+7. Wait until the user says "merge". Do not merge before that.
+8. When told to merge: merge the latest main into your branch again,
+   then merge the PR.
+9. After merging, delete the worktree (`git worktree remove`) and its
+   local branch, and move the task to done with update_task.
