@@ -124,8 +124,9 @@ export class PlaybackEngine {
       if (!audio) {
         const media = this.latest?.project.media[entry.mediaId];
         const changed = () => this.scheduleDraw(), failed = (error: unknown) => this.fail(entry, error);
-        entry.frames = media?.animation ? new AnimatedFrame(file, imageType(media.container), changed, failed)
-          : media?.still ? new StillFrame(file, changed, failed) : new FrameCache(file, changed, failed);
+        const size = this.canvas;
+        entry.frames = media?.animation ? new AnimatedFrame(file, imageType(media.container), size, changed, failed)
+          : media?.still ? new StillFrame(file, size, changed, failed) : new FrameCache(file, size, changed, failed);
       } else {
         const element = document.createElement('audio');
         const url = URL.createObjectURL(file);
@@ -185,6 +186,12 @@ export class PlaybackEngine {
         if (entry.disposed || !player.wantedPlaying || !latest?.playing || latest.time < clip.start || latest.time >= clipEnd(clip)) element.pause();
       }, (error) => { if (!entry.disposed) this.fail(entry, error); }).finally(() => { player.busy = false; });
     }
+  }
+
+  /** The canvas changed size: decoders reopen at the new resolution. */
+  resize() {
+    for (const [id, entry] of this.entries) if (entry.frames) this.release(id);
+    if (this.latest) this.update(this.latest);
   }
 
   private scheduleDraw() {
