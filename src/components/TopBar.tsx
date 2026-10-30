@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Brand } from './Brand';
 import { Download, Maximize, Minimize, Pencil, Redo, Undo } from './icons';
 import { progressPercent, useConversionJob } from '../convert/job';
@@ -16,6 +16,7 @@ function useFullscreen() {
 
 interface Props {
   projectName: string;
+  onRename: (name: string) => void;
   clipCount: number;
   totalTime: string;
   onExport: () => void;
@@ -42,16 +43,53 @@ function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
   );
 }
 
-export function TopBar({ projectName, clipCount, totalTime, onExport, onShowConversion }: Props) {
+/** Click to edit the name in place; Enter or leaving the field saves, Escape cancels. */
+function ProjectName({ name, onRename }: { name: string; onRename: Props['onRename'] }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const field = useRef<HTMLInputElement>(null);
+  const commit = () => {
+    const next = draft?.trim();
+    if (next && next !== name) onRename(next);
+    setDraft(null);
+  };
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+  const editing = draft !== null;
+  // Buttons never take focus in this app, so clicking one wouldn't blur the field.
+  useEffect(() => {
+    if (!editing) return;
+    const press = (event: PointerEvent) => {
+      if (event.target !== field.current) commitRef.current();
+    };
+    document.addEventListener('pointerdown', press, { capture: true });
+    return () => document.removeEventListener('pointerdown', press, { capture: true });
+  }, [editing]);
+  if (draft === null) {
+    return (
+      <button className="ib project-name" onClick={() => setDraft(name)} aria-label={`Rename project ${name}`} title="Rename project">
+        <span className="project-name-text">{name}</span>
+        <Pencil size={13} stroke="#8C948E" />
+      </button>
+    );
+  }
+  return (
+    <input ref={field} className="fld project-name-field" type="text" aria-label="Project name" spellCheck={false} maxLength={80}
+      autoFocus onFocus={(e) => e.target.select()}
+      value={draft} size={Math.max(draft.length, 8)} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+        else if (e.key === 'Escape') setDraft(null);
+      }} />
+  );
+}
+
+export function TopBar({ projectName, onRename, clipCount, totalTime, onExport, onShowConversion }: Props) {
   const [fullscreen, toggleFullscreen] = useFullscreen();
   return (
     <header className="topbar">
       <Brand />
       <div className="vsep" />
-      <button className="ib" style={{ height: 32, padding: '0 10px', gap: 8, fontWeight: 500 }} aria-label="Rename project">
-        {projectName}
-        <Pencil size={13} stroke="#8C948E" />
-      </button>
+      <ProjectName name={projectName} onRename={onRename} />
       <span className="count">{clipCount} clips · {totalTime}</span>
       <div className="spacer" />
       <ConversionProgress onShow={onShowConversion} />

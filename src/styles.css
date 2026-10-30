@@ -126,6 +126,9 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .workspace { flex: 1 1 0; display: flex; gap: 8px; padding: 8px; min-height: 380px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
 .panel-title { font-weight: 700; letter-spacing: -0.01em; }
+.project-name { height: 32px; padding: 0 10px; gap: 8px; font-weight: 500; max-width: 360px; }
+.project-name-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-name-field { width: auto; max-width: 360px; font: 500 13px var(--sans); }
 .count { color: var(--text-muted); font-size: 12px; }
 .eyebrow { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
 .hint { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
