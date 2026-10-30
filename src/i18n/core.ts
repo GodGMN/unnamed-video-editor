@@ -1,16 +1,41 @@
 import { en } from './locales/en';
+import { es } from './locales/es';
 
 export type TranslationKey = keyof typeof en;
 export type Message = string | Partial<Record<Intl.LDMLPluralRule, string>> & { other: string };
 export type Dictionary = Partial<Record<TranslationKey, Message>>;
-export const locales: Record<string, { name: string; messages: Dictionary }> = { en: { name: 'English', messages: en } };
+export const locales: Record<string, { name: string; messages: Dictionary }> = {
+  en: { name: 'English', messages: en },
+  es: { name: 'Español', messages: es },
+};
 export const LOCALE_KEY = 'editor-locale';
-export function resolveLocale(language: string): string {
-  return Object.hasOwn(locales, language.toLowerCase()) ? language.toLowerCase() : Object.hasOwn(locales, language.toLowerCase().split('-')[0]) ? language.toLowerCase().split('-')[0] : 'en';
+// Other languages of Spain fall back to Spanish until they get a dictionary of their own.
+const SPANISH_FALLBACK = new Set(['ca', 'eu', 'gl', 'ast', 'an', 'ext']);
+function matchLocale(language: string): string | null {
+  const code = language.toLowerCase();
+  const base = code.split('-')[0];
+  if (Object.hasOwn(locales, code)) return code;
+  if (Object.hasOwn(locales, base)) return base;
+  if (SPANISH_FALLBACK.has(base) || code === 'oc-es') return 'es';
+  return null;
+}
+// The first language the app can show, in the user's order of preference; English otherwise.
+export function resolveLocale(...languages: readonly string[]): string {
+  for (const language of languages) {
+    const match = matchLocale(language);
+    if (match) return match;
+  }
+  return 'en';
+}
+export function browserLocale(): string {
+  if (typeof navigator === 'undefined') return 'en';
+  return resolveLocale(...(navigator.languages?.length ? navigator.languages : [navigator.language]));
 }
 export function initialLocale(): string {
-  try { return resolveLocale(localStorage.getItem(LOCALE_KEY) ?? navigator.language); }
-  catch { return typeof navigator === 'undefined' ? 'en' : resolveLocale(navigator.language); }
+  try {
+    const stored = localStorage.getItem(LOCALE_KEY);
+    return stored ? resolveLocale(stored) : browserLocale();
+  } catch { return browserLocale(); }
 }
 let locale = initialLocale();
 const listeners = new Set<() => void>();

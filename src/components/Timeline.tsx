@@ -669,7 +669,7 @@ function Transitions({ editor, clips, pps, dropTarget }: { editor: Editor; clips
         const tt = c.transitionOut ?? DEFAULT_TRANSITION;
         const w = overlap > 0 ? overlap * pps - 2 : 26;
         return (
-          <button key={c.id} className={overlap > 0 ? 'overlap-band' + (dropTarget === c.id ? translate('dropTarget') : '') : 'trans-chip'}
+          <button key={c.id} className={overlap > 0 ? 'overlap-band' + (dropTarget === c.id ? ' drop-target' : '') : 'trans-chip'}
             style={{ left: overlap > 0 ? overlapStart * pps + 1 : overlapStart * pps - w / 2, width: w }}
             aria-label={translate('transitionBetweenAnd', { value1: TRANSITION_NAMES[tt.type], value2: layout.clips[c.id].name, value3: layout.clips[next.id].name })}
             title={overlap > 0 ? translate('sOverlapDropATransitionHere', { value1: formatNumber(overlap, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }) : translate('overlapClipsToAddATransition')}

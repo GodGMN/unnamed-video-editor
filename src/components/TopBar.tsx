@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Brand } from './Brand';
 import { Cog, Download, Maximize, Minimize, Pencil, Redo, Undo } from './icons';
 import { useFullscreen } from './useFullscreen';
+import type { SaveState } from '../editor/useProject';
 import { progressPercent, useConversionJob } from '../convert/job';
 
 const page = () => document.documentElement;
 
 interface Props {
   onProjects: () => void;
-  saveState: string;
+  saveState: SaveState;
   onSave: () => void;
   projectName: string;
   onRename: (name: string) => void;
@@ -27,7 +28,7 @@ function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
   const job = useConversionJob();
   if (!job) return null;
   const p = job.state.status === 'running' ? Math.round(progressPercent(job.state.progress, job.source.duration)) : job.state.status === 'done' ? 100 : 0;
-  const label = job.state.status === 'running' ? translate('converting2', { value1: job.sourceName }) : job.state.status === 'done' ? `Save ${job.sourceName}` : 'Conversion stopped';
+  const label = job.state.status === 'running' ? translate('converting2', { value1: job.sourceName }) : job.state.status === 'done' ? translate('saveConverted', { name: job.sourceName }) : translate('conversionStopped');
   return (
     <>
       <button className="ib conversion" onClick={() => onShow(job.mediaId, job.sourceName)} title={`${label} · ${p}%`}>
@@ -83,6 +84,12 @@ function ProjectName({ name, onRename }: { name: string; onRename: Props['onRena
   );
 }
 
+function saveStatus({ status, error }: SaveState) {
+  if (status === 'saved') return translate('saveSaved');
+  if (status === 'saving') return translate('saveSaving');
+  return error ? translate('saveFailedWith', { error }) : translate('saveFailed');
+}
+
 export function TopBar({ onProjects, saveState, onSave, projectName, onRename, clipCount, totalTime, onExport, onSettings, onShowConversion }: Props) {
   useT();
   const [fullscreen, toggleFullscreen] = useFullscreen(page);
@@ -93,8 +100,8 @@ export function TopBar({ onProjects, saveState, onSave, projectName, onRename, c
       <button className="ib project-home-link" onClick={onProjects}>{translate('projectHomeProjects')}</button>
       <ProjectName name={projectName} onRename={onRename} />
       <span className="count">{translate('clipCount', { count: clipCount, time: totalTime })}</span>
-      <span className={saveState.startsWith('Save failed') ? 'error save-status' : 'save-status'} role="status">{saveState}</span>
-      {saveState.startsWith('Save failed') && <button className="gb" onClick={onSave}>{translate('projectHomeRetrySave')}</button>}
+      <span className={saveState.status === 'failed' ? 'error save-status' : 'save-status'} role="status">{saveStatus(saveState)}</span>
+      {saveState.status === 'failed' && <button className="gb" onClick={onSave}>{translate('projectHomeRetrySave')}</button>}
       <div className="spacer" />
       <ConversionProgress onShow={onShowConversion} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

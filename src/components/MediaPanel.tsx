@@ -119,7 +119,7 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
     setPending((n) => n + batch.length);
     for (const { file, handle } of batch) queue.current = queue.current.then(async () => {
       try { onImport(await importMedia(file, handle)); }
-      catch (error) { setErrors((items) => [...items, `${file.name}: ${error instanceof Error ? error.message : 'Import failed'}`]); }
+      catch (error) { setErrors((items) => [...items, `${file.name}: ${error instanceof Error ? error.message : translate('importFailed')}`]); }
       finally { setPending((n) => n - 1); }
     });
   };
@@ -148,7 +148,7 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
         {pending > 0 && <p className="media-meta media-status">{translate('importingFiles', { count: pending })}</p>}
         {errors.map((error, i) => <p key={i} className="media-meta error media-status">{error}</p>)}
       </div>
-      <p className="hint" style={{ padding: '0 16px 10px' }}>{window.showOpenFilePicker ? 'Import links originals. Dropped files need reconnecting after reload.' : 'Files stay on your disk. Reconnect them after reopening this page.'}</p>
+      <p className="hint" style={{ padding: '0 16px 10px' }}>{window.showOpenFilePicker ? translate('mediaImportLinksOriginals') : translate('mediaFilesStayOnDisk')}</p>
       <div className="media-list">
         {media.map((m) => (
           <div key={m.id} className={'media-item' + (m.decodable ? ' playable' : '') + (previewing === m.id ? ' active' : '')} draggable={m.decodable}
@@ -168,10 +168,10 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
             <div className="media-text">
               <span className="media-name">{m.name}</span>
               <span className={'media-meta' + (m.decodable ? '' : ' error')}>{mediaMeta(project, m)}</span>
-              <span className="hint">{available[m.id] === false ? 'Reconnect needed' : sourceKinds[m.id] === 'linked' ? 'Linked original' : sourceKinds[m.id] === 'session' ? 'Session only' : sourceKinds[m.id] === 'legacy' ? 'Stored copy' : 'Checking source'}</span>
+              <span className="hint">{available[m.id] === false ? translate('mediaReconnectNeeded') : sourceKinds[m.id] === 'linked' ? translate('mediaLinkedOriginal') : sourceKinds[m.id] === 'session' ? translate('mediaSessionOnly') : sourceKinds[m.id] === 'legacy' ? translate('mediaStoredCopy') : translate('mediaCheckingSource')}</span>
               <div className="media-reconnect" onClick={e => e.stopPropagation()}>
-                {window.showOpenFilePicker ? <button className="gb" onClick={() => void pickFiles().then(files => { if (files[0]) return reconnect(m, files[0]); }).catch(failed)}>{available[m.id] ? 'Relink original' : 'Reconnect'}</button> : <label className="gb">{available[m.id] ? 'Relink original' : 'Reconnect'}<input aria-label={`Reconnect ${m.name}`} type="file" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void reconnect(m, { file: f }); e.target.value = ''; }} /></label>}
-                {available[m.id] === false && sourceKinds[m.id] === 'linked' && <button className="gb" onClick={() => void requestSourcePermission(m.id).then(granted => { if (!granted) throw new Error('Select the original file with Reconnect.'); setRevision(n => n + 1); onReconnect(); }).catch(failed)}>{translate('projectHomeRestoreAccess')}</button>}
+                {window.showOpenFilePicker ? <button className="gb" onClick={() => void pickFiles().then(files => { if (files[0]) return reconnect(m, files[0]); }).catch(failed)}>{available[m.id] ? translate('mediaRelinkOriginal') : translate('mediaReconnect')}</button> : <label className="gb">{available[m.id] ? translate('mediaRelinkOriginal') : translate('mediaReconnect')}<input aria-label={translate('mediaReconnectName', { name: m.name })} type="file" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void reconnect(m, { file: f }); e.target.value = ''; }} /></label>}
+                {available[m.id] === false && sourceKinds[m.id] === 'linked' && <button className="gb" onClick={() => void requestSourcePermission(m.id).then(granted => { if (!granted) throw new Error(translate('mediaSelectOriginalWithReconnect')); setRevision(n => n + 1); onReconnect(); }).catch(failed)}>{translate('projectHomeRestoreAccess')}</button>}
               </div>
               {available[m.id] && <button className="convert-btn" onClick={e => { e.stopPropagation(); setPending(n => n + 1); void readMediaFile(m.id).then(async f => { if (f) await regeneratePreview(m, f); setRevision(n => n + 1); onReconnect(); }).catch(failed).finally(() => setPending(n => n - 1)); }}>{translate('projectHomeRebuildPreviews')}</button>}
               {!m.decodable && (
