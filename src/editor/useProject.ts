@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, placeMedia, linkClips, DEFAULT_TRANSITION, clipEnd, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, trimTextItem, videoTracks } from './model';
+import { newId, placeMedia, linkClips, addTextItem, deleteItems, duplicateClip, splitClip, splitTextItem, DEFAULT_TRANSITION, clipEnd, findClip, findTextItem, findVideoClip, layoutTimeline, moveClip, patchClip, patchTextItem, patchTrack, removeMedia, settle, trimTextItem, videoTracks } from './model';
 import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextItem, Tool, Transition, VideoClip } from './model';
 import { SEED_SELECTION, seedProject } from './seed';
 import { clearProject, loadProject, saveProject } from './storage';
@@ -26,7 +26,7 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   const focusClip = findClip(p, ui.focusClip) ? ui.focusClip : first;
   const s = ui.sel;
   const valid = !!s && (s.kind === 'text' ? !!findTextItem(p, s.id) : !!findClip(p, s.id));
-  const sel: Selection | null = valid ? s : focusClip ? { kind: 'clip', id: focusClip } : null;
+  const sel: Selection | null = !s ? null : valid ? s : focusClip ? { kind: 'clip', id: focusClip } : null;
   const picked = ui.picked.filter((x) => findClip(p, x.id));
   if (!picked.length && sel && (sel.kind === 'clip' || sel.kind === 'audio')) picked.push(sel);
   const lockClip = findClip(p, ui.lockClip) ? ui.lockClip : null;
@@ -90,6 +90,8 @@ export function useProject() {
   const [project, setProject] = usePersistentProject(onLoad);
   const projectRef = useRef(project);
   projectRef.current = project;
+  const uiRef = useRef(ui);
+  uiRef.current = ui;
   const layout = useMemo(() => (project ? layoutTimeline(project) : null), [project]);
   const range = useMemo(() => (project && layout ? playRange(project, layout.end, ui.lockClip) : null), [project, layout, ui.lockClip]);
   const rangeRef = useRef(range);
@@ -112,6 +114,16 @@ export function useProject() {
         setProject(next);
         setUi((u) => reconcileUi(next, u));
         removeMediaFiles(mediaId).catch(() => undefined);
+      },
+      /** Deletes the selected clips (with their linked partners) or text item. */
+      deleteSelection: () => {
+        const p = projectRef.current;
+        const { sel, picked } = uiRef.current;
+        const ids = [...picked.map((x) => x.id), ...(sel?.kind === 'text' ? [sel.id] : [])];
+        if (!p || !ids.length) return;
+        const next = deleteItems(p, ids);
+        setProject(next);
+        setUi((u) => reconcileUi(next, { ...u, sel: null, picked: [] }));
       },
       placeMedia: (mediaId: string, trackId: string, time: number) => {
         const id = newId();
@@ -137,8 +149,9 @@ export function useProject() {
         const sel = kept ?? clips.at(-1) ?? null;
         return { ...u, sel, picked: clips, menu: null, focusClip: sel?.id ?? u.focusClip };
       }),
-      /** Moves clip `id` to `start`; `others` shift by the same amount. */
-      moveClip: (snapshot: Project, id: string, start: number, others: string[] = []) => setProject(moveClip(snapshot, id, start, others)),
+      /** Moves clip `id` to `start`, `trackShift` tracks down; `others` shift by the same amount. */
+      moveClip: (snapshot: Project, id: string, start: number, others: string[] = [], trackShift = 0) =>
+        setProject(moveClip(snapshot, id, start, others, trackShift)),
       setTool: (tool: Tool) => setUi((u) => ({ ...u, tool })),
       setScrub: (scrub: number) => setUi((u) => ({ ...u, scrub })),
       setPlayhead: (playhead: number) => setUi((u) => ({ ...u, playhead: rangeRef.current ? clamp(playhead, rangeRef.current) : playhead })),
@@ -169,6 +182,22 @@ export function useProject() {
       /** Links a video and an audio clip so they move and trim together. */
       linkClips: (videoId: string, audioId: string) => edit((p) => linkClips(p, videoId, audioId, newId())),
       updateText: (id: string, patch: Partial<TextItem>) => edit((p) => patchTextItem(p, id, patch)),
+      /** Cuts a clip, and its linked partners, at a sequence time. */
+      splitClip: (id: string, time: number) => edit((p) => splitClip(p, id, time, newId())),
+      splitText: (id: string, time: number) => edit((p) => splitTextItem(p, id, time, newId())),
+      /** Adds a text item at `time` and selects it so it opens in the properties panel. */
+      addText: (time: number) => {
+        const id = newId();
+        edit((p) => addTextItem(p, time, id));
+        setUi((u) => ({ ...u, sel: { kind: 'text', id }, picked: [], menu: null }));
+      },
+      /** Copies a clip, and its linked partners, and selects the copy. */
+      duplicateClip: (id: string) => {
+        const copyId = newId();
+        const kind = projectRef.current && findClip(projectRef.current, id)?.track.kind === 'audio' ? 'audio' : 'clip';
+        edit((p) => duplicateClip(p, id, copyId));
+        setUi((u) => ({ ...u, sel: { kind, id: copyId }, picked: [{ kind, id: copyId }], focusClip: copyId, menu: null }));
+      },
       /** Moves a text item's start or end edge to `time`; the other edge stays put. */
       trimText: (id: string, edge: 'in' | 'out', time: number) => edit((p) => trimTextItem(p, id, edge, time)),
       toggleTrack: (id: string) => edit((p) => {
@@ -196,16 +225,19 @@ export function useDrag() {
     const el = e.currentTarget;
     const x0 = e.clientX;
     const y0 = e.clientY;
-    el.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => onMove(ev.clientX - x0, ev.clientY - y0);
-    const end = () => {
-      el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', end);
-      el.removeEventListener('pointercancel', end);
+    const id = e.pointerId;
+    el.setPointerCapture(id);
+    // Listening on window keeps the drag alive if the element remounts, e.g. a clip moving to another track.
+    const move = (ev: PointerEvent) => { if (ev.pointerId === id) onMove(ev.clientX - x0, ev.clientY - y0); };
+    const end = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
     };
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', end);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
   }, []);
   return start;
 }

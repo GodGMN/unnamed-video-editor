@@ -1,25 +1,28 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
-import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
+import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, curveName, findClip, movingGroup, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
-import type { AudioClip, ClipSelection, Project, TextItem, TransitionType, Tool, Track, VideoClip } from '../editor/model';
+import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, curveName, findClip, movingGroup, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
+import type { AudioClip, AudioTrack, ClipSelection, Project, TextItem, TransitionType, Track, VideoClip, VideoTrack } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
-import { CutLine, Crossfade, Cursor, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
+import { CutLine, Crossfade, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
 
 const TEXT_TRACK_H = 44;
 const VIDEO_TRACK_H = 56;
 const AUDIO_TRACK_H = 64;
 const AUDIO_CLIP_H = 52;
 
-const TOOLS: { k: Tool; label: string; key: string; icon: ReactNode }[] = [
-  { k: 'select', label: 'Select', key: 'V', icon: <Cursor size={14} /> },
-  { k: 'split', label: 'Split', key: 'S', icon: <Scissors size={14} /> },
-  { k: 'text', label: 'Text', key: 'T', icon: <TextT size={14} /> },
-];
+/** Screen pixels within which a split snaps to the playhead, like the magnet's snap radius. */
+const SPLIT_SNAP_PX = 8;
 
 const TRACK_H = { text: TEXT_TRACK_H, video: VIDEO_TRACK_H, audio: AUDIO_TRACK_H };
+
+/** Clips cancel pointerdown for dragging, so a properties field would keep focus (and eat Delete) without this. */
+const blurField = () => {
+  const el = document.activeElement;
+  if (el instanceof HTMLElement && el.matches('input, textarea, select, [contenteditable=true]')) el.blur();
+};
 
 const isOff = (t: Track) => (t.kind === 'audio' ? t.muted : t.hidden);
 
@@ -64,7 +67,7 @@ function transitionTargetAt(project: Project, track: Track, time: number, slop: 
 }
 
 export function Timeline({ editor }: { editor: Editor }) {
-  const { project, ui, layout, select, setTool, setPlayhead, unlock, toggleTrack, openMenu, closeMenu } = editor;
+  const { project, ui, layout, select, setTool, setPlayhead, unlock, toggleTrack, openMenu, closeMenu, deleteSelection } = editor;
   const focus = ui.lockClip ? layout.clips[ui.lockClip] : undefined;
   const focused = !!focus;
   const rootRef = useRef<HTMLElement>(null);
@@ -110,6 +113,20 @@ export function Timeline({ editor }: { editor: Editor }) {
     }
   }, [pps]);
 
+  // Delete or Backspace removes the selection, unless the key is meant for a text field or a dialog.
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const target = event.target as HTMLElement;
+      if (target.closest('input, textarea, select, [contenteditable=true]') || document.querySelector('[role=dialog]')) return;
+      event.preventDefault();
+      closeMenu();
+      deleteSelection();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeMenu, deleteSelection]);
+
   const startDrag = useDrag();
   const [snapping, setSnapping] = useState(true);
   // The video clip whose transition a dragged transition would replace, for drop highlighting.
@@ -121,6 +138,62 @@ export function Timeline({ editor }: { editor: Editor }) {
     window.addEventListener('dragend', clear);
     return () => window.removeEventListener('dragend', clear);
   }, []);
+  const splitting = ui.tool === 'split';
+  // Where a click would cut in split mode, and the tracks the cut reaches.
+  const [cut, setCut] = useState<{ time: number; trackIds: string[] } | null>(null);
+  useEffect(() => { if (!splitting) setCut(null); }, [splitting]);
+
+  // S toggles the scissors, T adds text at the playhead, Esc puts the scissors away, Ctrl+D duplicates.
+  const keys = useRef({ editor, splitting });
+  keys.current = { editor, splitting };
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (e.repeat || e.altKey || target.closest('input, textarea, select, [contenteditable=true]') || document.querySelector('[aria-modal=true]')) return;
+      const { editor, splitting } = keys.current;
+      const key = e.key.toLowerCase();
+      if (e.ctrlKey || e.metaKey) {
+        if (key !== 'd' || e.shiftKey) return;
+        e.preventDefault();
+        for (const x of editor.ui.picked) editor.duplicateClip(x.id);
+      } else if (key === 's') editor.setTool(splitting ? 'select' : 'split');
+      else if (key === 't') editor.addText(editor.ui.playhead);
+      else if (key === 'escape' && splitting) editor.setTool('select');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  /** What a split-mode click at the pointer would cut on track `t`: the topmost clip or text item under it. */
+  const cutTarget = (e: PointerEvent<HTMLDivElement>, t: Track) => {
+    let time = Math.max(0, (e.clientX - e.currentTarget.getBoundingClientRect().left) / pps);
+    if (snapping && Math.abs(time - ui.playhead) * pps <= SPLIT_SNAP_PX) time = ui.playhead;
+    const inside = (start: number, end: number) => time - start >= MIN_SPLIT_PIECE && end - time >= MIN_SPLIT_PIECE;
+    if (t.kind === 'text') {
+      const item = [...t.items].reverse().find((x) => inside(x.start, x.start + x.duration));
+      return item && { time, id: item.id, text: true, trackIds: [t.id] };
+    }
+    const clip = [...t.clips as (VideoClip | AudioClip)[]].reverse().find((c) => inside(c.start, clipEnd(c)));
+    if (!clip) return null;
+    const partners = clip.linked ? partnersOf(project, clip).filter((c) => inside(c.start, clipEnd(c))) : [];
+    return { time, id: clip.id, text: false, trackIds: [t.id, ...partners.map((c) => findClip(project, c.id)!.track.id)] };
+  };
+  const onSplitMove = (e: PointerEvent<HTMLDivElement>, t: Track) => {
+    const target = cutTarget(e, t);
+    setCut(target ? { time: target.time, trackIds: target.trackIds } : null);
+  };
+  // Captured so the click cuts instead of grabbing a clip, trim handle or gain line underneath.
+  const onSplitDown = (e: PointerEvent<HTMLDivElement>, t: Track) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const target = cutTarget(e, t);
+    if (!target) return;
+    if (target.text) editor.splitText(target.id, target.time);
+    else editor.splitClip(target.id, target.time);
+    setCut(null);
+  };
+
   // Ticks run past the content and on to the right edge of the viewport when zoomed out.
   const lastTick = Math.max(Math.ceil(layout.end) + 2, Math.ceil(viewW / pps));
   const tlWidth = (Math.ceil(layout.end) + 2) * pps + 20;
@@ -276,19 +349,19 @@ export function Timeline({ editor }: { editor: Editor }) {
   }
 
   return (
-    <section ref={rootRef} className="panel timeline" onClick={closeMenu}>
+    <section ref={rootRef} className={'panel timeline' + (splitting ? ' splitting' : '')} onClick={closeMenu} onPointerDownCapture={blurField}>
       <div className="tl-tools">
         <div className="toolbar" role="toolbar" aria-label="Timeline tools">
-          {TOOLS.map((o) => (
-            <button key={o.k} aria-pressed={ui.tool === o.k} title={`${o.label} · ${o.key}`} onClick={() => setTool(o.k)}>
-              {o.icon}
-              {o.label}<span className="kbd">{o.key}</span>
-            </button>
-          ))}
+          <button aria-pressed={splitting} title="Split · S · click clips to cut them" onClick={() => setTool(splitting ? 'select' : 'split')}>
+            <Scissors size={14} />Split<span className="kbd">S</span>
+          </button>
+          <button title="Add text at the playhead · T" onClick={() => editor.addText(ui.playhead)}>
+            <TextT size={14} />Text<span className="kbd">T</span>
+          </button>
           <span className="tool-separator" role="separator" aria-orientation="vertical" />
           <button aria-label="Snap clips" aria-pressed={snapping} title="Snap clips" onClick={() => setSnapping(v => !v)}><Magnet size={16} /></button>
         </div>
-        <span className="hint">{focused ? 'Playhead locked to a clip · Double-click the time bar to release' : 'Double-click a clip to lock the playhead to it · Drag a transition onto an overlap'}</span>
+        <span className="hint">{splitting ? 'Click a clip to cut it · Cuts snap to the playhead · Esc to stop splitting' : focused ? 'Playhead locked to a clip · Double-click the time bar to release' : 'Double-click a clip to lock the playhead to it · Drag a transition onto an overlap'}</span>
         <div className="spacer" />
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Video track</button>
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Audio track</button>
@@ -333,6 +406,11 @@ export function Timeline({ editor }: { editor: Editor }) {
               return (
               <div key={t.id} className="track" onDragOver={(e) => onTrackDragOver(e, t)} onDrop={(e) => onTrackDrop(e, t)}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { setDropTarget(null); setGhost(null); } }}
+                onPointerDownCapture={splitting ? (e) => onSplitDown(e, t) : undefined}
+                onClickCapture={splitting ? (e) => e.stopPropagation() : undefined}
+                onDoubleClickCapture={splitting ? (e) => e.stopPropagation() : undefined}
+                onPointerMove={splitting ? (e) => onSplitMove(e, t) : undefined}
+                onPointerLeave={splitting ? () => setCut(null) : undefined}
                 data-track-id={t.id} style={{ height: TRACK_H[t.kind], opacity: t.kind !== 'text' && isOff(t) ? 0.35 : 1 }}>
                 {t.kind === 'text' && (
                   <>
@@ -366,6 +444,7 @@ export function Timeline({ editor }: { editor: Editor }) {
                     ))}
                   </>
                 )}
+                {cut?.trackIds.includes(t.id) && <span className="split-guide" style={{ left: cut.time * pps }} aria-hidden="true" />}
                 {ghost?.trackId === t.id && (
                   <div className={'drop-ghost' + (ghost.insert ? ' insert' : '')} aria-hidden="true"
                     style={{ left: ghost.start * pps, width: Math.max(2, ghost.duration * pps) }}>
@@ -428,12 +507,28 @@ function useClipMove(editor: Editor, clip: VideoClip | AudioClip, kind: 'clip' |
     }
     const element = e.currentTarget;
     const pps = ((element.closest('.audio-clip') ?? element).getBoundingClientRect().width + 3) / clipDuration(clip);
+    // Vertical bands of the tracks the clip can move between, measured once at drag start.
+    const trackKind = kind === 'clip' ? 'video' : 'audio';
+    const laneIds = snapshot.tracks.filter(t => t.kind === trackKind).map(t => t.id);
+    const lanes = laneIds.map(tid => element.closest('.tl-scroll')?.querySelector(`.track[data-track-id="${tid}"]`)?.getBoundingClientRect());
+    const from = laneIds.findIndex(tid => (snapshot.tracks.find(t => t.id === tid) as VideoTrack | AudioTrack).clips.some(c => c.id === clip.id));
+    const laneAt = (y: number) => {
+      let best = from;
+      let distance = Infinity;
+      lanes.forEach((r, i) => {
+        if (!r) return;
+        const d = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+        if (d < distance) { best = i; distance = d; }
+      });
+      return best;
+    };
+    const y0 = e.clientY;
     if (!others.length) editor.select({ kind, id: clip.id });
-    startDrag(e, dx => {
-      if (!dragged.current && Math.abs(dx) < 3) return;
+    startDrag(e, (dx, dy) => {
+      if (!dragged.current && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
       dragged.current = true;
       const start = Math.max(0, clip.start + dx / pps);
-      editor.moveClip(snapshot, clip.id, snapping ? snapClipStart(start, clipDuration(clip), targets, pps) : start, others);
+      editor.moveClip(snapshot, clip.id, snapping ? snapClipStart(start, clipDuration(clip), targets, pps) : start, others, laneAt(y0 + dy) - from);
     });
   };
   // The click that ends a drag keeps the selection as it is.
@@ -460,7 +555,7 @@ function partnerSelected({ project, ui }: Editor, clip: VideoClip | AudioClip, k
 }
 
 function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<VideoClip>) {
-  const { project, ui } = editor;
+  const { project } = editor;
   const move = useClipMove(editor, cs, 'clip', snapping);
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
@@ -471,7 +566,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
 
   return (
     <button className={'clip' + (partner ? ' partner' : '')}
-      style={{ left: cs.start * pps + 1, width, background: src.tone, cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
+      style={{ left: cs.start * pps + 1, width, background: src.tone }}
       aria-label={`Video: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
       aria-pressed={selected}
       onPointerDown={move.onPointerDown}
@@ -657,7 +752,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   return (
     <div className={'audio-clip' + (picked ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked')}
       style={{ left: cs.start * pps + 1, width }}>
-      <button className="audio-wave" style={{ cursor: ui.tool === 'split' ? 'crosshair' : 'pointer' }}
+      <button className="audio-wave"
         aria-label={`Audio: ${src.name}, volume ${cs.vol}%${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
         aria-pressed={picked}
         onPointerDown={move.onPointerDown}
@@ -718,7 +813,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
 }
 
 function ClipMenu({ editor }: { editor: Editor }) {
-  const { project, ui, updateVideoClip, updateAudioClip, linkClips, closeMenu } = editor;
+  const { project, ui, updateVideoClip, updateAudioClip, linkClips, closeMenu, deleteSelection } = editor;
   const m = ui.menu!;
   const found = findClip(project, m.id);
   if (!found) return null;
@@ -733,15 +828,18 @@ function ClipMenu({ editor }: { editor: Editor }) {
   const unlinkId = pair ? (pairLinked ? pair.video.id : null)
     : ui.picked.length === 1 && cs.linked && partnersOf(project, cs).length > 0 ? cs.id : null;
   const updateClip = findClip(project, unlinkId)?.track.kind === 'audio' ? updateAudioClip : updateVideoClip;
+  // The selected clips the playhead crosses.
+  const splittable = ui.picked.map((x) => findClip(project, x.id)?.clip)
+    .filter((c) => !!c && ui.playhead - c.start >= MIN_SPLIT_PIECE && clipEnd(c) - ui.playhead >= MIN_SPLIT_PIECE).map((c) => c!.id);
   const act = (fn?: () => void) => (e: MouseEvent) => { e.stopPropagation(); fn?.(); closeMenu(); };
 
   return (
     <div role="menu" aria-label={label} className="menu" style={{ left: m.left, top: m.top }} onClick={(e) => e.stopPropagation()}>
       <span className="menu-label">{label}</span>
-      <button role="menuitem" className="ib" onClick={act()}>
-        <Scissors size={14} stroke="#C8CEC9" /><span>Split at playhead</span><span className="kbd">S</span>
+      <button role="menuitem" className="ib" disabled={!splittable.length} onClick={act(() => splittable.forEach((id) => editor.splitClip(id, ui.playhead)))}>
+        <Scissors size={14} stroke="#C8CEC9" /><span>Split at playhead</span>
       </button>
-      <button role="menuitem" className="ib" onClick={act()}>
+      <button role="menuitem" className="ib" onClick={act(() => ui.picked.forEach((x) => editor.duplicateClip(x.id)))}>
         <Duplicate size={14} stroke="#C8CEC9" /><span>Duplicate</span><span className="kbd">Ctrl D</span>
       </button>
       <div className="menu-sep" />
@@ -760,7 +858,7 @@ function ClipMenu({ editor }: { editor: Editor }) {
         </button>
       )}
       <div className="menu-sep" />
-      <button role="menuitem" className="ib danger" onClick={act()}>
+      <button role="menuitem" className="ib danger" onClick={act(deleteSelection)}>
         <Trash size={14} /><span>Delete</span><span className="kbd">Del</span>
       </button>
     </div>

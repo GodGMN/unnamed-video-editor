@@ -308,6 +308,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .menu .ib > span:first-of-type { flex: 1 1 auto; }
 .menu .ib .kbd { font-size: 11px; }
 .menu .ib.danger { color: var(--danger); }
+.menu .ib:disabled { opacity: 0.4; cursor: default; background: transparent; }
 .menu-note { padding: 4px 10px 6px; white-space: normal; }
 .menu-sep { height: 1px; background: var(--line-strong); margin: 4px 6px; }
 
@@ -369,7 +370,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .gate-card .pill { margin-top: 6px; font-size: 12px; color: var(--text-muted); border-color: var(--line-strong); padding: 5px 12px; }
 
 .tool-separator { width: 1px; background: var(--control); margin: 4px 5px; }
-.clip, .audio-wave { touch-action: none; }
+.clip, .audio-wave { touch-action: none; cursor: pointer; }
 
 .trans-chip > .trans-icon { display: contents; }
 
@@ -388,4 +389,9 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .drop-ghost { position: absolute; top: 6px; bottom: 6px; z-index: 6; pointer-events: none; border-radius: 8px; border: 1px dashed var(--accent); background: linear-gradient(rgba(198, 240, 191, 0.16), rgba(198, 240, 191, 0.16)), var(--bg); color: var(--accent); font-size: 11px; font-weight: 500; display: flex; align-items: center; padding: 0 8px; overflow: hidden; white-space: nowrap; }
 .drop-ghost > span { overflow: hidden; text-overflow: ellipsis; }
 .drop-ghost.insert { box-shadow: -3px 0 0 var(--accent); }
+
+/* Split mode: scissors over every clip; the hotspot is where the blades cross. */
+.timeline.splitting .track, .timeline.splitting .track * { cursor: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"%3E%3Cg transform="rotate%2890 12 12%29"%3E%3Cg stroke="%230C0E0D" stroke-width="4"%3E%3Ccircle cx="6" cy="6" r="3"/%3E%3Ccircle cx="6" cy="18" r="3"/%3E%3Cpath d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/%3E%3C/g%3E%3Cg stroke="%23F1F4F0" stroke-width="1.8"%3E%3Ccircle cx="6" cy="6" r="3"/%3E%3Ccircle cx="6" cy="18" r="3"/%3E%3Cpath d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E') 12 12, crosshair !important; }
+.timeline.splitting .vol-line, .timeline.splitting .fade-handle, .timeline.splitting .curve-handle { pointer-events: none; }
+.split-guide { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: var(--text-bright); box-shadow: 0 0 0 1px rgba(12, 14, 13, 0.6); border-radius: 1px; pointer-events: none; z-index: 5; }
 .marquee { position: absolute; z-index: 7; pointer-events: none; border: 1.5px solid var(--accent); border-radius: 8px; background: radial-gradient(circle at center, rgba(198, 240, 191, 0.18) 0.5px, transparent 1px) 0 0 / 5px 5px, rgba(198, 240, 191, 0.1); }

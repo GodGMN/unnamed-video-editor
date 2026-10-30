@@ -6,7 +6,8 @@
 
 export type FitMode = 'fit' | 'fill' | 'custom';
 export type TransitionType = 'cut' | 'fade' | 'crossfade';
-export type Tool = 'select' | 'split' | 'text';
+/** `split` turns the pointer into scissors that cut clips where they're clicked. */
+export type Tool = 'select' | 'split';
 export type TextAnchor = `${'t' | 'c' | 'b'}${'l' | 'c' | 'r'}`;
 
 export interface VideoStream {
@@ -343,6 +344,14 @@ export function removeMedia(p: Project, mediaId: string): Project {
   } as Track) };
 }
 
+/** Removes clips (with their linked partners) and text items by id. */
+export function deleteItems(p: Project, ids: string[]): Project {
+  const gone = new Set([...ids, ...movingGroup(p, ids).map((c) => c.id)]);
+  return { ...p, tracks: p.tracks.map((t) => (t.kind === 'text'
+    ? { ...t, items: t.items.filter((x) => !gone.has(x.id)) }
+    : { ...t, clips: t.clips.filter((c) => !gone.has(c.id)) } as Track)) };
+}
+
 /** Keep track order deterministic without changing user-authored positions. */
 export function settle(p: Project): Project {
   return { ...p, tracks: p.tracks.map(t => t.kind === 'text' ? t : {
@@ -402,19 +411,45 @@ export function movingGroup(p: Project, ids: string[]): Clip[] {
 /**
  * Moves clip `id` to `start` and shifts `others` (plus everyone's linked partners) by the same
  * delta, without packing away the user's placement. No clip goes before 0.
+ *
+ * `trackShift` also moves `id` and those of `others` on the same kind of track that many tracks
+ * down (or up, when negative) among the tracks of that kind; linked partners stay on their tracks.
+ * The shift is clamped so every moved clip lands on an existing track.
  */
-export function moveClip(p: Project, id: string, start: number, others: string[] = []): Project {
+export function moveClip(p: Project, id: string, start: number, others: string[] = [], trackShift = 0): Project {
   const found = findClip(p, id);
   if (!found) return p;
   const group = movingGroup(p, [id, ...others]);
   const ids = new Set(group.map(c => c.id));
   const delta = Math.max(start - found.clip.start, -Math.min(...group.map(c => c.start)));
-  return { ...p, tracks: p.tracks.map(t => {
+
+  // Index of each vertically moving clip's track among the tracks of its kind.
+  const lanes = p.tracks.filter(t => t.kind === found.track.kind) as (VideoTrack | AudioTrack)[];
+  const lane = new Map<string, number>();
+  for (const x of [id, ...others]) {
+    const i = lanes.findIndex(t => (t.clips as Clip[]).some(c => c.id === x));
+    if (i >= 0) lane.set(x, i);
+  }
+  const shift = Math.max(-Math.min(...lane.values()), Math.min(lanes.length - 1 - Math.max(...lane.values()), Math.round(trackShift)));
+
+  const moved = new Map<string, Clip>();
+  const tracks = p.tracks.map(t => {
     if (t.kind === 'text') return t;
-    const clips = t.clips.map(c => ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c)
-      .sort((a, b) => a.start - b.start);
+    const clips = (t.clips as Clip[]).flatMap(c => {
+      const next = ids.has(c.id) ? { ...c, start: round6(c.start + delta) } : c;
+      if (!shift || !lane.has(c.id)) return [next];
+      moved.set(c.id, next);
+      return [];
+    });
     return { ...t, clips } as Track;
-  }) };
+  });
+  if (shift) for (const [x, i] of lane) {
+    const dest = lanes[i + shift].id;
+    const k = tracks.findIndex(t => t.id === dest);
+    const t = tracks[k] as VideoTrack | AudioTrack;
+    tracks[k] = { ...t, clips: [...t.clips, moved.get(x)!] } as Track;
+  }
+  return { ...p, tracks: tracks.map(t => t.kind === 'text' ? t : { ...t, clips: [...t.clips].sort((a, b) => a.start - b.start) } as Track) };
 }
 
 /** Both edges can snap; the radius stays constant in screen pixels at every zoom. */
@@ -436,6 +471,97 @@ export function patchTextItem(p: Project, id: string, patch: Partial<TextItem>):
       ? { ...t, items: t.items.map((x) => (x.id === id ? { ...x, ...patch } : x)) }
       : t)),
   };
+}
+
+/** Shortest piece a split may leave on either side of the cut, in seconds. */
+export const MIN_SPLIT_PIECE = 0.05;
+
+const cuts = (start: number, end: number, time: number) => time - start >= MIN_SPLIT_PIECE && end - time >= MIN_SPLIT_PIECE;
+
+/**
+ * Cuts clip `id` at sequence time `time`; the left piece keeps the id and the right piece gets
+ * `rightId`. Linked partners are cut too, and their right pieces link up under `rightId`. Fades
+ * and the outgoing transition stay on the outer ends. No-op when `time` isn't inside the clip.
+ */
+export function splitClip(p: Project, id: string, time: number, rightId: string): Project {
+  const found = findClip(p, id);
+  if (!found || !cuts(found.clip.start, clipEnd(found.clip), time)) return p;
+  const group = [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])]
+    .filter((c) => cuts(c.start, clipEnd(c), time));
+  const linkId = group.length > 1 ? rightId : null;
+  const ids = new Map(group.map((c, i) => [c.id, i === 0 ? rightId : `${rightId}-${i}`]));
+  return { ...p, tracks: p.tracks.map((t) => {
+    if (t.kind === 'text' || !t.clips.some((c) => ids.has(c.id))) return t;
+    const clips = (t.clips as Clip[]).flatMap((c): Clip[] => {
+      const newId = ids.get(c.id);
+      if (!newId) return [c];
+      const cut = round6(c.inS + time - c.start);
+      const left = { ...c, outS: cut };
+      const right = { ...c, id: newId, start: round6(time), inS: cut, linkId, linked: !!linkId && c.linked };
+      if (t.kind === 'video') return [{ ...left, transitionOut: null } as VideoClip, right];
+      const a = c as AudioClip;
+      return [
+        { ...left, fadeIn: Math.min(a.fadeIn, cut - a.inS), fadeOut: 0 } as AudioClip,
+        { ...right, fadeIn: 0, fadeOut: Math.min(a.fadeOut, a.outS - cut) } as AudioClip,
+      ];
+    });
+    return { ...t, clips } as Track;
+  }) };
+}
+
+/** Cuts text item `id` at `time`; the right piece gets `rightId`. No-op when `time` isn't inside it. */
+export function splitTextItem(p: Project, id: string, time: number, rightId: string): Project {
+  const item = findTextItem(p, id);
+  if (!item || !cuts(item.start, item.start + item.duration, time)) return p;
+  const left = round6(time - item.start);
+  return { ...p, tracks: p.tracks.map((t) => t.kind !== 'text' || !t.items.includes(item) ? t : {
+    ...t, items: t.items.flatMap((x) => x !== item ? [x] : [
+      { ...x, duration: left },
+      { ...x, id: rightId, start: round6(time), duration: round6(x.duration - left) },
+    ]),
+  }) };
+}
+
+/** Property values of a text item added from the timeline toolbar. */
+export const TEXT_ITEM_DEFAULTS: Omit<TextItem, 'id' | 'start'> = { content: 'Title', size: 72, color: '#FFFFFF', pos: 'bc', x: 0, y: 0, duration: 3 };
+
+/** Adds a default text item at `time` to the top text track with room for it, or to a new text track on top. */
+export function addTextItem(p: Project, time: number, id: string): Project {
+  const item: TextItem = { ...TEXT_ITEM_DEFAULTS, id, start: round6(Math.max(0, time)) };
+  const end = item.start + item.duration;
+  const tracks = textTracks(p);
+  const track = tracks.find((t) => t.items.every((x) => x.start + x.duration <= item.start + EPS || x.start >= end - EPS));
+  if (!track) {
+    const name = tracks.length ? `Text ${tracks.length + 1}` : 'Text';
+    return { ...p, tracks: [{ kind: 'text', id: `${id}-track`, name, label: '', hidden: false, items: [item] }, ...p.tracks] };
+  }
+  return { ...p, tracks: p.tracks.map((t) => t === track ? { ...track, items: [...track.items, item] } : t) };
+}
+
+/**
+ * Copies clip `id`, and its linked partners, as `copyId`. The copy goes right after the original
+ * when that spot is free on every track involved, otherwise after the last clip on those tracks.
+ */
+export function duplicateClip(p: Project, id: string, copyId: string): Project {
+  const found = findClip(p, id);
+  if (!found) return p;
+  const group = [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])];
+  const duration = clipDuration(found.clip);
+  const tracks = p.tracks.filter((t): t is VideoTrack | AudioTrack => t.kind !== 'text' && (t.clips as Clip[]).some((c) => group.includes(c)));
+  const others = tracks.flatMap((t) => t.clips as Clip[]);
+  const after = clipEnd(found.clip);
+  const free = others.every((c) => clipEnd(c) <= after + EPS || c.start >= after + duration - EPS);
+  const start = free ? after : Math.max(...others.map(clipEnd));
+  const linkId = group.length > 1 ? copyId : null;
+  const ids = new Map(group.map((c, i) => [c.id, i === 0 ? copyId : `${copyId}-${i}`]));
+  return settle({ ...p, tracks: p.tracks.map((t) => {
+    if (t.kind === 'text') return t;
+    const copies = (t.clips as Clip[]).filter((c) => ids.has(c.id)).map((c) => ({
+      ...c, id: ids.get(c.id)!, start: round6(start + c.start - found.clip.start), linkId, linked: !!linkId && c.linked,
+      ...(t.kind === 'video' ? { transitionOut: null } : {}),
+    }));
+    return copies.length ? { ...t, clips: [...t.clips, ...copies] } as Track : t;
+  }) });
 }
 
 export const MIN_TEXT_DURATION = 0.5;
