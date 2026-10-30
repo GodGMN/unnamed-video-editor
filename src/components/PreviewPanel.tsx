@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import type { CSSProperties, PointerEvent } from 'react';
 import { filmstrip, findClip, fmtTime, textTracks, videoTracks } from '../editor/model';
 import type { Clip, Media, Project, TimelineLayout, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { ChevronLeft, ChevronRight, Play, SkipEnd, SkipStart, Volume } from './icons';
+import { Slider } from './Slider';
 
 const ALIGN: Record<string, CSSProperties['alignItems']> = { t: 'flex-start', c: 'center', b: 'flex-end', l: 'flex-start', r: 'flex-end' };
 
@@ -24,6 +26,7 @@ function clipAt(project: Project, layout: TimelineLayout, t: number): VideoClip 
 
 export function PreviewPanel({ editor, totalTime }: Props) {
   const { project, ui, layout } = editor;
+  const [volume, setVolume] = useState(70);
   const accent = 'var(--accent)';
   const { width: ow, height: oh } = project.output;
 
@@ -98,10 +101,9 @@ export function PreviewPanel({ editor, totalTime }: Props) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, justifyContent: 'flex-end' }}>
           <Volume stroke="#C8CEC9" />
-          <label style={{ width: 110, display: 'flex', alignItems: 'center' }}>
-            <span className="sr-only">Preview volume</span>
-            <input type="range" min={0} max={100} defaultValue={70} style={{ height: 16, cursor: 'pointer' }} />
-          </label>
+          <div style={{ width: 110 }}>
+            <Slider label="Preview volume" hideLabel className="compact" value={volume} unit="%" min={0} max={100} onChange={setVolume} />
+          </div>
         </div>
       </div>
     </section>
@@ -172,7 +174,7 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: Clip; src: Medi
         <span className="trim-time" style={{ textAlign: 'right' }}>{fmtTime(cs.outS)}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
-        Playhead <span className="mono" style={{ color: 'var(--text)' }}>{fmtTime(scrub)}</span> · drag the handles to trim, the line to scrub
+        Playhead <span className="mono" style={{ color: 'var(--text)' }}>{fmtTime(scrub)}</span>
       </div>
     </div>
   );

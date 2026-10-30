@@ -4,6 +4,7 @@ import type { AudioClip, FitMode, TextAnchor, TextItem, TransitionType, VideoCli
 import type { Editor } from '../editor/useProject';
 import { Mute, Waveform } from './icons';
 import { NumberField } from './NumberField';
+import { Slider } from './Slider';
 
 const TITLES = { clip: 'Video clip', audio: 'Audio clip', trans: 'Transition', text: 'Text overlay' } as const;
 
@@ -24,17 +25,6 @@ export function PropertiesPanel({ editor }: { editor: Editor }) {
   );
 }
 
-
-function Slider({ label, value, unit, min, max, step = 1, onChange }: {
-  label: string; value: number; unit: string; min: number; max: number; step?: number; onChange: (v: number) => void;
-}) {
-  return (
-    <label className="slider">
-      <span>{label}<span>{value}{unit}</span></span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-    </label>
-  );
-}
 
 function Stat({ label, value }: { label: string; value: string }) {
   return <div className="stat"><span>{label}</span><span>{value}</span></div>;

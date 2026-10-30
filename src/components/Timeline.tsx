@@ -275,14 +275,14 @@ function AudioClipView({ editor, clip: cs, onMenu }: ClipProps<AudioClip>) {
         <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H} L${f1(foW)},0 Z`} fill="rgba(12,14,13,0.62)" />
         <path d={`M0,0 Q${f1(co.cx)},${f1(co.cy)} ${f1(foW)},${H}`} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
       </svg>
-      {fiW >= 14 && (
+      {selected && fiW >= 14 && (
         <button className="curve-handle" style={{ left: ciM.x - 9, top: ciM.y - 9 }}
           aria-label={`Fade-in curve ${curveName(cs.curveIn)}, drag up or down to adjust`}
           title="Drag up or down to shape the fade-in curve" onPointerDown={curveDown('curveIn')}>
           <span />
         </button>
       )}
-      {foW >= 14 && (
+      {selected && foW >= 14 && (
         <button className="curve-handle" style={{ left: width - foW + coM.x - 9, top: coM.y - 9 }}
           aria-label={`Fade-out curve ${curveName(cs.curveOut)}, drag up or down to adjust`}
           title="Drag up or down to shape the fade-out curve" onPointerDown={curveDown('curveOut')}>
@@ -294,16 +294,20 @@ function AudioClipView({ editor, clip: cs, onMenu }: ClipProps<AudioClip>) {
         {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
         {cs.vol}%
       </span>
-      <button className="fade-handle" style={{ left: fiW - 10 }}
-        aria-label={`Fade in ${cs.fadeIn.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade in"
-        onPointerDown={fadeDown('fadeIn', 1)}>
-        <span />
-      </button>
-      <button className="fade-handle" style={{ right: foW - 10 }}
-        aria-label={`Fade out ${cs.fadeOut.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade out"
-        onPointerDown={fadeDown('fadeOut', -1)}>
-        <span />
-      </button>
+      {selected && (
+        <>
+          <button className="fade-handle" style={{ left: fiW - 10 }}
+            aria-label={`Fade in ${cs.fadeIn.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade in"
+            onPointerDown={fadeDown('fadeIn', 1)}>
+            <span />
+          </button>
+          <button className="fade-handle" style={{ right: foW - 10 }}
+            aria-label={`Fade out ${cs.fadeOut.toFixed(1)} seconds, drag to adjust`} title="Drag to set the fade out"
+            onPointerDown={fadeDown('fadeOut', -1)}>
+            <span />
+          </button>
+        </>
+      )}
     </div>
   );
 }
