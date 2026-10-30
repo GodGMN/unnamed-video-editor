@@ -180,11 +180,8 @@ export function useProject(id: string, initial: Project, draft = false) {
       },
       /** Takes back media whose import failed, with any clips already placed from it. */
       cancelMedia: (mediaId: string) => {
-        const p = projectRef.current;
-        if (!p?.media[mediaId]) return;
-        const next = removeMedia(p, mediaId);
-        setProject(next);
-        setUi((u) => reconcileUi(next, u));
+        setProject(p => removeMedia(p, mediaId));
+        setUi(u => reconcileUi(removeMedia(projectRef.current, mediaId), u));
       },
       placeMedia: (mediaId: string, trackId: string, time: number) => {
         const id = newId();
