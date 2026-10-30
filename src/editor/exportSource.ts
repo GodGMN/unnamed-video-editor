@@ -1,6 +1,6 @@
 import { ALL_FORMATS, AudioBufferSink, BlobSource, Input } from 'mediabunny';
 import type { ExportSource } from '../components/ExportDialog';
-import { audioTracks, clipEnd, videoTracks } from './model';
+import { GAIN_MIN_DB, audioTracks, clipEnd, videoTracks } from './model';
 import type { Project, TimelineLayout } from './model';
 import { readMediaFile } from '../media/files';
 import { AnimationReader, imageType, openAnimation } from '../media/animation';
@@ -15,7 +15,7 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
       const p = structuredClone(project);
       const ids = new Set([
         ...videoTracks(p).filter((t) => !t.hidden).flatMap((t) => t.clips.map((c) => c.mediaId)),
-        ...audioTracks(p).filter((t) => !t.muted).flatMap((t) => t.clips.filter((c) => !c.muted && c.vol > 0).map((c) => c.mediaId)),
+        ...audioTracks(p).filter((t) => !t.muted).flatMap((t) => t.clips.filter((c) => !c.muted && c.gainDb > GAIN_MIN_DB).map((c) => c.mediaId)),
       ]);
       const files: Record<string, File> = {};
       for (const id of ids) {
@@ -99,7 +99,7 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
 
 async function mixdown(p: Project, duration: number, files: Record<string, File>, sampleRate: number, signal: AbortSignal) {
   const clips = audioTracks(p).filter((t) => !t.muted).flatMap((t) => t.clips)
-    .filter((c) => !c.muted && c.vol > 0 && clipEnd(c) > 0 && c.start < duration);
+    .filter((c) => !c.muted && c.gainDb > GAIN_MIN_DB && clipEnd(c) > 0 && c.start < duration);
   if (!clips.length) return null;
   const ctx = new OfflineAudioContext(2, Math.ceil(duration * sampleRate), sampleRate);
   for (const clip of clips) {
