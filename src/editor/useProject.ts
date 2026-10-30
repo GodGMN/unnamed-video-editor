@@ -107,6 +107,7 @@ export function useProject() {
   const actions = useMemo(() => {
     const edit = (fn: (p: Project) => Project) => setProject((p) => (p ? settle(fn(p)) : p));
     return {
+      renameProject: (name: string) => edit((p) => ({ ...p, name })),
       addMedia: (media: Media) => edit((p) => ({ ...p, media: { ...p.media, [media.id]: media } })),
       /** Deletes a source, its clips on the timeline, and its stored files. */
       removeMedia: (mediaId: string) => {
