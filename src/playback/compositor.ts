@@ -1,5 +1,6 @@
-import { clipEnd, overlapAfter, findVideoClip, partnersOf, videoTracks } from '../editor/model';
-import type { AudioClip, MediaClip, Project, VideoClip } from '../editor/model';
+import { clipEnd, dbToGain, overlapAfter, findVideoClip, partnersOf, videoTracks } from '../editor/model';
+import type { AudioClip, MediaClip, Project, VideoClip, VideoStream } from '../editor/model';
+import { keyFrame } from './chromaKey';
 
 export type RenderContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 export type FrameSource = (clip: VideoClip, sourceTime: number) => CanvasImageSource | null;
@@ -28,8 +29,8 @@ export function fadeLevel(clip: MediaClip, time: number): number {
   return level;
 }
 
-/** Incoming opacity for crossfade; outgoing stays opaque underneath it. */
-export function videoOpacity(p: Project, clip: VideoClip, time: number): number {
+/** Incoming opacity for crossfade; outgoing stays opaque underneath it. `shape` maps crossfade progress to a level. */
+export function videoOpacity(p: Project, clip: VideoClip, time: number, shape = (t: number) => t): number {
   const track = videoTracks(p).find((t) => t.clips.some((c) => c.id === clip.id));
   if (!track) return 1;
   const i = track.clips.findIndex((c) => c.id === clip.id);
@@ -37,7 +38,7 @@ export function videoOpacity(p: Project, clip: VideoClip, time: number): number 
   let alpha = 1;
   if (prev && prev.transitionOut?.type === 'crossfade') {
     const overlap = overlapAfter(prev, clip);
-    if (overlap > 0) alpha *= clamp((time - clip.start) / overlap);
+    if (overlap > 0) alpha *= shape(clamp((time - clip.start) / overlap));
   }
   if (prev?.transitionOut?.type === 'fade') {
     const overlap = overlapAfter(prev, clip);
@@ -50,30 +51,61 @@ export function videoOpacity(p: Project, clip: VideoClip, time: number): number 
   return alpha;
 }
 
+/** Equal-power crossfade level: the two sides' powers sum to one, so the overlap has no dip in loudness. */
+const equalPower = (t: number) => Math.sin(t * Math.PI / 2);
+
 export function audioGain(p: Project, clip: AudioClip, time: number): number {
   if (clip.muted || time < clip.start || time >= clipEnd(clip)) return 0;
-  let gain = clip.vol / 100 * fadeLevel(clip, time);
+  let gain = dbToGain(clip.gainDb) * fadeLevel(clip, time);
   const partner = partnersOf(p, clip).map((c) => findVideoClip(p, c.id)).find((c) => !!c);
   if (partner) {
-    gain *= videoOpacity(p, partner, time);
+    gain *= videoOpacity(p, partner, time, equalPower);
     const track = videoTracks(p).find((t) => t.clips.some((c) => c.id === partner.id));
     const next = track?.clips[track.clips.findIndex((c) => c.id === partner.id) + 1];
     if (next && partner.transitionOut?.type === 'crossfade') {
       const overlap = overlapAfter(partner, next);
-      if (overlap > 0) gain *= clamp((Math.min(clipEnd(partner), clipEnd(next)) - time) / overlap);
+      if (overlap > 0) gain *= equalPower(clamp((Math.min(clipEnd(partner), clipEnd(next)) - time) / overlap));
     }
   }
   return gain;
 }
 
-/** Shared preview/export renderer. Has no React, DOM creation, or playback state. */
-export function renderFrame(p: Project, time: number, ctx: RenderContext, frameSource: FrameSource) {
+/** Source pixels to output pixels for a clip's frame. */
+function clipScale(p: Project, clip: VideoClip, video: VideoStream) {
+  const { width, height } = p.output;
+  const sw = video.width, sh = video.height;
+  return (clip.fit === 'fill' ? Math.max(width / sw, height / sh) : Math.min(width / sw, height / sh)) * (clip.fit === 'custom' ? clip.scale / 100 : 1);
+}
+
+/**
+ * The source pixel of `clip` drawn at output pixel (`x`, `y`), undoing its position, rotation and
+ * scale. Null when that point is outside the clip's cropped frame.
+ */
+export function sourcePoint(p: Project, clip: VideoClip, x: number, y: number): { x: number; y: number } | null {
+  const video = p.media[clip.mediaId]?.video;
+  if (!video) return null;
+  const scale = clipScale(p, clip, video);
+  const dx = x - (p.output.width / 2 + clip.x), dy = y - (p.output.height / 2 + clip.y);
+  const a = clip.rot * Math.PI / 180;
+  const sx = (dx * Math.cos(a) + dy * Math.sin(a)) / scale + video.width / 2;
+  const sy = (-dx * Math.sin(a) + dy * Math.cos(a)) / scale + video.height / 2;
+  if (sx < clip.cropL || sx >= video.width - clip.cropR || sy < clip.cropT || sy >= video.height - clip.cropB) return null;
+  return { x: sx, y: sy };
+}
+
+/**
+ * Shared preview/export renderer. Has no React, DOM creation, or playback state. With a null
+ * `background`, whatever no clip covers (or a key removed) is left transparent.
+ */
+export function renderFrame(p: Project, time: number, ctx: RenderContext, frameSource: FrameSource, background: string | null = '#000') {
   const { width, height } = p.output;
   ctx.save();
   ctx.resetTransform();
   ctx.globalAlpha = 1;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (background) {
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  } else ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.scale(ctx.canvas.width / width, ctx.canvas.height / height);
   // Tracks are listed top first. Draw bottom first, including text tracks.
   for (const track of [...p.tracks].reverse()) {
@@ -100,12 +132,13 @@ export function renderFrame(p: Project, time: number, ctx: RenderContext, frameS
       const media = p.media[clip.mediaId];
       const video = media?.video;
       if (!video) continue;
-      const frame = frameSource(clip, clip.inS + time - clip.start);
-      if (!frame) continue;
+      const raw = frameSource(clip, clip.inS + time - clip.start);
+      if (!raw) continue;
+      const frame = clip.key.enabled ? keyFrame(raw, clip.key) : raw;
       const sw = video.width, sh = video.height;
-      const scale = (clip.fit === 'fill' ? Math.max(width / sw, height / sh) : Math.min(width / sw, height / sh)) * (clip.fit === 'custom' ? clip.scale / 100 : 1);
+      const scale = clipScale(p, clip, video);
       ctx.save();
-      // The clip's own fades go through whatever is underneath: black on the main track.
+      // The clip's own fades and key go through whatever is underneath: the background on the main track.
       ctx.globalAlpha = videoOpacity(p, clip, time) * fadeLevel(clip, time);
       ctx.translate(width / 2 + clip.x, height / 2 + clip.y);
       ctx.rotate(clip.rot * Math.PI / 180);

@@ -1,7 +1,7 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, clipKind, curveName, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, removeTrack as removeTrackModel, clipDuration, clipEnd, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
+import { DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, clipKind, curveName, dbToFader, dbToGain, faderToDb, fmtDb, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, removeTrack as removeTrackModel, clipDuration, clipEnd, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
 import type { AudioClip, Clip, ClipKind, Fades, ClipSelection, MediaClip, Project, TextClip, TransitionType, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
@@ -551,7 +551,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   return (
     <button className={'clip' + (partner ? ' partner' : '')}
       style={{ left: cs.start * pps + 1, width, background: src.tone }}
-      aria-label={`Video: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
+      aria-label={`${src.still ? 'Image' : 'Video'}: ${src.name}, ${dur.toFixed(1)} seconds${cs.linked ? ', linked to audio' : ''}`}
       aria-pressed={selected}
       onPointerDown={move.onPointerDown}
       onClick={move.onClick}
@@ -702,31 +702,32 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
     const n = Math.max(1, Math.floor((width - 24) / 4));
     const time = cs.inS + k / n * span;
     const v = preview?.peaks[Math.min(preview.peaks.length - 1, Math.floor(time / src.duration * preview.peaks.length))] ?? 0;
-    bars.push(cs.muted ? 2 : Math.max(2, Math.min(40, Math.round((4 + v * 34) * Math.min(2, cs.vol / 100)))));
+    bars.push(cs.muted ? 2 : Math.max(2, Math.min(40, Math.round((4 + v * 34) * Math.min(2, dbToGain(cs.gainDb))))));
   }
 
-  // Gain line: the clip's height spans 0–200%, the line sits at the level and follows the pointer.
-  const volY = Math.round(H * (1 - Math.min(200, cs.vol) / 200));
+  // Gain line: the clip's height is a fader from −∞ to +12 dB, the line sits at the level and follows the pointer.
+  const volY = Math.round(H * (1 - dbToFader(cs.gainDb)));
+  const level = `${fmtDb(cs.gainDb)} dB`;
   const volDown = (e: PointerEvent<HTMLButtonElement>) => {
     // The gain line spans the clip, so Ctrl-clicks on it pick the clip too.
     if (additive(e)) { e.preventDefault(); togglePick({ kind: 'audio', id }); return; }
     select({ kind: 'audio', id });
-    const v0 = cs.vol;
-    startDrag(e, (_dx, dy) => updateClip(id, { vol: Math.round(Math.max(0, Math.min(200, v0 - dy * 200 / H))) }));
+    const pos0 = dbToFader(cs.gainDb);
+    startDrag(e, (_dx, dy) => updateClip(id, { gainDb: faderToDb(pos0 - dy / H) }));
   };
   const volKey = (e: KeyboardEvent<HTMLButtonElement>) => {
-    const step = e.shiftKey ? 10 : 1;
+    const step = e.shiftKey ? 6 : 1;
     const d = e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0;
     if (!d) return;
     e.preventDefault();
-    updateClip(id, { vol: Math.max(0, Math.min(200, cs.vol + d)) });
+    updateClip(id, { gainDb: Math.round(Math.max(GAIN_MIN_DB, Math.min(GAIN_MAX_DB, cs.gainDb + d)) * 10) / 10 });
   };
 
   return (
     <div className={'audio-clip' + (picked ? ' selected' : partner ? ' partner' : '') + (cs.linked ? '' : ' unlinked')}
       style={{ left: cs.start * pps + 1, width }}>
       <button className="audio-wave"
-        aria-label={`Audio: ${src.name}, volume ${cs.vol}%${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
+        aria-label={`Audio: ${src.name}, volume ${level}${cs.muted ? ', muted' : ''}${cs.linked ? '' : ', unlinked'}`}
         aria-pressed={picked}
         onPointerDown={move.onPointerDown}
         onClick={move.onClick}
@@ -737,18 +738,17 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         ))}
       </button>
       <button className={'vol-line' + (cs.muted ? ' muted' : '')} style={{ top: volY - 6 }}
-        aria-label={`Volume ${cs.vol}%, drag up or down to adjust`} title={`Volume ${cs.vol}% · drag to adjust`}
+        aria-label={`Volume ${level}, drag up or down to adjust`} title={`Volume ${level} · drag to adjust`}
         onPointerDown={volDown} onKeyDown={volKey} />
-      {/* Drawn apart from the line's hit area so the clip's rounded corners can clip it at 0% and 200%. */}
+      {/* Drawn apart from the line's hit area so the clip's rounded corners can clip it at −∞ and +12 dB. */}
       <div className="vol-clip" aria-hidden="true">
         <span className="vol-headroom" style={{ height: volY }} />
         <FadeRamps clip={cs} width={width} height={H} />
         <span className="vol-mark" style={{ top: Math.max(0, Math.min(H - 2, volY - 1)) }} />
       </div>
       <span className="audio-badge" style={inset && { right: 8 + inset.tail * pps }}>
-        {!cs.linked && <span className="unlinked">unlinked</span>}
         {cs.muted && <Mute size={11} stroke="var(--warn)" strokeWidth={2.4} />}
-        {cs.vol}%
+        {level}
       </span>
     </div>
   );

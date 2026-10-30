@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Media } from '../editor/model';
 import { readPreview } from './files';
 import type { MediaPreview } from './files';
+import { loopTime } from './animation';
 
 export function useMediaPreview(id: string) {
   const [revision, setRevision] = useState(0);
@@ -20,7 +21,9 @@ export function PreviewStrip({ media, width, inS = 0, outS = media.duration }: {
   const n = Math.max(1, Math.ceil(width / 70));
   return <span className="strip" aria-hidden="true">{preview?.thumbnails.length ? Array.from({ length: n }, (_, i) => {
     const time = inS + (outS - inS) * i / n;
-    const index = Math.min(preview.thumbnails.length - 1, Math.floor(time / media.duration * preview.thumbnails.length));
+    // Thumbnails of an animation span one loop.
+    const at = media.animation ? loopTime(time, media.animation) / media.animation : time / media.duration;
+    const index = Math.min(preview.thumbnails.length - 1, Math.max(0, Math.floor(at * preview.thumbnails.length)));
     return <img key={i} src={preview.thumbnails[index]} alt="" style={{ height: '100%', width: `${100 / n}%`, objectFit: 'cover', flex: '1 1 0', minWidth: 0 }} />;
   }) : null}</span>;
 }

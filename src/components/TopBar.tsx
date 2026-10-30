@@ -1,18 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Brand } from './Brand';
 import { Download, Maximize, Minimize, Pencil, Redo, Undo } from './icons';
+import { useFullscreen } from './useFullscreen';
 import { progressPercent, useConversionJob } from '../convert/job';
 
-function useFullscreen() {
-  const [on, setOn] = useState(() => !!document.fullscreenElement);
-  useEffect(() => {
-    const sync = () => setOn(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', sync);
-    return () => document.removeEventListener('fullscreenchange', sync);
-  }, []);
-  const toggle = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
-  return [on, toggle] as const;
-}
+const page = () => document.documentElement;
 
 interface Props {
   onProjects: () => void;
@@ -87,7 +79,7 @@ function ProjectName({ name, onRename }: { name: string; onRename: Props['onRena
 }
 
 export function TopBar({ onProjects, saveState, onSave, projectName, onRename, clipCount, totalTime, onExport, onShowConversion }: Props) {
-  const [fullscreen, toggleFullscreen] = useFullscreen();
+  const [fullscreen, toggleFullscreen] = useFullscreen(page);
   return (
     <header className="topbar">
       <Brand />

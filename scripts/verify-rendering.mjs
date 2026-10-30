@@ -28,7 +28,7 @@ try {
     const first = { ...VIDEO_CLIP_DEFAULTS, id: 'first', mediaId: media.id, start: 0.2, inS: 0.4, outS: 1.9, linkId: 'first', linked: true, transitionOut: { type: 'crossfade', duration: 0.5 } };
     const second = { ...first, id: 'second', start: 1.2, inS: 0.9, outS: 2.4, linkId: 'second', transitionOut: null };
     const overlay = { ...first, id: 'overlay', start: 0.5, inS: 0.7, outS: 1.2, linkId: null, fit: 'custom', scale: 35, x: 70, rot: 15, cropL: 30, transitionOut: null };
-    const sound = (v) => ({ ...AUDIO_CLIP_DEFAULTS, id: `${v.id}-audio`, mediaId: media.id, start: v.start, inS: v.inS, outS: v.outS, linkId: v.linkId, linked: true, vol: 60, fadeIn: 0.25, fadeOut: 0.25, curveIn: 0, curveOut: 0 });
+    const sound = (v) => ({ ...AUDIO_CLIP_DEFAULTS, id: `${v.id}-audio`, mediaId: media.id, start: v.start, inS: v.inS, outS: v.outS, linkId: v.linkId, linked: true, gainDb: -4.4, fadeIn: 0.25, fadeOut: 0.25, curveIn: 0, curveOut: 0 });
     p.tracks = [
       { id: 'text', name: 'T', label: '', kind: 'text', hidden: false, clips: [{ id: 'title', content: 'Real export', start: 0.3, duration: 2, size: 24, color: '#FFFFFF', pos: 'cc', x: 0, y: 0 }] },
       { id: 'overlay', name: 'V2', label: '', kind: 'video', hidden: false, clips: [overlay] },
@@ -124,7 +124,8 @@ try {
   assert.ok(result.audio.steady > 0.03 && result.audio.steady < 0.08);
   assert.ok(result.audio.earlyFade < result.audio.steady / 3);
   assert.ok(result.audio.fadeOut < result.audio.steady / 3);
-  assert.ok(result.audio.overlap / result.audio.steady > 0.9 && result.audio.overlap / result.audio.steady < 1.1);
+  // Both sides are the same in-phase tone, so the equal-power crossfade sums to √2 at the midpoint.
+  assert.ok(Math.abs(result.audio.overlap / result.audio.steady - Math.SQRT2) < 0.1, `overlap ratio ${result.audio.overlap / result.audio.steady}`);
   assert.ok(result.trimSamples > 400 && result.trimError < 0.002, `Audio trim mismatch: ${result.trimError}`);
   assert.ok(result.energy > 0);
   assert.ok(result.aborted);

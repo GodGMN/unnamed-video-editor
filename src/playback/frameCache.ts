@@ -1,11 +1,83 @@
 import { ALL_FORMATS, BlobSource, CanvasSink, Input } from 'mediabunny';
 import type { WrappedCanvas } from 'mediabunny';
+import { frameAt, openAnimation } from '../media/animation';
+import type { Animation } from '../media/animation';
 
 const FRAME_LIMIT = 12;
 const LOOKAHEAD = 0.25;
 
+/** Preview-sized frames of one clip's source, decoded ahead of the playhead. */
+export interface Frames {
+  request(time: number, playing: boolean): void;
+  frame(time: number, playing: boolean): CanvasImageSource | null;
+  dispose(): void;
+}
+
+/** Caps both dimensions while preserving the source aspect ratio. Export keeps the original resolution. */
+const previewWidth = (width: number, height: number) => Math.max(1, Math.round(Math.min(width, 960, 540 * width / height)));
+
+/** A still image decoded once at preview size; every time shows the same frame. */
+export class StillFrame implements Frames {
+  private image: ImageBitmap | null = null;
+  private disposed = false;
+
+  constructor(file: File, changed: () => void, failed: (error: unknown) => void) {
+    createImageBitmap(file).then(async (full) => {
+      try { return await createImageBitmap(full, { resizeWidth: previewWidth(full.width, full.height), resizeQuality: 'high' }); }
+      finally { full.close(); }
+    }).then((image) => {
+      if (this.disposed) { image.close(); return; }
+      this.image = image;
+      changed();
+    }, (error: unknown) => { if (!this.disposed) failed(error); });
+  }
+
+  request() {}
+  frame() { return this.image; }
+  dispose() {
+    this.disposed = true;
+    this.image?.close();
+    this.image = null;
+  }
+}
+
+/** Most memory an animation's preview frames may take; bigger ones decode at a smaller size. */
+const ANIMATION_BYTES = 256 * 1024 * 1024;
+
+/** An animated image decoded once at preview size, looping forever. */
+export class AnimatedFrame implements Frames {
+  private images: ImageBitmap[] = [];
+  private timing: Pick<Animation, 'starts' | 'loop'> | null = null;
+  private disposed = false;
+
+  constructor(file: File, type: string, changed: () => void, failed: (error: unknown) => void) {
+    const images: ImageBitmap[] = [];
+    openAnimation(file, type, async (frame, _, count) => {
+      if (this.disposed) return;
+      const { displayWidth: w, displayHeight: h } = frame;
+      const fit = Math.min(1, Math.sqrt(ANIMATION_BYTES / (count * w * h * 4)));
+      const resizeWidth = Math.max(1, Math.round(Math.min(previewWidth(w, h), w * fit)));
+      images.push(await createImageBitmap(frame, { resizeWidth, resizeHeight: Math.max(1, Math.round(resizeWidth * h / w)), resizeQuality: 'high' }));
+    }).then((animation) => {
+      animation?.decoder.close();
+      if (this.disposed || !animation) { images.forEach((i) => i.close()); if (!this.disposed) failed(new Error('This animation could not be decoded.')); return; }
+      this.images = images;
+      this.timing = animation;
+      changed();
+    }, (error: unknown) => { images.forEach((i) => i.close()); if (!this.disposed) failed(error); });
+  }
+
+  request() {}
+  frame(time: number) { return this.timing ? this.images[frameAt(this.timing, time)] : null; }
+  dispose() {
+    this.disposed = true;
+    this.images.forEach((i) => i.close());
+    this.images = [];
+  }
+}
+
 /** A sequential decoder with a small preview-sized frame window. CanvasSink closes its VideoSamples. */
-export class FrameCache {
+export class FrameCache implements Frames {
   private input: Input;
   private sink: Promise<CanvasSink>;
   private frames: WrappedCanvas[] = [];
@@ -23,9 +95,7 @@ export class FrameCache {
     this.input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
     this.sink = this.input.getPrimaryVideoTrack().then(async (track) => {
       if (!track || !await track.canDecode()) throw new Error('This video could not be decoded.');
-      // Cap both dimensions while preserving the source aspect ratio. Export keeps the original resolution.
-      const width = Math.max(1, Math.round(Math.min(track.displayWidth, 960, 540 * track.displayWidth / track.displayHeight)));
-      return new CanvasSink(track, { width, alpha: true, poolSize: 0 });
+      return new CanvasSink(track, { width: previewWidth(track.displayWidth, track.displayHeight), alpha: true, poolSize: 0 });
     });
     // The first request attaches the operational error handler; avoid an unhandled rejection during preload.
     void this.sink.catch(() => undefined);

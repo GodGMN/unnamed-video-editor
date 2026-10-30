@@ -18,6 +18,7 @@ const initialUi: EditorUi = {
   menu: null,
   scrub: 7.6,
   playhead: 12.4,
+  keyPick: null,
 };
 
 /** The trim scrubber shows media, so only video and audio clips take the focus. */
@@ -33,7 +34,8 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   if (!picked.length && sel && sel.kind !== 'trans') picked.push(sel);
   const lockClip = findClip(p, ui.lockClip) ? ui.lockClip : null;
   const source = ui.source && p.media[ui.source] ? ui.source : null;
-  return { ...ui, sel, picked, focusClip, lockClip, source, menu: null };
+  const keyPick = findVideoClip(p, ui.keyPick) ? ui.keyPick : null;
+  return { ...ui, sel, picked, focusClip, lockClip, source, keyPick, menu: null };
 }
 
 function usePersistentProject(id: string, initial: Project) {
@@ -133,6 +135,7 @@ export function useProject(id: string, initial: Project) {
       },
       select: (sel: Selection) => setUi((u) => ({
         ...u, sel, menu: null, source: null, picked: sel.kind === 'trans' ? [] : [sel], focusClip: focusOf(sel, u.focusClip),
+        keyPick: u.keyPick === sel.id ? u.keyPick : null,
       })),
       /** Ctrl-click: adds a clip to the selection, or removes it if it's already there. */
       togglePick: (clip: ClipSelection) => setUi((u) => {
@@ -158,7 +161,9 @@ export function useProject(id: string, initial: Project) {
       /** Double-click: locks the playhead to a clip's range. */
       lockTo: (id: string) => setUi((u) => ({ ...u, lockClip: id, source: null, menu: null })),
       /** Plays a Media item in the preview on its own, without touching the timeline. */
-      previewSource: (mediaId: string) => setUi((u) => ({ ...u, source: mediaId })),
+      previewSource: (mediaId: string) => setUi((u) => ({ ...u, source: mediaId, keyPick: null })),
+      /** Arms the preview eyedropper for video clip `id`'s key colour; null disarms it. */
+      pickKey: (id: string | null) => setUi((u) => ({ ...u, keyPick: id, source: id ? null : u.source })),
       /** Puts the timeline back in the preview. */
       closeSource: () => setUi((u) => (u.source ? { ...u, source: null } : u)),
       /** Releases the locked clip so the playhead can roam the whole sequence again. */

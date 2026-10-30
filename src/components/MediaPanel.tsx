@@ -48,8 +48,8 @@ function mediaMeta(project: Project, m: Media): string {
     uses.length > 1 ? `used ${TIMES[uses.length] ?? `${uses.length} times`}`
     : v.width > ow || v.height > oh ? 'scaled to output'
     : uses.length === 1 && uses[0] !== main ? `on ${uses[0].name}`
-    : codecFamily(v.codec);
-  return `${v.width}×${v.height} · ${Math.round(v.fps)} fps · ${note}`;
+    : m.still ? m.container : codecFamily(v.codec);
+  return `${v.width}×${v.height} · ${m.animation ? 'Animated' : m.still ? 'Image' : `${Math.round(v.fps)} fps`} · ${note}`;
 }
 
 /** How many timeline clips (video and audio) play this source. */
@@ -134,7 +134,7 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
           <span className="panel-title">Media</span>
           <span className="count">{media.length}</span>
         </div>
-        <input ref={input} type="file" multiple accept="video/*,audio/*,.mov,.mkv" aria-label="Import media files" hidden onChange={(e) => { if (e.target.files) ingest(Array.from(e.target.files, file => ({ file }))); e.target.value = ''; }} />
+        <input ref={input} type="file" multiple accept="video/*,audio/*,image/*,.mov,.mkv" aria-label="Import media files" hidden onChange={(e) => { if (e.target.files) ingest(Array.from(e.target.files, file => ({ file }))); e.target.value = ''; }} />
         <button onClick={() => {
           if (!window.showOpenFilePicker) input.current?.click();
           else void pickFiles().then(ingest).catch(failed);
@@ -162,7 +162,7 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
             <div className="media-thumb" style={{ background: m.tone }}>
               <PreviewStrip media={m} width={100} />
               {!m.decodable && <div className="warn"><Warning stroke="var(--warn-icon)" /></div>}
-              <span className="media-dur">{m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
+              <span className="media-dur">{m.animation ? `${m.animation.toFixed(1)}s loop` : m.still ? 'Still' : m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
             </div>
             <div className="media-text">
               <span className="media-name">{m.name}</span>

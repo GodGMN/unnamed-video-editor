@@ -132,13 +132,26 @@ try {
    track.clips = [{ ...a, cropL: 60 }];
    renderFrame(p, 0.5, ctx, () => red); const cropped = pixel();
    track.hidden = true; renderFrame(p, 0.5, ctx, () => red); const hidden = pixel();
-   const ac = { ...AUDIO_CLIP_DEFAULTS, id: 'audio', mediaId: 'm', start: 0, inS: 0, outS: 2, linkId: null, vol: 80, fadeIn: 1 };
-   return { crossfade, black, edge, cropped, hidden, gain: audioGain(p, ac, 0.5), mutedGain: audioGain(p, { ...ac, muted: true }, 0.5), curves: [-1, 0, 1].map((v) => fadeCurve(0.25, v)) };
+   const ac = { ...AUDIO_CLIP_DEFAULTS, id: 'audio', mediaId: 'm', start: 0, inS: 0, outS: 2, linkId: null, gainDb: 20 * Math.log10(0.8), fadeIn: 1 };
+   // Linked audio under a crossfade: equal power, so the two gains' squares sum to one.
+   a.transitionOut = { type: 'crossfade', duration: 1 }; track.hidden = false;
+   track.clips = [{ ...a, linkId: 'a', linked: true }, { ...b, linkId: 'b', linked: true }];
+   const sound = (id, start) => ({ ...AUDIO_CLIP_DEFAULTS, id: `${id}-audio`, mediaId: 'm', start, inS: 0, outS: 2, linkId: id, linked: true });
+   const [outgoing, incoming] = [sound('a', 0), sound('b', 1)];
+   const linked = { ...p, tracks: [track, { id: 'a1', name: 'A1', kind: 'audio', muted: false, clips: [outgoing] }, { id: 'a2', name: 'A2', kind: 'audio', muted: false, clips: [incoming] }] };
+   const power = [1.25, 1.5, 1.75].map((t) => audioGain(linked, outgoing, t) ** 2 + audioGain(linked, incoming, t) ** 2);
+   const { upgrade } = await import('/src/editor/storage.ts');
+   const upgraded = upgrade({ ...p, tracks: [{ id: 'a1', name: 'A1', kind: 'audio', muted: false, clips: [100, 50, 200, 0].map((vol) => {
+     const { gainDb, ...old } = outgoing; return { ...old, vol };
+   }) }] }).tracks[0].clips.map((c) => [c.gainDb, 'vol' in c]);
+   return { crossfade, black, edge, cropped, hidden, power, upgraded, gain: audioGain(p, ac, 0.5), mutedGain: audioGain(p, { ...ac, muted: true }, 0.5), curves: [-1, 0, 1].map((v) => fadeCurve(0.25, v)) };
  });
  assert.ok(Math.abs(compositor.crossfade[0] - 127) <= 1 && Math.abs(compositor.crossfade[2] - 128) <= 1);
  for (const key of ['black', 'edge', 'cropped', 'hidden']) assert.deepEqual(compositor[key].slice(0, 3), [0, 0, 0], key);
  assert.ok(Math.abs(compositor.gain - 0.4) < 0.001);
  assert.equal(compositor.mutedGain, 0);
+ for (const sum of compositor.power) assert.ok(Math.abs(sum - 1) < 0.001, `crossfade power ${sum}`);
+ assert.deepEqual(compositor.upgraded, [[0, false], [-6, false], [6, false], [-60, false]]);
  assert.ok(compositor.curves[0] < compositor.curves[1] && compositor.curves[1] < compositor.curves[2]);
  const workerPixel = await page.evaluate(async () => {
    const source = `import { renderFrame } from '${location.origin}/src/playback/compositor.ts';

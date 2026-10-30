@@ -1,12 +1,58 @@
 import { ALL_FORMATS, AudioBufferSink, BlobSource, CanvasSink, Input } from 'mediabunny';
-import { newId } from '../editor/model';
+import { STILL_DURATION, animationDuration, newId } from '../editor/model';
 import type { Media } from '../editor/model';
 import { removeMediaFiles, writePreview } from './files';
 import type { MediaPreview } from './files';
 import { fingerprint, linkFile } from './links';
 import type { ReadHandle } from './links';
+import { imageType, openAnimation } from './animation';
+
+const FORMAT_LABELS: Record<string, string> = { jpg: 'JPEG', apng: 'APNG', 'x-icon': 'ICO', 'vnd.microsoft.icon': 'ICO', 'x-ms-bmp': 'BMP' };
+const IMAGE_EXTENSIONS = /\.(a?png|jpe?g|webp|gif|avif|bmp|ico)$/i;
+/** Most thumbnails kept across one loop of an animation. */
+const ANIMATION_THUMBNAILS = 12;
+
+const isImageFile = (file: File) => file.type.startsWith('image/') || IMAGE_EXTENSIONS.test(file.name);
+
+/** Draws `image` into a 160×90 JPEG thumbnail, letterboxed like the video ones. */
+function thumbnail(image: CanvasImageSource, width: number, height: number) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 160; canvas.height = 90;
+  const scale = Math.min(160 / width, 90 / height);
+  canvas.getContext('2d')!.drawImage(image, (160 - width * scale) / 2, (90 - height * scale) / 2, width * scale, height * scale);
+  return canvas.toDataURL('image/jpeg', 0.7);
+}
+
+async function importStill(file: File, handle?: ReadHandle): Promise<Media> {
+  const image = await createImageBitmap(file).catch(() => { throw new Error('This image could not be decoded.'); });
+  const id = newId();
+  try {
+    const format = (file.type.startsWith('image/') ? file.type.slice(6) : file.name.split('.').pop() ?? '').toLowerCase();
+    const container = FORMAT_LABELS[format] ?? format.toUpperCase();
+    const thumbnails: string[] = [];
+    const animation = await openAnimation(file, imageType(container), (frame, i, count) => {
+      if (Math.floor(i * ANIMATION_THUMBNAILS / count) !== Math.floor((i - 1) * ANIMATION_THUMBNAILS / count))
+        thumbnails.push(thumbnail(frame, frame.displayWidth, frame.displayHeight));
+    }).catch(() => null);
+    animation?.decoder.close();
+    const media: Media = {
+      id, fingerprint: await fingerprint(file), lastModified: file.lastModified, name: file.name, container,
+      duration: animation ? animationDuration(animation.loop) : STILL_DURATION, size: file.size, bitrate: 0,
+      video: { codec: 'image', width: image.width, height: image.height, fps: animation ? animation.starts.length / animation.loop : 0 }, audio: null,
+      decodable: true, tone: '#4A4433', seed: 0, still: true, ...(animation && { animation: animation.loop }),
+    };
+    if (!animation) thumbnails.push(thumbnail(image, image.width, image.height));
+    await linkFile(id, file, handle);
+    try { await writePreview(id, { thumbnails, peaks: [] }); }
+    catch (error) { await removeMediaFiles(id).catch(() => undefined); throw error; }
+    return media;
+  } finally { image.close(); }
+}
+
+
 
 export async function importMedia(file: File, handle?: ReadHandle): Promise<Media> {
+  if (isImageFile(file)) return importStill(file, handle);
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   const id = newId();
   let stored = false;
@@ -65,6 +111,11 @@ async function generatePreview(media: Media, video: Awaited<ReturnType<Input['ge
   await writePreview(id, preview);
 }
 export async function regeneratePreview(media: Media, file: File) {
+  if (media.still) {
+    const generated = await importStill(file);
+    try { const { readPreview } = await import('./files'); const preview = await readPreview(generated.id); if (preview) await writePreview(media.id, preview); } finally { await removeMediaFiles(generated.id); }
+    window.dispatchEvent(new Event('media-preview-change')); return;
+  }
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   try {
     const video = await input.getPrimaryVideoTrack();
