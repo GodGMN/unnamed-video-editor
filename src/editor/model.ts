@@ -385,11 +385,25 @@ export function pickedPair(p: Project, picked: ClipSelection[]): { video: VideoC
   return video && audio ? { video, audio } : null;
 }
 
-/** Move linked clips by a common delta without packing away the user's placement. */
-export function moveClip(p: Project, id: string, start: number): Project {
+/** Clips that move with these: the clips themselves plus their linked partners. */
+export function movingGroup(p: Project, ids: string[]): Clip[] {
+  const group = new Map<string, Clip>();
+  for (const id of ids) {
+    const found = findClip(p, id);
+    if (!found) continue;
+    for (const c of [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])]) group.set(c.id, c);
+  }
+  return [...group.values()];
+}
+
+/**
+ * Moves clip `id` to `start` and shifts `others` (plus everyone's linked partners) by the same
+ * delta, without packing away the user's placement. No clip goes before 0.
+ */
+export function moveClip(p: Project, id: string, start: number, others: string[] = []): Project {
   const found = findClip(p, id);
   if (!found) return p;
-  const group = [found.clip, ...(found.clip.linked ? partnersOf(p, found.clip) : [])];
+  const group = movingGroup(p, [id, ...others]);
   const ids = new Set(group.map(c => c.id));
   const delta = Math.max(start - found.clip.start, -Math.min(...group.map(c => c.start)));
   return { ...p, tracks: p.tracks.map(t => {

@@ -22,3 +22,17 @@ test('moving a clip controls overlap independently of its transition', () => {
   assert.equal(overlapAfter(...separated.tracks[0].clips), 0);
   assert.deepEqual(separated.tracks[0].clips.map(c => c.start), [0, 8]);
 });
+
+test('moving a clip with others shifts them all by the same delta', () => {
+  const p = project();
+  p.tracks[0].clips.push(clip('c', 12));
+  const moved = moveClip(p, 'b', 6, ['c']);
+  assert.deepEqual(moved.tracks[0].clips.map(c => [c.id, c.start]), [['a', 0], ['b', 6], ['c', 14]]);
+});
+
+test('a group move stops when its earliest clip reaches 0', () => {
+  const p = project();
+  p.tracks[0].clips.push(clip('c', 12));
+  const moved = moveClip(p, 'c', 0, ['b']);
+  assert.deepEqual(moved.tracks[0].clips.map(c => [c.id, c.start]), [['a', 0], ['b', 0], ['c', 8]]);
+});
