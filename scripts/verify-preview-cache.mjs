@@ -35,6 +35,13 @@ try {
     await wait(() => engine.entries.get('blue')?.frames?.frame(1, false), 'next clip preroll');
     update(1);
     const cut = pixel();
+    project.tracks[0].clips[0].transitionOut = { type: 'crossfade', duration: 0.5 };
+    project.tracks[0].clips[1].start = 0.5;
+    update(0.75);
+    await wait(() => { const p = pixel(); return p[0] > 110 && p[0] < 140 && p[2] > 110 && p[2] < 140; }, 'decoded crossfade midpoint');
+    const crossfade = pixel();
+    project.tracks[0].clips[0].transitionOut = null;
+    project.tracks[0].clips[1].start = 1;
     update(0.2); update(1.4); update(0.1); update(1.2);
     await wait(() => pixel()[2] > 240, 'latest rapid seek wins');
     const seek = pixel();
@@ -78,9 +85,10 @@ try {
     }
     const frames = [...engine.entries.values()].flatMap((e) => e.frames?.frames ?? []).map((f) => f.canvas);
     engine.dispose();
-    return { cut, seek, misses, duringAudioSeek, maxEntries, maxFrames, entriesAfterDispose: engine.entries.size, releasedCanvases: frames.every((c) => c.width === 0 && c.height === 0), statuses };
+    return { cut, crossfade, seek, misses, duringAudioSeek, maxEntries, maxFrames, entriesAfterDispose: engine.entries.size, releasedCanvases: frames.every((c) => c.width === 0 && c.height === 0), statuses };
   }, [...readFileSync(file)]);
   assert.ok(result.cut[2] > 240, 'preloaded cut draws synchronously');
+  assert.ok(result.crossfade[0] > 110 && result.crossfade[2] > 110, 'decoded clips crossfade together');
   assert.ok(result.seek[2] > 240, 'latest seek wins');
   assert.equal(result.misses, 0, '60fps prefetch keeps current frames');
   assert.ok(result.duringAudioSeek[2] > 240, 'video does not await audio seeking');
