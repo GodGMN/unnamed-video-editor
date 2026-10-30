@@ -1,0 +1,13 @@
+.git
+.gitignore
+.worktrees
+node_modules
+dist
+.pnpm-store
+*.tsbuildinfo
+
+# Agent/tool config that may hold credentials.
+.mcp.json
+opencode.json
+.codex
+.scratch

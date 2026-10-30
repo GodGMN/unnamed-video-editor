@@ -1,0 +1,25 @@
+services:
+  web:
+    build:
+      context: .
+      target: dev
+    working_dir: /app
+    volumes:
+      - .:/app
+      # Keep node_modules inside the container so the host's copy is never used.
+      # The volume is seeded from the image on first start, so no install is
+      # needed at runtime.
+      - node_modules:/app/node_modules
+    ports:
+      # Binds all host interfaces so the app is reachable from the LAN. Override with WEB_PORT.
+      - "${WEB_PORT:-5200}:5173"
+    command:
+      - pnpm
+      - dev
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5173"
+
+volumes:
+  node_modules:
