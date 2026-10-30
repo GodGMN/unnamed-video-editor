@@ -124,9 +124,27 @@ try {
    finally { worker.terminate(); URL.revokeObjectURL(url); }
  });
  assert.deepEqual(workerPixel, [0, 0, 0, 255]);
+ // Playback that starts in a gap must show the clip once the playhead reaches it.
+ await page.evaluate(async () => {
+   const { loadProject, saveProject } = await import('/src/editor/storage.ts');
+   const p = await loadProject();
+   p.tracks[0].clips[0].start = 1;
+   await saveProject(p);
+ });
+ await page.reload();
+ await page.getByRole('button', { name: 'Go to start', exact: true }).click();
+ // Seeks in real 1080p footage outlast a frame. Delay them so that holds for this tiny test file too.
+ await page.evaluate(() => {
+   const { get, set } = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+   Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', { get, set(value) { setTimeout(() => set.call(this, value), 50); } });
+ });
+ await page.getByRole('button', { name: 'Play (Space)', exact: true }).click();
+ await page.waitForFunction(() => /^00:0[23]\./.test(document.querySelector('.transport-bar').textContent));
+ assert.ok(await page.locator('canvas').evaluate((c) => Array.from(c.getContext('2d').getImageData(0, 0, c.width, c.height).data).some((v, i) => i % 4 !== 3 && v > 50)), 'Clip entered during playback is drawn');
+ await page.getByRole('button', { name: 'Pause (Space)', exact: true }).click();
  await page.getByRole('button', { name: 'Go to start', exact: true }).click();
  await page.waitForTimeout(150);
  await page.screenshot({ path: process.env.SCREENSHOT_PATH ?? '/tmp/editor-media-check/playback.png' });
  assert.deepEqual(errors, []);
- console.log(JSON.stringify({ result: 'PASS', audio, compositor, checks: ['rendered real media', 'play/pause', 'audio samples', 'preview mute', 'frame stepping', 'transport limits', 'crossfade pixels', 'fade-to-black pixels', 'transform', 'crop', 'hidden track', 'fade curves', 'ruler scrub', 'trim scrub', 'properties update', 'worker render'] }, null, 2));
+ console.log(JSON.stringify({ result: 'PASS', audio, compositor, checks: ['rendered real media', 'play/pause', 'audio samples', 'preview mute', 'frame stepping', 'transport limits', 'crossfade pixels', 'fade-to-black pixels', 'transform', 'crop', 'hidden track', 'fade curves', 'play into clip', 'ruler scrub', 'trim scrub', 'properties update', 'worker render'] }, null, 2));
 } finally { await browser.close(); }
