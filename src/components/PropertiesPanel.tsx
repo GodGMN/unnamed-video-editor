@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, MISSING_MEDIA, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextItem, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
 import type { AudioClip, FitMode, TextAnchor, TextItem, TransitionType, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
-import { Mute, Waveform } from './icons';
+import { Dropper, Mute, Waveform } from './icons';
+import { ColorPopover } from './ColorPicker';
 import { NumberField } from './NumberField';
 import { Slider } from './Slider';
 
@@ -227,6 +228,9 @@ function TimeField({ value, onChange }: { value: number; onChange: (v: number) =
 
 function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
   const updateText = (patch: Partial<TextItem>) => editor.updateText(tx.id, patch);
+  const custom = !SWATCHES.some(([, hex]) => hex === tx.color.toUpperCase());
+  const pickerAnchor = useRef<HTMLButtonElement>(null);
+  const [picking, setPicking] = useState(false);
   return (
     <div className="props-body" style={{ padding: 14, gap: 14 }}>
       <label className="field-label" style={{ gap: 6 }}>Text
@@ -240,13 +244,24 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
         <div style={{ display: 'flex', gap: 8 }}>
           {SWATCHES.map(([name, hex]) => (
             <button key={name} className="swatch" style={{ background: hex }} aria-label={name}
-              aria-pressed={tx.color === hex} onClick={() => updateText({ color: hex })} />
+              aria-pressed={tx.color.toUpperCase() === hex} onClick={() => updateText({ color: hex })} />
           ))}
+          <button ref={pickerAnchor} className="swatch custom" aria-label="Custom color" title="Custom color"
+            aria-pressed={custom} aria-expanded={picking} onClick={() => setPicking((v) => !v)}>
+            <Dropper size={14} stroke={custom ? tx.color : 'var(--text-soft)'} />
+          </button>
         </div>
+        {picking && <ColorPopover anchor={pickerAnchor} value={tx.color} onChange={(color) => updateText({ color })} onClose={() => setPicking(false)} />}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Position</span>
-        <div className="anchor-grid" role="group" aria-label="Text position">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Position</span>
+          <button className="ib" style={{ height: 24, padding: '0 8px', fontSize: 11, color: 'var(--text-dim)' }}
+            onClick={() => updateText({ x: 0, y: 0 })} disabled={!tx.x && !tx.y}>
+            Reset offset
+          </button>
+        </div>
+        <div className="anchor-grid" style={{ alignSelf: 'center' }} role="group" aria-label="Text position">
           {(['t', 'c', 'b'] as const).flatMap((v) => (['l', 'c', 'r'] as const).map((h) => {
             const k: TextAnchor = `${v}${h}`;
             return (
@@ -256,6 +271,11 @@ function TextProps({ editor, item: tx }: { editor: Editor; item: TextItem }) {
             );
           }))}
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+          <NumberField lead="X" unit="px" aria-label="X offset" value={tx.x} defaultValue={0} onChange={(x) => updateText({ x })} />
+          <NumberField lead="Y" unit="px" aria-label="Y offset" value={tx.y} defaultValue={0} onChange={(y) => updateText({ y })} />
+        </div>
+        <span className="hint">Offset in pixels from the chosen anchor.</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
         <label className="field-label">Starts at<TimeField value={tx.start} onChange={(start) => updateText({ start })} /></label>
