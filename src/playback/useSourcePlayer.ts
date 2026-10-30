@@ -1,0 +1,86 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Media } from '../editor/model';
+import { readMediaFile } from '../media/files';
+
+/** Plays one source file on its own in a `<video>`, outside the timeline. */
+export function useSourcePlayer(media: Media | null, volume: number) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [time, setTime] = useState(0);
+  const [status, setStatus] = useState('');
+  const id = media?.id ?? null;
+
+  useEffect(() => {
+    const element = video.current;
+    setPlaying(false); setTime(0); setStatus('');
+    if (!element || !id) return;
+    let url: string | null = null;
+    let cancelled = false;
+    readMediaFile(id).then((file) => {
+      if (cancelled) return;
+      if (!file) { setStatus('Source file is missing. Import your own media to preview it.'); return; }
+      url = URL.createObjectURL(file);
+      element.src = url;
+    }, (error: unknown) => { if (!cancelled) setStatus(error instanceof Error ? error.message : 'Media could not be loaded.'); });
+    const onError = () => setStatus(element.error?.message || 'This file could not be decoded.');
+    const onEnded = () => setPlaying(false);
+    element.addEventListener('error', onError);
+    element.addEventListener('ended', onEnded);
+    return () => {
+      cancelled = true;
+      element.removeEventListener('error', onError);
+      element.removeEventListener('ended', onEnded);
+      element.pause();
+      element.removeAttribute('src'); element.load();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [id]);
+
+  useEffect(() => { if (video.current) video.current.volume = volume; }, [volume, id]);
+
+  // Follow the element's clock every frame while playing; `seeked` covers paused seeks.
+  useEffect(() => {
+    const element = video.current;
+    if (!element) return;
+    const sync = () => setTime(element.currentTime);
+    element.addEventListener('seeked', sync);
+    let frame = 0;
+    const tick = () => { sync(); frame = requestAnimationFrame(tick); };
+    if (playing) frame = requestAnimationFrame(tick);
+    return () => { element.removeEventListener('seeked', sync); cancelAnimationFrame(frame); };
+  }, [playing, id]);
+
+  const duration = media?.duration ?? 0;
+  const toggle = useCallback(async () => {
+    const element = video.current;
+    if (!element || !id) return;
+    if (!element.paused) { element.pause(); setPlaying(false); return; }
+    try {
+      if (element.ended || element.currentTime >= element.duration) element.currentTime = 0;
+      await element.play();
+      setPlaying(true);
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Playback could not start.'); }
+  }, [id]);
+
+  const seek = useCallback((to: number) => {
+    const element = video.current;
+    if (!element) return;
+    element.pause(); setPlaying(false);
+    const clamped = Math.max(0, Math.min(duration, to));
+    element.currentTime = clamped;
+    setTime(clamped);
+  }, [duration]);
+
+  useEffect(() => {
+    if (!id) return;
+    const key = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (event.code !== 'Space' || event.repeat || target.closest('input, textarea, select, button, [contenteditable=true]')) return;
+      event.preventDefault(); void toggle();
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [id, toggle]);
+
+  return { video, playing, time, duration, status, toggle, seek };
+}
