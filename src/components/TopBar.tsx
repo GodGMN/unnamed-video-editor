@@ -15,6 +15,9 @@ function useFullscreen() {
 }
 
 interface Props {
+  onProjects: () => void;
+  saveState: string;
+  onSave: () => void;
   projectName: string;
   onRename: (name: string) => void;
   clipCount: number;
@@ -26,9 +29,9 @@ interface Props {
 
 function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
   const job = useConversionJob();
-  if (job?.state.status !== 'running') return null;
-  const p = Math.round(progressPercent(job.state.progress, job.source.duration));
-  const label = `Converting ${job.sourceName}`;
+  if (!job) return null;
+  const p = job.state.status === 'running' ? Math.round(progressPercent(job.state.progress, job.source.duration)) : job.state.status === 'done' ? 100 : 0;
+  const label = job.state.status === 'running' ? `Converting ${job.sourceName}` : job.state.status === 'done' ? `Save ${job.sourceName}` : 'Conversion stopped';
   return (
     <>
       <button className="ib conversion" onClick={() => onShow(job.mediaId, job.sourceName)} title={`${label} · ${p}%`}>
@@ -83,14 +86,17 @@ function ProjectName({ name, onRename }: { name: string; onRename: Props['onRena
   );
 }
 
-export function TopBar({ projectName, onRename, clipCount, totalTime, onExport, onShowConversion }: Props) {
+export function TopBar({ onProjects, saveState, onSave, projectName, onRename, clipCount, totalTime, onExport, onShowConversion }: Props) {
   const [fullscreen, toggleFullscreen] = useFullscreen();
   return (
     <header className="topbar">
       <Brand />
       <div className="vsep" />
+      <button className="gb" onClick={onProjects}>Projects</button>
       <ProjectName name={projectName} onRename={onRename} />
       <span className="count">{clipCount} clips · {totalTime}</span>
+      <span className={saveState.startsWith('Save failed') ? 'error save-status' : 'save-status'} role="status">{saveState}</span>
+      {saveState.startsWith('Save failed') && <button className="gb" onClick={onSave}>Retry save</button>}
       <div className="spacer" />
       <ConversionProgress onShow={onShowConversion} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

@@ -14,7 +14,7 @@ try {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(process.env.TEST_URL ?? 'http://127.0.0.1:5212');
-  await page.locator('input[type=file]').setInputFiles(file);
+  await page.locator('input[aria-label="Import media files"]').setInputFiles(file);
   const item = page.locator('.media-item').filter({ hasText: 'sample.mp4' });
   await item.waitFor();
   assert.match(await item.innerText(), /320×180/);
@@ -47,7 +47,7 @@ try {
   assert.ok(stored.thumbnails > 0 && stored.peak > 0.01);
   await page.reload();
   await page.getByRole('button', { name: /Video: sample.mp4/ }).waitFor();
-  await page.locator('input[type=file]').setInputFiles({ name: 'broken.mp4', mimeType: 'video/mp4', buffer: Buffer.from('not a movie') });
+  await page.locator('input[aria-label="Import media files"]').setInputFiles({ name: 'broken.mp4', mimeType: 'video/mp4', buffer: Buffer.from('not a movie') });
   await page.getByRole('status').filter({ hasText: 'broken.mp4' }).waitFor();
   await page.locator('.media-item').filter({ hasText: 'sample.mp4' }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: process.env.SCREENSHOT_PATH ?? '/tmp/editor-media-check/import.png' });

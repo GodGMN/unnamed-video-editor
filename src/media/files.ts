@@ -1,6 +1,6 @@
+import { linkedFile, forgetLink, mediaTransaction } from './links';
 /** Source bytes and generated previews are keyed by media id: in OPFS when the origin is secure, else IndexedDB. */
 interface Store {
-  write(id: string, name: string, data: Blob): Promise<void>;
   read(id: string, name: string): Promise<File | null>;
   remove(id: string): Promise<void>;
 }
@@ -14,12 +14,6 @@ function notFound(error: unknown) {
   return error instanceof DOMException && error.name === 'NotFoundError';
 }
 const opfs: Store = {
-  async write(id, name, data) {
-    const handle = await (await directory(id, true)).getFileHandle(name, { create: true });
-    const writer = await handle.createWritable();
-    try { await writer.write(data); await writer.close(); }
-    catch (error) { await writer.abort(); throw error; }
-  },
   async read(id, name) {
     try { return await (await (await directory(id)).getFileHandle(name)).getFile(); }
     catch (error) { if (notFound(error)) return null; throw error; }
@@ -48,7 +42,6 @@ async function transaction<T>(mode: IDBTransactionMode, run: (store: IDBObjectSt
   return result;
 }
 const idb: Store = {
-  async write(id, name, data) { await transaction('readwrite', (s) => s.put(data, `${id}/${name}`)); },
   async read(id, name) {
     const blob: Blob | undefined = await transaction('readonly', (s) => s.get(`${id}/${name}`));
     return blob ? new File([blob], name, { type: blob.type }) : null;
@@ -58,20 +51,50 @@ const idb: Store = {
 
 const store = () => typeof navigator.storage?.getDirectory === 'function' ? opfs : idb;
 
-export async function writeMediaFile(id: string, file: File) {
-  await store().write(id, 'source', file);
-}
-export function readMediaFile(id: string): Promise<File | null> {
-  return store().read(id, 'source');
+export async function readMediaFile(id: string): Promise<File | null> {
+  const linked = await linkedFile(id);
+  return linked.linked ? linked.file : store().read(id, 'source');
 }
 export interface MediaPreview { thumbnails: string[]; peaks: number[] }
-export async function writePreview(id: string, preview: MediaPreview) {
-  await store().write(id, 'preview.json', new Blob([JSON.stringify(preview)], { type: 'application/json' }));
+export const PREVIEW_BUDGET = 128 * 1024 * 1024;
+interface CachedPreview { id: string; blob: Blob; used: number }
+export async function writePreview(id: string, preview: MediaPreview): Promise<void> {
+  const blob = new Blob([JSON.stringify(preview)], { type: 'application/json' });
+  if (blob.size > PREVIEW_BUDGET) return;
+  try {
+    await mediaTransaction('previews', 'readwrite', store => {
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const entries: CachedPreview[] = request.result;
+        const others = entries.filter(e => e.id !== id).sort((a, b) => a.used - b.used);
+        let size = others.reduce((n, e) => n + e.blob.size, blob.size);
+        for (const entry of others) {
+          if (size <= PREVIEW_BUDGET) break;
+          store.delete(entry.id); size -= entry.blob.size;
+        }
+        store.put({ id, blob, used: Date.now() } satisfies CachedPreview, id);
+      };
+      return request;
+    });
+  } catch (error) { if (!(error instanceof DOMException && error.name === 'QuotaExceededError')) throw error; }
 }
 export async function readPreview(id: string): Promise<MediaPreview | null> {
-  const file = await store().read(id, 'preview.json');
-  return file ? JSON.parse(await file.text()) : null;
+  const entry = await mediaTransaction<CachedPreview | undefined>('previews', 'readonly', s => s.get(id));
+  return entry ? JSON.parse(await entry.blob.text()) : null;
 }
-export function removeMediaFiles(id: string) {
-  return store().remove(id);
+export async function previewCacheBytes(): Promise<number> {
+  const entries = await mediaTransaction<CachedPreview[]>('previews', 'readonly', s => s.getAll());
+  return entries.reduce((n, e) => n + e.blob.size, 0);
+}
+export async function clearPreviewCache(): Promise<void> {
+  await mediaTransaction('previews', 'readwrite', s => s.clear());
+}
+export async function removeMediaFiles(id: string) {
+  await forgetLink(id);
+  await mediaTransaction('previews', 'readwrite', s => s.delete(id));
+  try { await store().remove(id); } catch (error) { if (!notFound(error)) throw error; }
+}
+
+export async function removeLegacyCopy(id: string) {
+  try { await store().remove(id); } catch (error) { if (!notFound(error)) throw error; }
 }

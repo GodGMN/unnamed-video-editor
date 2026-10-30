@@ -2,9 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { newId, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, settle, trimClipEdge, videoTracks } from './model';
 import type { AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
-import { SEED_SELECTION, seedProject } from './seed';
-import { clearProject, loadProject, saveProject } from './storage';
 import { removeMediaFiles } from '../media/files';
+import { SEED_SELECTION } from './seed';
+import { saveProject, listProjects } from './storage';
 
 const SAVE_DELAY_MS = 250;
 
@@ -36,37 +36,34 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   return { ...ui, sel, picked, focusClip, lockClip, source, menu: null };
 }
 
-/** Loads the saved project (or the seed) and saves it back after every change. */
-function usePersistentProject(onLoad: (p: Project) => void) {
-  const [project, setProject] = useState<Project | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    // `?reset` discards the saved project and starts over from the seed.
-    const url = new URL(window.location.href);
-    const reset = url.searchParams.has('reset');
-    if (reset) {
-      url.searchParams.delete('reset');
-      history.replaceState(null, '', url);
+function usePersistentProject(id: string, initial: Project) {
+  const [project, setProject] = useState(initial);
+  const [saveState, setSaveState] = useState('Saved');
+  const latest = useRef(project);
+  latest.current = project;
+  const save = useCallback(async () => {
+    const snapshot = latest.current;
+    setSaveState('Saving');
+    try {
+      await saveProject(snapshot, id);
+      if (snapshot === latest.current) setSaveState('Saved');
+    } catch (error) {
+      setSaveState(error instanceof Error ? `Save failed: ${error.message}` : 'Save failed');
+      throw error;
     }
-    (reset ? clearProject().then(() => null) : loadProject())
-      .catch((err) => { console.warn('Could not load the saved project', err); return null; })
-      .then((saved) => {
-        if (cancelled) return;
-        const p = saved ?? seedProject();
-        setProject(p);
-        onLoad(p);
-      });
-    return () => { cancelled = true; };
-  }, [onLoad]);
-
+  }, [id]);
   useEffect(() => {
-    if (!project) return;
-    const t = setTimeout(() => saveProject(project).catch((err) => console.warn('Could not save the project', err)), SAVE_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [project]);
-
-  return [project, setProject] as const;
+    setSaveState('Saving');
+    const timer = setTimeout(() => { void save().catch(() => undefined); }, SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [project, save]);
+  useEffect(() => {
+    if (saveState === 'Saved') return;
+    const leave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', leave);
+    return () => window.removeEventListener('beforeunload', leave);
+  }, [saveState]);
+  return { project, setProject, saveState, flush: save };
 }
 
 export interface PlayRange {
@@ -86,10 +83,9 @@ function playRange(p: Project, end: number, lockClip: string | null): PlayRange 
   return { start: clip.start, end: Math.max(clip.start, clipEnd(clip) - 1 / p.output.fps) };
 }
 
-export function useProject() {
-  const [ui, setUi] = useState<EditorUi>(initialUi);
-  const onLoad = useCallback((p: Project) => setUi((u) => reconcileUi(p, u)), []);
-  const [project, setProject] = usePersistentProject(onLoad);
+export function useProject(id: string, initial: Project) {
+  const [ui, setUi] = useState<EditorUi>(() => reconcileUi(initial, initialUi));
+  const { project, setProject, saveState, flush } = usePersistentProject(id, initial);
   const projectRef = useRef(project);
   projectRef.current = project;
   const uiRef = useRef(ui);
@@ -116,7 +112,10 @@ export function useProject() {
         const next = removeMedia(p, mediaId);
         setProject(next);
         setUi((u) => reconcileUi(next, u));
-        removeMediaFiles(mediaId).catch(() => undefined);
+        void saveProject(next, id).then(async () => {
+          const entries = await listProjects();
+          if (!entries.some(e => Object.hasOwn(e.project.media, mediaId))) await removeMediaFiles(mediaId);
+        }).catch(error => console.warn('Could not remove unused media', error));
       },
       /** Deletes the selected clips, with their linked partners. */
       deleteSelection: () => {
@@ -217,10 +216,10 @@ export function useProject() {
         return t.kind === 'audio' ? patchTrack(p, id, { muted: !t.muted }) : patchTrack(p, id, { hidden: !t.hidden });
       }),
     };
-  }, [setProject]);
+  }, [id, setProject]);
 
   if (!project || !layout || !range) return null;
-  return { project, ui, layout, range, ...actions };
+  return { project, ui, layout, range, saveState, flush, ...actions };
 }
 
 export type Editor = NonNullable<ReturnType<typeof useProject>>;

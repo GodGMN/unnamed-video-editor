@@ -210,13 +210,13 @@ function JobView({ job, onClose, onCancel, onFinish, onRetry720 }: {
 
   if (state.status === 'done') {
     return (
-      <Dialog id="cv-title" title="Ready to edit" subtitle="The MP4 copy is in your Media library." width={560} onClose={onClose}>
+      <Dialog id="cv-title" title="Ready to edit" subtitle="The MP4 is available for this session. Save it to your computer to keep it." width={560} onClose={onClose}>
         <div className="dialog-body">
           <ResultCard tone="#2E3A45" name={name}
             meta={`${out.width}×${out.height} · ${fpsLabel(out.fps)} · ${mmss(source.duration)} · ${mb(state.output.size)} · ${codecs}`}
             extra={<span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Converted in {mmss(state.elapsed)} · {(source.duration / state.elapsed).toFixed(2)}× speed</span>} />
           <div className="dialog-actions split">
-            {url ? <a className="link-btn" href={url} download={name}>Save a copy to my computer</a> : <span />}
+            {url ? <a className="link-btn" href={url} download={name}>Save MP4 to my computer</a> : <span />}
             <button className="primary" onClick={onFinish}>Back to editing</button>
           </div>
         </div>

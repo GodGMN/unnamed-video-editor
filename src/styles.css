@@ -404,3 +404,17 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .split-guide { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: var(--text-bright); box-shadow: 0 0 0 1px rgba(12, 14, 13, 0.6); border-radius: 1px; pointer-events: none; z-index: 5; }
 .marquee { position: absolute; z-index: 7; pointer-events: none; border: 1.5px solid var(--accent); border-radius: 8px; background: radial-gradient(circle at center, rgba(198, 240, 191, 0.18) 0.5px, transparent 1px) 0 0 / 5px 5px, rgba(198, 240, 191, 0.1); }
 .snap-guide { position: absolute; top: 0; bottom: 0; width: 0; margin-left: -1px; border-left: 2px dashed var(--accent); pointer-events: none; z-index: 6; }
+
+.save-status { font-size: 11px; color: var(--text-muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-library { display: flex; flex-direction: column; gap: 18px; }
+.project-library fieldset { border: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.project-library fieldset:disabled { opacity: .55; }
+.library-toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+.project-list { max-height: 320px; overflow: auto; }
+.project-row { display: flex; align-items: center; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.project-row > div { flex: 1; min-width: 0; }
+.project-row strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-row small { display: block; color: var(--text-muted); margin-top: 6px; }
+.cache-settings { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.media-reconnect { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.startup-error { padding: 32px; }
