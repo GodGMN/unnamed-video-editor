@@ -17,10 +17,6 @@ export function usePlayback(editor: Editor, volume: number) {
   }, []);
 
   useEffect(() => {
-    if (editor.ui.playhead > editor.layout.end) editor.setPlayhead(editor.layout.end);
-  }, [editor.ui.playhead, editor.layout.end, editor.setPlayhead]);
-
-  useEffect(() => {
     engine.current?.update({ project: editor.project, time: editor.ui.playhead, playing, volume });
   }, [editor.project, editor.ui.playhead, playing, volume]);
 
@@ -30,10 +26,10 @@ export function usePlayback(editor: Editor, volume: number) {
     let frame = 0;
     const tick = (now: number) => {
       const { editor } = current.current;
-      const next = Math.min(editor.layout.end, editor.ui.playhead + (now - last) / 1000);
+      const next = Math.min(editor.range.end, editor.ui.playhead + (now - last) / 1000);
       last = now;
       editor.setPlayhead(next);
-      if (next >= editor.layout.end) setPlaying(false);
+      if (next >= editor.range.end) setPlaying(false);
       else frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -45,7 +41,7 @@ export function usePlayback(editor: Editor, volume: number) {
     if (playing) { setPlaying(false); return; }
     try {
       await engine.current?.resumeAudio();
-      if (editor.ui.playhead >= editor.layout.end) editor.setPlayhead(0);
+      if (editor.ui.playhead >= editor.range.end) editor.setPlayhead(editor.range.start);
       setPlaying(true);
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Audio could not start.'); }
   }, []);
@@ -62,7 +58,7 @@ export function usePlayback(editor: Editor, volume: number) {
 
   const seek = (time: number) => {
     setPlaying(false);
-    editor.setPlayhead(Math.max(0, Math.min(editor.layout.end, time)));
+    editor.setPlayhead(time);
   };
   return { canvas, playing, status, toggle, seek };
 }
