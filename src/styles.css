@@ -194,6 +194,12 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 
 .transport-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .play-btn { width: 44px; height: 44px; border-radius: 999px; border: 0; background: var(--accent); display: flex; align-items: center; justify-content: center; }
+/* Fullscreen keeps only the stage and the transport; the stage grows to fill the screen. */
+.preview:fullscreen { border: 0; border-radius: 0; background: #000; }
+.preview:fullscreen > .preview-head, .preview:fullscreen > .trim { display: none; }
+.preview:fullscreen .stage-wrap { padding: 0; background: #000; }
+.preview:fullscreen .stage { width: min(100cqw, 100cqh * 16 / 9); border-radius: 0; }
+.preview:fullscreen .transport-bar { background: var(--panel); }
 
 /* Properties */
 .props { flex: 1 1 288px; max-width: 320px; }
