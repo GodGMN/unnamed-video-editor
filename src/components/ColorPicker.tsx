@@ -12,6 +12,8 @@ const RING_W = 18;
 const PAD = Math.floor((RING - 2 * RING_W) / Math.SQRT2) - 2;
 const POP_W = 312;
 const GAP = 8;
+const RECENT_KEY = 'unnamed-video-editor:recent-colors';
+const RECENT_MAX = 8;
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
@@ -63,6 +65,21 @@ function trackPointer(e: PointerEvent<HTMLElement>, onMove: (x: number, y: numbe
   el.addEventListener('pointercancel', end);
 }
 
+/** Colors picked in earlier sessions, newest first. Shared by every project in this browser. */
+function loadRecent(): string[] {
+  try {
+    const list: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
+    return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string' && !!hexToRgb(x)).slice(0, RECENT_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecent(hex: string) {
+  const list = [hex, ...loadRecent().filter((x) => x !== hex)].slice(0, RECENT_MAX);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* storage full or blocked */ }
+}
+
 /** A `#RRGGBB` text field that commits when the typed text is a valid hex color. */
 export function HexField({ value, onChange, style }: { value: string; onChange: (v: string) => void; style?: CSSProperties }) {
   const [draft, setDraft] = useState<string | null>(null);
@@ -104,6 +121,12 @@ export function ColorPopover({ anchor, value, onChange, onClose }: Props) {
     }
   }
   const rgb = hsvToRgb(hsv);
+  const [recent] = useState(loadRecent);
+  // On close, remember the final color if this session changed it.
+  const opened = useRef(current);
+  const latest = useRef(current);
+  latest.current = current;
+  useEffect(() => () => { if (latest.current !== opened.current) pushRecent(latest.current); }, []);
   const set = (patch: Partial<Hsv>) => {
     const next = { ...hsv, ...patch };
     setHsv(next);
@@ -161,27 +184,40 @@ export function ColorPopover({ anchor, value, onChange, onClose }: Props) {
   return createPortal(
     <div ref={ref} className={'color-pop' + (pos?.above ? ' above' : '')} role="dialog" aria-label="Custom color"
       style={{ width: POP_W, left: pos?.left ?? -9999, top: pos?.top ?? 0, ['--caret' as string]: `${pos?.caret ?? 0}px` }}>
-      <div className="hue-ring" style={{ width: RING, height: RING }} onPointerDown={onRingDown}
-        role="slider" aria-label="Hue" aria-valuemin={0} aria-valuemax={359} aria-valuenow={Math.round(hsv.h)} tabIndex={0}
-        onKeyDown={(e) => {
-          const d = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
-          if (d) { e.preventDefault(); set({ h: (hsv.h + d * (e.shiftKey ? 10 : 1) + 360) % 360 }); }
-        }}>
-        <span className="hue-ring-hole" style={{ inset: RING_W }} />
-        <span className="picker-knob" style={{ left: RING / 2 + Math.cos(angle) * radius, top: RING / 2 + Math.sin(angle) * radius, background: pure }} />
-        <div className="tone-pad" style={{ width: PAD, height: PAD, background: pure }} onPointerDown={onPadDown}
-          role="slider" aria-label="Saturation and brightness" aria-valuetext={`Saturation ${Math.round(hsv.s * 100)}%, brightness ${Math.round(hsv.v * 100)}%`}>
-          <span className="picker-knob" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: current }} />
+      <div className="color-pop-main">
+        <div className="hue-ring" style={{ width: RING, height: RING }} onPointerDown={onRingDown}
+          role="slider" aria-label="Hue" aria-valuemin={0} aria-valuemax={359} aria-valuenow={Math.round(hsv.h)} tabIndex={0}
+          onKeyDown={(e) => {
+            const d = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
+            if (d) { e.preventDefault(); set({ h: (hsv.h + d * (e.shiftKey ? 10 : 1) + 360) % 360 }); }
+          }}>
+          <span className="hue-ring-hole" style={{ inset: RING_W }} />
+          <span className="picker-knob" style={{ left: RING / 2 + Math.cos(angle) * radius, top: RING / 2 + Math.sin(angle) * radius, background: pure }} />
+          <div className="tone-pad" style={{ width: PAD, height: PAD, background: pure }} onPointerDown={onPadDown}
+            role="slider" aria-label="Saturation and brightness" aria-valuetext={`Saturation ${Math.round(hsv.s * 100)}%, brightness ${Math.round(hsv.v * 100)}%`}>
+            <span className="picker-knob" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: current }} />
+          </div>
+        </div>
+        <div className="color-pop-fields">
+          <span className="color-pop-chip" style={{ background: current }} />
+          <HexField value={current} onChange={onChange} />
+          {(['R', 'G', 'B'] as const).map((k, i) => (
+            <NumberField key={k} lead={k} aria-label={`${k === 'R' ? 'Red' : k === 'G' ? 'Green' : 'Blue'} channel`}
+              min={0} max={255} value={rgb[i]} onChange={setChannel(i)} />
+          ))}
         </div>
       </div>
-      <div className="color-pop-fields">
-        <span className="color-pop-chip" style={{ background: current }} />
-        <HexField value={current} onChange={onChange} />
-        {(['R', 'G', 'B'] as const).map((k, i) => (
-          <NumberField key={k} lead={k} aria-label={`${k === 'R' ? 'Red' : k === 'G' ? 'Green' : 'Blue'} channel`}
-            min={0} max={255} value={rgb[i]} onChange={setChannel(i)} />
-        ))}
-      </div>
+      {recent.length > 0 && (
+        <div className="color-pop-recent">
+          <span className="eyebrow">Recent</span>
+          <div role="group" aria-label="Recent colors">
+            {recent.map((hex) => (
+              <button key={hex} style={{ background: hex }} aria-label={hex} title={hex}
+                aria-pressed={hex === current} onClick={() => onChange(hex)} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>,
     document.body,
   );
