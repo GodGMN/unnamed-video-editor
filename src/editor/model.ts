@@ -455,3 +455,26 @@ export const filmstrip = (width: number, seed: number) => {
   const n = Math.max(1, Math.round(width / 44));
   return Array.from({ length: n }, (_, i) => 0.03 + 0.07 * Math.abs(Math.sin(i * 1.3 + seed)));
 };
+
+/** Places a source on a compatible track, keeping its audio linked on a separate track. */
+export function placeMedia(p: Project, mediaId: string, trackId: string, time: number, id: string): Project {
+  const media = p.media[mediaId];
+  const track = p.tracks.find((t) => t.id === trackId);
+  if (!media?.decodable || !track || track.kind === 'text' || (track.kind === 'video' ? !media.video : !media.audio)) return p;
+  const start = track.kind === 'video' && track.magnetic
+    ? Math.max(0, ...track.clips.map(clipEnd)) : Math.max(0, time);
+  const base = { id, mediaId, start, inS: 0, outS: media.duration, linkId: null, linked: false };
+  if (track.kind === 'audio') return { ...p, tracks: p.tracks.map((t) => t.id === trackId ? { ...track, clips: [...track.clips, { ...AUDIO_CLIP_DEFAULTS, ...base }].sort((a, b) => a.start - b.start) } : t) };
+  const audioTrack = media.audio ? p.tracks.find((t): t is AudioTrack => t.kind === 'audio' && t.clips.every((c) => clipEnd(c) <= start || c.start >= start + media.duration)) : undefined;
+  const audioId = `${id}-audio`;
+  const linkId = media.audio ? id : null;
+  const videoClip: VideoClip = { ...VIDEO_CLIP_DEFAULTS, ...base, linkId, linked: !!linkId };
+  const audioClip: AudioClip = { ...AUDIO_CLIP_DEFAULTS, ...base, id: audioId, linkId, linked: true };
+  const tracks = p.tracks.map((t): Track => {
+    if (t.id === trackId) return { ...track, clips: [...track.clips, videoClip].sort((a, b) => a.start - b.start) };
+    if (t === audioTrack) return { ...audioTrack, clips: [...audioTrack.clips, audioClip].sort((a, b) => a.start - b.start) };
+    return t;
+  });
+  if (media.audio && !audioTrack) tracks.push({ id: `${id}-track`, name: `A${p.tracks.filter((t) => t.kind === 'audio').length + 1}`, label: 'Audio', kind: 'audio', muted: false, clips: [audioClip] });
+  return settle({ ...p, tracks });
+}

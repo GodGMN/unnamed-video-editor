@@ -1,10 +1,7 @@
 import { AUDIO_CLIP_DEFAULTS, VIDEO_CLIP_DEFAULTS, settle } from './model';
 import type { AudioClip, Media, Project, Transition, VideoClip } from './model';
 
-/*
- * The demo project a fresh editor opens with. Clips on the magnetic V1 track only need to be
- * listed in order: `settle` lays them out back to back and moves their linked audio along.
- */
+/* Demo clip positions are explicit, just like user-authored timeline positions. */
 
 const media: Media[] = [
   {
