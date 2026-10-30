@@ -213,13 +213,13 @@ function JobView({ job, onClose, onCancel, onFinish, onRetry720 }: {
 
   if (state.status === 'done') {
     return (
-      <Dialog id="cv-title" title={translate('readyToEdit')} subtitle={translate('theMP4CopyIsInYourMediaLibrary')} width={560} onClose={onClose}>
+      <Dialog id="cv-title" title={translate('readyToEdit')} subtitle={translate('projectHomeTheMP4IsAvailableForThisSessionSaveItToYourComputerToKeepIt')} width={560} onClose={onClose}>
         <div className="dialog-body">
           <ResultCard tone="#2E3A45" name={name}
             meta={`${out.width}×${out.height} · ${fpsLabel(out.fps)} · ${mmss(source.duration)} · ${mb(state.output.size)} · ${codecs}`}
             extra={<span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{translate('convertedInSpeed', { value1: mmss(state.elapsed), value2: formatNumber((source.duration / state.elapsed), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}</span>} />
           <div className="dialog-actions split">
-            {url ? <a className="link-btn" href={url} download={name}>{translate('saveACopyToMyComputer')}</a> : <span />}
+            {url ? <a className="link-btn" href={url} download={name}>{translate('projectHomeSaveMP4ToMyComputer')}</a> : <span />}
             <button className="primary" onClick={onFinish}>{translate('backToEditing')}</button>
           </div>
         </div>
