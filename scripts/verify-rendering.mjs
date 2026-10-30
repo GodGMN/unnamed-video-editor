@@ -136,7 +136,7 @@ try {
   await page.reload();
   await openEditor(page);
   await page.locator('input[aria-label="Reconnect source.mp4"]').setInputFiles(file);
-  await page.locator('.media-item').filter({ hasText: 'source.mp4' }).getByRole('button', { name: 'Rebuild previews' }).waitFor();
+  await page.locator('.media-item').filter({ hasText: 'source.mp4' }).and(page.locator('[data-source="ready"]')).waitFor();
   await page.getByRole('button', { name: 'Export', exact: true }).click();
   await page.getByRole('button', { name: '720p', exact: false }).click();
   await page.getByRole('button', { name: 'Start export', exact: true }).click();

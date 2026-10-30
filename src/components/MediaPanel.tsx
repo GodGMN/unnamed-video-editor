@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { codecFamily, fmtShortDuration, videoTracks } from '../editor/model';
 import type { Media, Project } from '../editor/model';
-import { Convert, Plus, Trash, Warning } from './icons';
+import { Convert, Link, Plus, Reset, Trash, Warning } from './icons';
 
 import { importMedia, regeneratePreview } from '../media/import';
 import { readMediaFile, removeLegacyCopy } from '../media/files';
@@ -116,6 +116,17 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
     } catch (error) { failed(error); }
     finally { setPending(n => n - 1); }
   };
+  const relinkInput = useRef<HTMLInputElement>(null);
+  const relinkTarget = useRef<Media | null>(null);
+  /** Asks for the source file again, then swaps it in. */
+  const relink = (m: Media) => {
+    if (window.showOpenFilePicker) { void pickFiles().then(files => { if (files[0]) return reconnect(m, files[0]); }).catch(failed); return; }
+    relinkTarget.current = m; relinkInput.current?.click();
+  };
+  const rebuildPreviews = (m: Media) => {
+    setPending(n => n + 1);
+    void readMediaFile(m.id).then(async f => { if (f) await regeneratePreview(m, f); setRevision(n => n + 1); onReconnect(); }).catch(failed).finally(() => setPending(n => n - 1));
+  };
   const ingest = (files: PickedFile[]) => {
     const batch = files;
     setTab('media');
@@ -139,6 +150,7 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
         { id: 'transitions', label: <>{translate('transitions')}<span className="count">{TRANSITIONS().length}</span></> },
       ]} actions={<>
         <input ref={input} type="file" multiple accept="video/*,audio/*,image/*,.mov,.mkv" aria-label={translate('importMediaFiles')} hidden onChange={(e) => { if (e.target.files) ingest(Array.from(e.target.files, file => ({ file }))); e.target.value = ''; }} />
+        <input ref={relinkInput} type="file" aria-label={translate('relinkOriginal')} hidden onChange={e => { const f = e.target.files?.[0], m = relinkTarget.current; if (f && m) void reconnect(m, { file: f }); e.target.value = ''; }} />
         <button onClick={() => {
           if (!window.showOpenFilePicker) input.current?.click();
           else void pickFiles().then(ingest).catch(failed);
@@ -156,13 +168,14 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
       <div className="media-list">
         {media.map((m) => (
           <div key={m.id} className={'media-item' + (m.decodable ? ' playable' : '') + (previewing === m.id ? ' active' : '')} draggable={m.decodable}
+            data-source={available[m.id] === undefined ? undefined : available[m.id] ? 'ready' : 'missing'}
             title={m.decodable ? translate('clickToPreviewDragOntoTheTimeline') : undefined}
             onClick={() => { if (m.decodable) onPreview(m.id); }}
             onDragStart={(e) => { e.dataTransfer.setData(MEDIA_MIME, m.id); e.dataTransfer.effectAllowed = 'copy'; mediaDrag.id = m.id; }}
             onDragEnd={() => { mediaDrag.id = null; }}
             onContextMenu={(e) => {
               e.preventDefault();
-              setMenu({ id: m.id, left: Math.min(e.clientX + 4, window.innerWidth - 240), top: Math.min(e.clientY + 4, window.innerHeight - 110) });
+              setMenu({ id: m.id, left: Math.min(e.clientX + 4, window.innerWidth - 240), top: Math.min(e.clientY + 4, window.innerHeight - 200) });
             }}>
             <div className="media-thumb" style={{ background: m.tone }}>
               <PreviewStrip media={m} width={100} />
@@ -172,12 +185,13 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
             <div className="media-text">
               <span className="media-name">{m.name}</span>
               <span className={'media-meta' + (m.decodable ? '' : ' error')}>{mediaMeta(project, m)}</span>
-              <span className="hint">{available[m.id] === false ? 'Reconnect needed' : sourceKinds[m.id] === 'linked' ? 'Linked original' : sourceKinds[m.id] === 'session' ? 'Session only' : sourceKinds[m.id] === 'legacy' ? 'Stored copy' : 'Checking source'}</span>
-              <div className="media-reconnect" onClick={e => e.stopPropagation()}>
-                {window.showOpenFilePicker ? <button className="gb" onClick={() => void pickFiles().then(files => { if (files[0]) return reconnect(m, files[0]); }).catch(failed)}>{available[m.id] ? 'Relink original' : 'Reconnect'}</button> : <label className="gb">{available[m.id] ? 'Relink original' : 'Reconnect'}<input aria-label={`Reconnect ${m.name}`} type="file" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void reconnect(m, { file: f }); e.target.value = ''; }} /></label>}
-                {available[m.id] === false && sourceKinds[m.id] === 'linked' && <button className="gb" onClick={() => void requestSourcePermission(m.id).then(granted => { if (!granted) throw new Error('Select the original file with Reconnect.'); setRevision(n => n + 1); onReconnect(); }).catch(failed)}>{translate('projectHomeRestoreAccess')}</button>}
-              </div>
-              {available[m.id] && <button className="convert-btn" onClick={e => { e.stopPropagation(); setPending(n => n + 1); void readMediaFile(m.id).then(async f => { if (f) await regeneratePreview(m, f); setRevision(n => n + 1); onReconnect(); }).catch(failed).finally(() => setPending(n => n - 1)); }}>{translate('projectHomeRebuildPreviews')}</button>}
+              {available[m.id] === false && <>
+                <span className="media-meta error">Reconnect needed</span>
+                <div className="media-reconnect" onClick={e => e.stopPropagation()}>
+                  {window.showOpenFilePicker ? <button className="gb" onClick={() => relink(m)}>Reconnect</button> : <label className="gb">Reconnect<input aria-label={`Reconnect ${m.name}`} type="file" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void reconnect(m, { file: f }); e.target.value = ''; }} /></label>}
+                  {sourceKinds[m.id] === 'linked' && <button className="gb" onClick={() => void requestSourcePermission(m.id).then(granted => { if (!granted) throw new Error('Select the original file with Reconnect.'); setRevision(n => n + 1); onReconnect(); }).catch(failed)}>{translate('projectHomeRestoreAccess')}</button>}
+                </div>
+              </>}
               {!m.decodable && (
                 <button className="convert-btn" onClick={() => onConvert(m)}>
                   <Convert size={12} strokeWidth={2.2} />
@@ -209,7 +223,18 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
           <div role="menu" aria-label={project.media[menu.id].name} className="menu" style={{ position: 'fixed', left: menu.left, top: menu.top }}
             onPointerDown={(e) => e.stopPropagation()}>
             <span className="menu-label">{project.media[menu.id].name}</span>
-            <button role="menuitem" className="ib danger" autoFocus onClick={() => { onRemove(menu.id); setMenu(null); }}>
+            {available[menu.id] && <>
+              <button role="menuitem" className="ib" autoFocus onClick={() => { relink(project.media[menu.id]); setMenu(null); }}>
+                <Link size={14} />
+                <span>{translate('relinkOriginal')}</span>
+              </button>
+              <button role="menuitem" className="ib" onClick={() => { rebuildPreviews(project.media[menu.id]); setMenu(null); }}>
+                <Reset size={14} />
+                <span>{translate('projectHomeRebuildPreviews')}</span>
+              </button>
+              <div className="menu-sep" />
+            </>}
+            <button role="menuitem" className="ib danger" autoFocus={!available[menu.id]} onClick={() => { onRemove(menu.id); setMenu(null); }}>
               <Trash size={14} />
               <span>{translate('deleteFromProject')}</span>
             </button>

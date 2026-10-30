@@ -48,7 +48,7 @@ try {
   await page.getByRole('status').filter({ hasText: /does not match/ }).waitFor();
   checks.push('Rejects same-name same-size wrong source');
   await page.locator('input[aria-label="Reconnect original.mp4"]').setInputFiles(fixture);
-  await item.getByRole('button', { name: 'Rebuild previews' }).waitFor();
+  await item.and(page.locator('[data-source="ready"]')).waitFor();
   checks.push('Reconnect restores source and previews');
   await returnHome(page);
   await projectAction(page, 'Untitled project', 'Duplicate');
@@ -75,7 +75,7 @@ try {
   await projectAction(page, 'Untitled project', 'Reconnect package');
   await page.locator('input[aria-label="Reconnect package"]').setInputFiles(packagePath);
   await openEditor(page);
-  await page.locator('.media-item').filter({ hasText: 'original.mp4' }).getByText('Session only', { exact: true }).waitFor();
+  await page.locator('.media-item[data-source="ready"]').filter({ hasText: 'original.mp4' }).waitFor();
   assert.equal(await page.evaluate(async id => (await (await import('/src/media/files.ts')).readMediaFile(id))?.size, restored.id), bytes.length);
   checks.push('Reconnect package restores current project media after reload');
   // Genuine serializable browser handles, using an OPFS fixture as the controlled picker source.

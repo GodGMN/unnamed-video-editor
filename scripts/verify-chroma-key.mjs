@@ -109,7 +109,7 @@ try {
   await openEditor(page);
   for (const [name, path] of [['greenscreen.mp4', fg], ['backdrop.mp4', bg]]) {
     await page.locator(`input[aria-label="Reconnect ${name}"]`).setInputFiles(path);
-    await page.locator('.media-item').filter({ hasText: name }).getByRole('button', { name: 'Rebuild previews' }).waitFor();
+    await page.locator('.media-item').filter({ hasText: name }).and(page.locator('[data-source="ready"]')).waitFor();
   }
   const stage = page.locator('canvas[aria-label="Timeline preview"]');
   await stage.waitFor();

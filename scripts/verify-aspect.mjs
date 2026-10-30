@@ -35,7 +35,7 @@ try {
   await page.reload();
   await openEditor(page);
   await page.locator('input[aria-label="Reconnect landscape.mp4"]').setInputFiles(file);
-  await page.locator('.media-item').filter({ hasText: 'landscape.mp4' }).getByRole('button', { name: 'Rebuild previews' }).waitFor();
+  await page.locator('.media-item').filter({ hasText: 'landscape.mp4' }).and(page.locator('[data-source="ready"]')).waitFor();
   const button = page.getByRole('button', { name: /^Output aspect ratio/ });
   await button.waitFor();
   assert.match(await button.innerText(), /16:9\s*1920×1080/);

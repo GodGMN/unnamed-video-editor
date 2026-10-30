@@ -466,6 +466,7 @@ export const en = {
   "projectHomeSaveMP4ToMyComputer": "Save MP4 to my computer",
   "projectHomeRestoreAccess": "Restore access",
   "projectHomeRebuildPreviews": "Rebuild previews",
+  "relinkOriginal": "Relink original…",
   "projectHomeLibrary": "Library",
   "projectHomeProjectLibrary": "Project library",
   "projectHomeSavedOnThisDevice": "Saved on this device",

@@ -45,7 +45,7 @@ try {
  await page.reload();
   await openEditor(page);
  await page.locator('input[aria-label="Reconnect playback.mp4"]').setInputFiles(file);
- await page.locator('.media-item').filter({ hasText: 'playback.mp4' }).getByRole('button', { name: 'Rebuild previews' }).waitFor();
+ await page.locator('.media-item').filter({ hasText: 'playback.mp4' }).and(page.locator('[data-source="ready"]')).waitFor();
  await page.getByRole('button', { name: 'Go to start', exact: true }).click();
  await page.waitForFunction(() => {
    const c = document.querySelector('canvas');
@@ -175,7 +175,7 @@ try {
  await page.reload();
   await openEditor(page);
  await page.locator('input[aria-label="Reconnect playback.mp4"]').setInputFiles(file);
- await page.locator('.media-item').filter({ hasText: 'playback.mp4' }).getByRole('button', { name: 'Rebuild previews' }).waitFor();
+ await page.locator('.media-item').filter({ hasText: 'playback.mp4' }).and(page.locator('[data-source="ready"]')).waitFor();
  await page.getByRole('button', { name: 'Go to start', exact: true }).click();
  // Seeks in real 1080p footage outlast a frame. Delay them so that holds for this tiny test file too.
  await page.evaluate(() => {
