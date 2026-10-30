@@ -1,11 +1,12 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, clipKind, curveName, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
+import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, clipKind, curveName, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, removeTrack as removeTrackModel, clipDuration, clipEnd, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
 import type { AudioClip, Clip, ClipKind, ClipSelection, MediaClip, Project, TextClip, TransitionType, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
+import { Dialog } from './Dialog';
 import { CutLine, Crossfade, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
 
 const TEXT_TRACK_H = 44;
@@ -77,6 +78,8 @@ export function Timeline({ editor }: { editor: Editor }) {
   const scaleRef = useRef(PPS);
   const pendingScroll = useRef<number | null>(null);
   const [viewW, setViewW] = useState(0);
+  const [trackMenu, setTrackMenu] = useState<{ id: string; left: number; top: number } | null>(null);
+  const [confirmTrack, setConfirmTrack] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     const scroll = scrollRef.current;
@@ -195,15 +198,29 @@ export function Timeline({ editor }: { editor: Editor }) {
   const lastTick = Math.max(Math.ceil(layout.end) + 2, Math.ceil(viewW / pps));
   const tlWidth = (Math.ceil(layout.end) + 2) * pps + 20;
 
-  const onContextMenu = (kind: ClipKind, id: string) => (e: MouseEvent) => {
+  /** Where a context menu opened at the pointer goes, kept inside the timeline. */
+  const menuSpot = (e: MouseEvent, height: number) => {
     e.preventDefault();
     e.stopPropagation();
     const root = rootRef.current;
-    if (!root) return;
+    if (!root) return null;
     const r = root.getBoundingClientRect();
-    const left = Math.max(8, Math.min(e.clientX - r.left + 4, root.offsetWidth - 244));
-    const top = Math.max(8, Math.min(e.clientY - r.top + 4, root.offsetHeight - 290));
-    openMenu({ kind, id, left, top });
+    return {
+      left: Math.max(8, Math.min(e.clientX - r.left + 4, root.offsetWidth - 244)),
+      top: Math.max(8, Math.min(e.clientY - r.top + 4, root.offsetHeight - height)),
+    };
+  };
+  const onContextMenu = (kind: ClipKind, id: string) => (e: MouseEvent) => {
+    const spot = menuSpot(e, 290);
+    if (!spot) return;
+    setTrackMenu(null);
+    openMenu({ kind, id, ...spot });
+  };
+  const onTrackMenu = (id: string) => (e: MouseEvent) => {
+    const spot = menuSpot(e, 120);
+    if (!spot) return;
+    closeMenu();
+    setTrackMenu({ id, ...spot });
   };
 
   // Press anywhere on the ruler to jump the playhead there, then drag to scrub. While a clip
@@ -325,7 +342,7 @@ export function Timeline({ editor }: { editor: Editor }) {
   }
 
   return (
-    <section ref={rootRef} className={'panel timeline' + (splitting ? ' splitting' : '')} onClick={closeMenu} onPointerDownCapture={blurField}>
+    <section ref={rootRef} className={'panel timeline' + (splitting ? ' splitting' : '')} onClick={() => { closeMenu(); setTrackMenu(null); }} onPointerDownCapture={blurField}>
       <div className="tl-tools">
         <div className="toolbar" role="toolbar" aria-label="Timeline tools">
           <button aria-pressed={splitting} title="Split · S · click clips to cut them" onClick={() => setTool(splitting ? 'select' : 'split')}>
@@ -337,7 +354,7 @@ export function Timeline({ editor }: { editor: Editor }) {
           <span className="tool-separator" role="separator" aria-orientation="vertical" />
           <button aria-label="Snap clips" aria-pressed={snapping} title="Snap clips" onClick={() => setSnapping(v => !v)}><Magnet size={16} /></button>
         </div>
-        <span className="hint">{splitting ? 'Click a clip to cut it · Cuts snap to the playhead · Esc to stop splitting' : focused ? 'Playhead locked to a clip · Double-click the time bar to release' : 'Double-click a clip to lock the playhead to it · Drag a transition onto an overlap'}</span>
+        {(splitting || focused) && <span className="hint">{splitting ? 'Click a clip to cut it · Cuts snap to the playhead · Esc to stop splitting' : 'Playhead locked to a clip · Double-click the time bar to release'}</span>}
         <div className="spacer" />
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Video track</button>
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />Audio track</button>
@@ -350,7 +367,7 @@ export function Timeline({ editor }: { editor: Editor }) {
           {project.tracks.map((t) => {
             const off = isOff(t);
             return (
-              <div key={t.id} className="track-head" style={{ height: TRACK_H[t.kind] }}>
+              <div key={t.id} className="track-head" style={{ height: TRACK_H[t.kind] }} onContextMenu={onTrackMenu(t.id)}>
                 <span className="track-head-label"><span>{t.name}</span><span>{t.label}</span></span>
                 <button className="ib" style={{ width: 28, height: 28, color: off ? 'var(--warn)' : 'var(--text-muted)' }}
                   aria-label={`${t.kind === 'audio' ? (off ? 'Unmute' : 'Mute') : (off ? 'Show' : 'Hide')} track ${t.name}`}
@@ -434,6 +451,8 @@ export function Timeline({ editor }: { editor: Editor }) {
       </div>
 
       {ui.menu && <ClipMenu editor={editor} />}
+      {trackMenu && <TrackMenu editor={editor} {...trackMenu} onClose={() => setTrackMenu(null)} onConfirm={setConfirmTrack} />}
+      {confirmTrack && <DeleteTrackDialog editor={editor} id={confirmTrack} onClose={() => setConfirmTrack(null)} />}
     </section>
   );
 }
@@ -777,6 +796,55 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         </>
       )}
     </div>
+  );
+}
+
+/** Track header menu. Deleting a track that holds anything asks first, through `onConfirm`. */
+function TrackMenu({ editor, id, left, top, onClose, onConfirm }: {
+  editor: Editor; id: string; left: number; top: number; onClose: () => void; onConfirm: (id: string) => void;
+}) {
+  const { project, removeTrack } = editor;
+  const track = project.tracks.find((t) => t.id === id);
+  if (!track) return null;
+  const removable = canRemoveTrack(project, id);
+  const empty = track.clips.length === 0;
+  const remove = (e: MouseEvent) => {
+    e.stopPropagation();
+    onClose();
+    if (empty) removeTrack(id); else onConfirm(id);
+  };
+  return (
+    <div role="menu" aria-label={`Track ${track.name}`} className="menu" style={{ left, top }} onClick={(e) => e.stopPropagation()}>
+      <span className="menu-label">Track · {track.name}</span>
+      <button role="menuitem" className="ib danger" disabled={!removable} onClick={remove}>
+        <Trash size={14} /><span>Delete track</span>
+      </button>
+      {!removable && <span className="menu-label menu-note">The timeline keeps at least one {track.kind} track.</span>}
+    </div>
+  );
+}
+
+function DeleteTrackDialog({ editor, id, onClose }: { editor: Editor; id: string; onClose: () => void }) {
+  const { project, removeTrack } = editor;
+  const track = project.tracks.find((t) => t.id === id);
+  if (!track) return null;
+  const own = track.clips.length;
+  const clipCount = (p: Project) => p.tracks.reduce((n, t) => n + t.clips.length, 0);
+  // Linked partners on other tracks go too.
+  const linked = clipCount(project) - clipCount(removeTrackModel(project, id)) - own;
+  const noun = track.kind === 'text' ? 'text clip' : 'clip';
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const subtitle = `Its ${plural(own, noun)} will be removed`
+    + (linked ? `, along with ${plural(linked, 'linked clip')} on other tracks.` : '.');
+  return (
+    <Dialog id="del-track-title" title={`Delete ${track.name}`} subtitle={subtitle} warn width={440} onClose={onClose}>
+      <div className="dialog-body">
+        <div className="dialog-actions">
+          <button className="gb" onClick={onClose}>Cancel</button>
+          <button className="primary danger" autoFocus onClick={() => { removeTrack(id); onClose(); }}>Delete track</button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 

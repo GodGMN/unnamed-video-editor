@@ -1,111 +1,108 @@
-/*
- * Feeds the current timeline to the MP4 export. The mixdown is real (clip timing, trims, volume, mute, fades
- * and their curves, muted tracks), but there is no decoded media or shared compositor yet, so sources are
- * stand-ins: each clip renders as its tone colour with a source timecode, and sounds as a steady sine tone.
- * Swap `placeholderFrames` and `placeholderAudio` for the compositor and decoded audio once they exist.
- */
-
+import { ALL_FORMATS, AudioBufferSink, BlobSource, Input } from 'mediabunny';
 import type { ExportSource } from '../components/ExportDialog';
-import { MISSING_MEDIA, audioTracks, fmtTime, videoTracks } from './model';
-import type { Media, Project, TimelineLayout } from './model';
+import { audioTracks, clipEnd, videoTracks } from './model';
+import type { Project, TimelineLayout } from './model';
+import { readMediaFile } from '../media/files';
+import { audioGain, renderFrame } from '../playback/compositor';
+import type { RenderReply, RenderRequest } from './renderProtocol';
 
-export function exportSource(p: Project, layout: TimelineLayout): ExportSource {
+export function exportSource(project: Project, layout: TimelineLayout): ExportSource {
   return {
     duration: layout.end,
-    fps: p.output.fps,
-    frames: (width, height) => placeholderFrames(p, layout, width, height),
-    mixAudio: (sampleRate) => mixdown(p, layout, sampleRate),
+    fps: project.output.fps,
+    async prepare(width, height, sampleRate, signal) {
+      const p = structuredClone(project);
+      const ids = new Set([
+        ...videoTracks(p).filter((t) => !t.hidden).flatMap((t) => t.clips.map((c) => c.mediaId)),
+        ...audioTracks(p).filter((t) => !t.muted).flatMap((t) => t.clips.filter((c) => !c.muted && c.vol > 0).map((c) => c.mediaId)),
+      ]);
+      const files: Record<string, File> = {};
+      for (const id of ids) {
+        signal.throwIfAborted();
+        const file = await readMediaFile(id);
+        if (!file) throw new Error(`Source file "${p.media[id]?.name ?? id}" is missing. Import it before exporting.`);
+        files[id] = file;
+      }
+      // Composite on the main thread so text uses the same loaded fonts as preview.
+      await document.fonts.load('700 72px Figtree');
+      signal.throwIfAborted();
+      const worker = new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
+      let pending: { resolve: (reply: RenderReply) => void; reject: (error: Error) => void } | null = null;
+      const dispose = () => {
+        worker.terminate();
+        pending?.reject(new DOMException('Export stopped.', 'AbortError'));
+        pending = null;
+        signal.removeEventListener('abort', dispose);
+      };
+      signal.addEventListener('abort', dispose, { once: true });
+      worker.onmessage = ({ data }: MessageEvent<RenderReply>) => {
+        if (data.type === 'error') pending?.reject(new Error(data.message));
+        else pending?.resolve(data);
+        pending = null;
+      };
+      worker.onerror = (e) => { pending?.reject(new Error(e.message || 'Video decoder failed.')); pending = null; };
+      const request = (message: RenderRequest) => new Promise<RenderReply>((resolve, reject) => {
+        signal.throwIfAborted();
+        pending = { resolve, reject };
+        worker.postMessage(message);
+      });
+      try {
+        await request({ type: 'init', project: p, files });
+        const audio = await mixdown(p, layout.end, files, sampleRate, signal);
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        return {
+          audio,
+          async renderFrame({ time }) {
+            const reply = await request({ type: 'frame', time });
+            if (reply.type !== 'frame') throw new Error('Unexpected decoder reply.');
+            try {
+              signal.throwIfAborted();
+              const images = new Map(reply.frames.map((f) => [f.clipId, f.image]));
+              renderFrame(p, time, ctx, (clip) => images.get(clip.id) ?? null);
+              return canvas;
+            } finally { reply.frames.forEach((f) => f.image.close()); }
+          },
+          dispose,
+        };
+      } catch (error) { dispose(); throw error; }
+    },
   };
 }
 
-/** Draws only the bottom (main) video track: overlays need the real compositor's transforms. */
-function placeholderFrames(p: Project, layout: TimelineLayout, width: number, height: number) {
-  const main = videoTracks(p).at(-1);
-  const canvas = new OffscreenCanvas(width, height);
-  const g = canvas.getContext('2d')!;
-  const k = height / 1080;
-  return ({ time: t }: { time: number }) => {
-    // Layout boundaries are sums of floats (7.6 + 10.8 = 18.400000000000002); nudge so a frame on a cut lands after it.
-    const time = t + 1e-6;
-    g.fillStyle = '#000';
-    g.fillRect(0, 0, width, height);
-    const clip = main && !main.hidden
-      ? main.clips.find((c) => time >= layout.clips[c.id].vs && time < layout.clips[c.id].ve)
-      : undefined;
-    if (clip) {
-      const l = layout.clips[clip.id];
-      g.fillStyle = (p.media[clip.mediaId] ?? MISSING_MEDIA).tone;
-      g.fillRect(0, 0, width, height);
-      g.fillStyle = 'rgba(255,255,255,0.85)';
-      g.font = `500 ${Math.round(40 * k)}px ui-monospace, monospace`;
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillText(`${l.name} @ ${fmtTime(clip.inS + time - l.start)}`, width / 2, height / 2);
-    }
-    return canvas;
-  };
-}
-
-/** Mixes every audible clip into one stereo buffer covering the whole sequence. */
-async function mixdown(p: Project, layout: TimelineLayout, sampleRate: number) {
-  const ctx = new OfflineAudioContext(2, Math.ceil(layout.end * sampleRate), sampleRate);
-  const buffers = new Map<string, AudioBuffer>();
-  let audible = 0;
-  for (const track of audioTracks(p)) {
-    if (track.muted) continue;
-    for (const clip of track.clips) {
-      const media = p.media[clip.mediaId];
-      const l = layout.clips[clip.id];
-      // Audio clips span the clip's visible range on the timeline, same as the video.
-      const dur = l.ve - l.vs;
-      if (!media?.audio || clip.muted || clip.vol <= 0 || dur <= 0) continue;
-      audible++;
-      if (!buffers.has(media.id)) buffers.set(media.id, placeholderAudio(ctx, media));
-      const src = ctx.createBufferSource();
-      src.buffer = buffers.get(media.id)!;
+async function mixdown(p: Project, duration: number, files: Record<string, File>, sampleRate: number, signal: AbortSignal) {
+  const clips = audioTracks(p).filter((t) => !t.muted).flatMap((t) => t.clips)
+    .filter((c) => !c.muted && c.vol > 0 && clipEnd(c) > 0 && c.start < duration);
+  if (!clips.length) return null;
+  const ctx = new OfflineAudioContext(2, Math.ceil(duration * sampleRate), sampleRate);
+  for (const clip of clips) {
+    signal.throwIfAborted();
+    const input = new Input({ source: new BlobSource(files[clip.mediaId]), formats: ALL_FORMATS });
+    try {
+      const track = await input.getPrimaryAudioTrack();
+      if (!track || !await track.canDecode()) throw new Error(`Cannot decode audio from "${p.media[clip.mediaId]?.name}". Convert it to MP4 first.`);
+      const start = Math.max(0, clip.start), end = Math.min(duration, clipEnd(clip));
       const gain = ctx.createGain();
-      scheduleEnvelope(gain.gain, l.vs, dur, clip.vol / 100, clip.fadeIn, clip.curveIn, clip.fadeOut, clip.curveOut);
-      src.connect(gain).connect(ctx.destination);
-      src.start(l.vs, clip.inS + l.vs - l.start, dur);
-    }
+      // Web Audio interpolates gain values between these 1 ms control points.
+      const count = Math.max(2, Math.ceil((end - start) * 1000) + 1);
+      const curve = Float32Array.from({ length: count }, (_, i) =>
+        audioGain(p, clip, Math.min(end - 1 / sampleRate, start + i / (count - 1) * (end - start))));
+      gain.gain.setValueCurveAtTime(curve, start, end - start);
+      gain.connect(ctx.destination);
+      const sourceStart = clip.inS + start - clip.start, sourceEnd = clip.inS + end - clip.start;
+      for await (const { buffer, timestamp } of new AudioBufferSink(track).buffers(sourceStart, sourceEnd)) {
+        signal.throwIfAborted();
+        const from = Math.max(sourceStart, timestamp), to = Math.min(sourceEnd, timestamp + buffer.duration);
+        if (to <= from) continue;
+        const source = ctx.createBufferSource();
+        source.buffer = buffer; source.connect(gain);
+        source.start(clip.start + from - clip.inS, from - timestamp, to - from);
+      }
+    } finally { input.dispose(); }
   }
-  return audible ? ctx.startRendering() : null;
-}
-
-function scheduleEnvelope(p: AudioParam, start: number, dur: number, vol: number,
-  fadeIn: number, curveIn: number, fadeOut: number, curveOut: number) {
-  const fi = Math.min(fadeIn, dur / 2);
-  const fo = Math.min(fadeOut, dur / 2);
-  if (fi > 0) p.setValueCurveAtTime(fadeCurve(curveIn, vol, false), start, fi);
-  else p.setValueAtTime(vol, start);
-  if (fo > 0) p.setValueCurveAtTime(fadeCurve(curveOut, vol, true), start + dur - fo, fo);
-}
-
-/**
- * Samples the timeline's fade shape: a quadratic Bézier from silence to full volume whose control point sits at
- * (0.5 − c/2, 0.5 + c/2), so c = 0 is linear, c > 0 rises early (logarithmic), c < 0 rises late (exponential).
- * A fade-out is the same shape mirrored in time.
- */
-function fadeCurve(c: number, vol: number, out: boolean, n = 128) {
-  const cx = 0.5 - c / 2;
-  const cy = 0.5 + c / 2;
-  const curve = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const x = out ? 1 - i / (n - 1) : i / (n - 1);
-    // Solve x = (1 − 2cx)s² + 2cx·s for the Bézier parameter s, then evaluate y(s).
-    const a = 1 - 2 * cx;
-    const s = Math.abs(a) < 1e-6 ? x / (2 * cx) : (-2 * cx + Math.sqrt(4 * cx * cx + 4 * a * x)) / (2 * a);
-    curve[i] = vol * (2 * s * (1 - s) * cy + s * s);
-  }
-  return curve;
-}
-
-/** Stand-in for a source's decoded audio: a sine tone per source, as long as the source. */
-function placeholderAudio(ctx: BaseAudioContext, { duration, seed }: Media) {
-  const buf = ctx.createBuffer(2, Math.ceil(duration * ctx.sampleRate), ctx.sampleRate);
-  const freq = 220 * (1 + seed * 0.25);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = 0.25 * Math.sin(2 * Math.PI * freq * i / ctx.sampleRate);
-  buf.copyToChannel(data, 1);
-  return buf;
+  signal.throwIfAborted();
+  const result = await ctx.startRendering();
+  signal.throwIfAborted();
+  return result;
 }
