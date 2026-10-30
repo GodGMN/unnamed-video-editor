@@ -24,7 +24,8 @@
   --sans: Figtree, system-ui, sans-serif;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+input, textarea, [contenteditable]:not([contenteditable='false']), [contenteditable]:not([contenteditable='false']) * { -webkit-user-select: text; user-select: text; }
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 var(--sans); }
 a { color: var(--accent); }
