@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import type { CSSProperties, PointerEvent } from 'react';
 import { SOURCES, filmstrip, fmtTime } from '../editor/model';
 import type { ClipId, TextOverlay } from '../editor/model';
 import type { Project } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
 import { ChevronLeft, ChevronRight, Play, SkipEnd, SkipStart, Volume } from './icons';
+import { Slider } from './Slider';
 
 const ALIGN: Record<string, CSSProperties['alignItems']> = { t: 'flex-start', c: 'center', b: 'flex-end', l: 'flex-start', r: 'flex-end' };
 /** The clip under the timeline playhead. */
@@ -18,6 +20,7 @@ interface Props {
 
 export function PreviewPanel({ project, clipId, totalTime }: Props) {
   const { state, updateClip, setScrub } = project;
+  const [volume, setVolume] = useState(70);
   const startDrag = useDrag();
   const accent = 'var(--accent)';
 
@@ -138,10 +141,9 @@ export function PreviewPanel({ project, clipId, totalTime }: Props) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, justifyContent: 'flex-end' }}>
           <Volume stroke="#C8CEC9" />
-          <label style={{ width: 110, display: 'flex', alignItems: 'center' }}>
-            <span className="sr-only">Preview volume</span>
-            <input type="range" min={0} max={100} defaultValue={70} style={{ height: 16, cursor: 'pointer' }} />
-          </label>
+          <div style={{ width: 110 }}>
+            <Slider label="Preview volume" hideLabel className="compact" value={volume} unit="%" min={0} max={100} onChange={setVolume} />
+          </div>
         </div>
       </div>
     </section>

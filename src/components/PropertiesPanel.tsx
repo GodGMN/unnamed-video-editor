@@ -3,6 +3,7 @@ import type { ClipId, ClipState, FitMode, TextAnchor, TransitionType } from '../
 import type { Project } from '../editor/useProject';
 import { Mute, Waveform } from './icons';
 import { NumberField } from './NumberField';
+import { Slider } from './Slider';
 
 interface Props {
   project: Project;
@@ -21,17 +22,6 @@ export function PropertiesPanel({ project, clipId }: Props) {
       {kind === 'trans' && <TransitionProps project={project} />}
       {kind === 'text' && <TextProps project={project} />}
     </aside>
-  );
-}
-
-function Slider({ label, value, unit, min, max, step = 1, onChange }: {
-  label: string; value: number; unit: string; min: number; max: number; step?: number; onChange: (v: number) => void;
-}) {
-  return (
-    <label className="slider">
-      <span>{label}<span>{value}{unit}</span></span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-    </label>
   );
 }
 
