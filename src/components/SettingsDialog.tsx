@@ -8,6 +8,7 @@ import { StorageSettings } from './StorageSettings';
 import { previewSize, updateSettings, useSettings } from '../settings';
 import type { PreviewResolution } from '../settings';
 import { Choice, Dialog, Note } from './Dialog';
+import { Flag } from './Flag';
 import { GitHub } from './icons';
 
 type Key = `${PreviewResolution}`;
@@ -27,11 +28,17 @@ export function SettingsDialog({ output, onClose }: { output: { width: number; h
   return (
     <Dialog id="settings-title" title={translate('settings')} subtitle={translate('savedInThisBrowserForEveryProject')} width={520} onClose={onClose}>
       <div className="dialog-body">
-        <label className="field-label">{translate('language')}
-          <select aria-label={translate('language')} className="fld" value={getLocale()} onChange={(event) => setLocale(event.target.value)}>
-            {Object.entries(locales).map(([code, entry]) => <option key={code} value={code}>{entry.name}</option>)}
-          </select>
-        </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{translate('language')}</span>
+          <div className="seg lang" role="group" aria-label={translate('language')}>
+            {Object.entries(locales).map(([code, entry]) => (
+              <button key={code} lang={code} aria-pressed={getLocale() === code} onClick={() => setLocale(code)}>
+                <Flag code={entry.flag} />
+                <span>{entry.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="settings-tabs" role="tablist" aria-label={translate('projectHomeSettingsSections')} onKeyDown={e => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
           e.preventDefault();
