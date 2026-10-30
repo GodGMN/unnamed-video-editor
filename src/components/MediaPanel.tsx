@@ -105,11 +105,13 @@ export function MediaPanel({ project, onConvert, onImport }: Props) {
         </div>
         <div className="transition-grid">
           {TRANSITIONS.map((t) => (
-            <button key={t.name} className="transition-card" draggable
-              onDragStart={e => { e.dataTransfer.setData('application/x-timeline-transition', t.type); e.dataTransfer.effectAllowed = 'copy'; }}>
+            // A div, not a button: Firefox won't start a drag from a button.
+            <div key={t.name} className="transition-card" draggable title="Drag onto an overlap between two clips"
+              onDragStart={e => { e.dataTransfer.setData('application/x-timeline-transition', t.type); e.dataTransfer.effectAllowed = 'copy'; document.body.classList.add('dragging-transition'); }}
+              onDragEnd={() => document.body.classList.remove('dragging-transition')}>
               <span style={{ background: t.swatch }} />
               {t.name}
-            </button>
+            </div>
           ))}
         </div>
         <span className="hint" style={{ lineHeight: 1.4 }}>Overlap two clips, then drag a transition onto their overlap.</span>

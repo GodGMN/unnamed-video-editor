@@ -143,6 +143,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .transitions { display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 14px; border-top: 1px solid var(--line); margin-top: auto; flex: none; }
 .transition-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .transition-card { display: flex; flex-direction: column; gap: 6px; padding: 6px; background: var(--bg); border: 1px solid var(--control); border-radius: 9px; font-size: 12px; font-weight: 500; text-align: left; }
+.transition-card { cursor: grab; user-select: none; }
 .transition-card:hover { border-color: #4a544d; }
 .transition-card > span { display: block; height: 28px; border-radius: 5px; }
 
@@ -336,3 +337,6 @@ button.overlap-band:not([aria-pressed='true']):hover { color: var(--text-bright)
 .overlap-band[aria-pressed='true'] { color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
 .overlap-band > .trans-icon { display: flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; border-radius: 6px; background: var(--bg); box-shadow: 0 0 0 1px #46504a; }
 .overlap-band[aria-pressed='true'] > .trans-icon { box-shadow: 0 0 0 1px var(--accent); }
+/* While a transition is dragged, every video overlap shows as a target; the one under the pointer lights up. */
+.dragging-transition button.overlap-band { box-shadow: inset 0 0 0 1px var(--accent); }
+button.overlap-band.drop-target { color: var(--accent); background-color: rgba(198, 240, 191, 0.22); box-shadow: inset 0 0 0 2px var(--accent); }
