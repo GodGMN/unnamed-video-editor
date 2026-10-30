@@ -365,4 +365,4 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .drop-ghost { position: absolute; top: 6px; bottom: 6px; z-index: 6; pointer-events: none; border-radius: 8px; border: 1px dashed var(--accent); background: linear-gradient(rgba(198, 240, 191, 0.16), rgba(198, 240, 191, 0.16)), var(--bg); color: var(--accent); font-size: 11px; font-weight: 500; display: flex; align-items: center; padding: 0 8px; overflow: hidden; white-space: nowrap; }
 .drop-ghost > span { overflow: hidden; text-overflow: ellipsis; }
 .drop-ghost.insert { box-shadow: -3px 0 0 var(--accent); }
-.marquee { position: absolute; z-index: 7; pointer-events: none; border: 1.5px dashed var(--accent); border-radius: 8px; background: radial-gradient(circle at center, rgba(198, 240, 191, 0.3) 0.5px, transparent 1px) 0 0 / 5px 5px, rgba(198, 240, 191, 0.1); }
+.marquee { position: absolute; z-index: 7; pointer-events: none; border: 1.5px solid var(--accent); border-radius: 8px; background: radial-gradient(circle at center, rgba(198, 240, 191, 0.18) 0.5px, transparent 1px) 0 0 / 5px 5px, rgba(198, 240, 191, 0.1); }
