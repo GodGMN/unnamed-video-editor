@@ -9,6 +9,7 @@ export function useSourcePlayer(media: Media | null, volume: number) {
   const [time, setTime] = useState(0);
   const [status, setStatus] = useState('');
   const id = media?.id ?? null;
+  const name = media?.name ?? '';
 
   useEffect(() => {
     const element = video.current;
@@ -18,7 +19,7 @@ export function useSourcePlayer(media: Media | null, volume: number) {
     let cancelled = false;
     readMediaFile(id).then((file) => {
       if (cancelled) return;
-      if (!file) { setStatus('Source file is missing. Import your own media to preview it.'); return; }
+      if (!file) { setStatus(`Source file "${name}" is missing. Import your own media to preview it.`); return; }
       url = URL.createObjectURL(file);
       element.src = url;
     }, (error: unknown) => { if (!cancelled) setStatus(error instanceof Error ? error.message : 'Media could not be loaded.'); });
@@ -34,7 +35,7 @@ export function useSourcePlayer(media: Media | null, volume: number) {
       element.removeAttribute('src'); element.load();
       if (url) URL.revokeObjectURL(url);
     };
-  }, [id]);
+  }, [id, name]);
 
   useEffect(() => { if (video.current) video.current.volume = volume; }, [volume, id]);
 
