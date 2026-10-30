@@ -1,7 +1,7 @@
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, curveName, findClip, movingGroup, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
+import { DEFAULT_TRANSITION, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, curveName, findClip, movingGroup, partnersOf, pickedPair, clipDuration, clipEnd, mediaDropStart, snapClipStart } from '../editor/model';
 import type { AudioClip, AudioTrack, ClipSelection, Project, TextItem, TransitionType, Track, VideoClip, VideoTrack } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
@@ -67,7 +67,7 @@ function transitionTargetAt(project: Project, track: Track, time: number, slop: 
 }
 
 export function Timeline({ editor }: { editor: Editor }) {
-  const { project, ui, layout, select, setTool, setPlayhead, unlock, toggleTrack, openMenu, closeMenu, deleteSelection } = editor;
+  const { project, ui, layout, select, setTool, setPlayhead, unlock, toggleTrack, removeTrack, openMenu, closeMenu, deleteSelection } = editor;
   const focus = ui.lockClip ? layout.clips[ui.lockClip] : undefined;
   const focused = !!focus;
   const rootRef = useRef<HTMLElement>(null);
@@ -381,6 +381,12 @@ export function Timeline({ editor }: { editor: Editor }) {
                     aria-label={`${t.kind === 'audio' ? (off ? 'Unmute' : 'Mute') : (off ? 'Show' : 'Hide')} track ${t.name}`}
                     aria-pressed={off} onClick={() => toggleTrack(t.id)}>
                     {t.kind === 'video' ? <Eye size={14} /> : <Volume size={14} />}
+                  </button>
+                )}
+                {canRemoveTrack(project, t.id) && (
+                  <button className="ib" style={{ width: 28, height: 28, color: 'var(--text-muted)' }}
+                    aria-label={`Delete track ${t.name}`} title="Delete track" onClick={() => removeTrack(t.id)}>
+                    <Trash size={14} />
                   </button>
                 )}
               </div>
