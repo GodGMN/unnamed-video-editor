@@ -131,14 +131,27 @@ async function mixdown(p: Project, duration: number, files: Record<string, File>
       const sourceStart = clip.inS + start - clip.start, sourceEnd = clip.inS + end - clip.start;
       const length = `${Math.round(sourceEnd - sourceStart)} s`;
       trace.progress(`0 / ${length}`);
+      // Copy the decoded chunks into one buffer per clip: a source node per chunk (thousands for a long clip)
+      // makes the offline render crawl, since it visits every scheduled node on each 128-sample block.
+      let joined: AudioBuffer | null = null;
       for await (const { buffer, timestamp } of new AudioBufferSink(track).buffers(sourceStart, sourceEnd)) {
         signal.throwIfAborted();
         const from = Math.max(sourceStart, timestamp), to = Math.min(sourceEnd, timestamp + buffer.duration);
         trace.progress(`${Math.round(Math.max(0, to - sourceStart))} / ${length}`);
         if (to <= from) continue;
+        const rate = buffer.sampleRate;
+        joined ??= new AudioBuffer({ length: Math.ceil((sourceEnd - sourceStart) * rate), numberOfChannels: buffer.numberOfChannels, sampleRate: rate });
+        const offset = Math.round((from - sourceStart) * rate), skip = Math.round((from - timestamp) * rate);
+        const samples = Math.max(0, Math.min(Math.round((to - from) * rate), buffer.length - skip, joined.length - offset));
+        for (let ch = 0; ch < joined.numberOfChannels; ch++) {
+          const data = buffer.getChannelData(Math.min(ch, buffer.numberOfChannels - 1));
+          joined.copyToChannel(data.subarray(skip, skip + samples), ch, offset);
+        }
+      }
+      if (joined) {
         const source = ctx.createBufferSource();
-        source.buffer = buffer; source.connect(gain);
-        source.start(clip.start + from - clip.inS, from - timestamp, to - from);
+        source.buffer = joined; source.connect(gain);
+        source.start(start, 0, end - start);
       }
     } finally { input.dispose(); }
   }
