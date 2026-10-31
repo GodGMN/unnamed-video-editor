@@ -864,6 +864,14 @@ export function placeMedia(p: Project, mediaId: string, trackId: string, time: n
   return settle({ ...p, tracks });
 }
 
+/** The first audio track with nothing between `start` and `end`, adding a new one at the bottom when none is free. */
+export function freeAudioTrack(p: Project, start: number, end: number, newTrackId: string): { project: Project; trackId: string } {
+  const free = audioTracks(p).find((t) => t.clips.every((c) => clipEnd(c) <= start || c.start >= end));
+  if (free) return { project: p, trackId: free.id };
+  const track: AudioTrack = { id: newTrackId, name: `A${audioTracks(p).length + 1}`, label: translate('audio2'), kind: 'audio', muted: false, clips: [] };
+  return { project: { ...p, tracks: [...p.tracks, track] }, trackId: newTrackId };
+}
+
 /**
  * Adds `media` to the project and places each one at `time` on `trackId`, back to back, or on the
  * first track that takes it when that one can't. Returns the id of each media's clip, or null

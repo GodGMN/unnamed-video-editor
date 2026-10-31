@@ -27,7 +27,7 @@ interface Props {
   onShowConversion: (mediaId: string, fileName: string) => void;
 }
 
-function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
+export function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
   useT();
   const job = useConversionJob();
   if (!job) return null;
@@ -48,7 +48,7 @@ function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
 }
 
 /** Click to edit the name in place; Enter or leaving the field saves, Escape cancels. */
-function ProjectName({ name, onRename }: { name: string; onRename: Props['onRename'] }) {
+export function ProjectName({ name, onRename }: { name: string; onRename: Props['onRename'] }) {
   useT();
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
