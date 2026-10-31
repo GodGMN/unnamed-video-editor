@@ -35,6 +35,8 @@ interface Props {
   /** Plays a source in the preview on its own. */
   onPreview: (mediaId: string) => void;
   onRemove: (mediaId: string) => void;
+  /** Adds a source to the end of the sequence; shown as a button on each item where dragging isn't practical (touch). */
+  onAdd?: (mediaId: string) => void;
 }
 
 interface MediaMenu { id: string; left: number; top: number }
@@ -66,7 +68,7 @@ function clipCount(project: Project, mediaId: string): number {
 /** Whether a drag carries files from outside the page (not a media item or transition). */
 const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
 
-export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, importing, onPreview, onRemove, previewing }: Props) {
+export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, importing, onPreview, onRemove, onAdd, previewing }: Props) {
   useT();
   const [menu, setMenu] = useState<MediaMenu | null>(null);
   useEffect(() => {
@@ -203,6 +205,12 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
               )}
               </>}
             </div>
+            {onAdd && ready && (
+              <button className="ib outlined media-add" aria-label={translate('mobileAddNameToTimeline', { name: m.name })} title={translate('mobileAddToTimeline')}
+                onClick={(e) => { e.stopPropagation(); onAdd(m.id); }}>
+                <Plus size={14} strokeWidth={2.2} />
+              </button>
+            )}
           </div>
           );
         })}
