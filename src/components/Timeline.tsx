@@ -22,6 +22,8 @@ const AUDIO_CLIP_H = 52;
 
 /** Screen pixels within which a split snaps to the playhead, like the magnet's snap radius. */
 const SPLIT_SNAP_PX = 8;
+/** Timeline zoom limits, in pixels per second. */
+const clampZoom = (pps: number) => Math.max(8, Math.min(320, pps));
 
 const TRACK_H = { text: TEXT_TRACK_H, video: VIDEO_TRACK_H, audio: AUDIO_TRACK_H };
 
@@ -107,7 +109,7 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
       if (!scroll || event.deltaY === 0) return;
       const oldScale = scaleRef.current;
       const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroll.clientWidth : 1);
-      const nextScale = Math.max(8, Math.min(320, oldScale * Math.exp(-Math.max(-100, Math.min(100, delta)) * 0.002)));
+      const nextScale = clampZoom(oldScale * Math.exp(-Math.max(-100, Math.min(100, delta)) * 0.002));
       if (nextScale === oldScale) return;
       const anchor = Math.max(0, Math.min(scroll.clientWidth, event.clientX - scroll.getBoundingClientRect().left));
       const left = pendingScroll.current ?? scroll.scrollLeft;
@@ -209,6 +211,17 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
   // Ticks run past the content and on to the right edge of the viewport when zoomed out.
   const lastTick = Math.max(Math.ceil(layout.end) + 2, Math.ceil(viewW / pps));
   const tlWidth = (Math.ceil(layout.end) + 2) * pps + 20;
+
+  /** Zooms so the whole project fills the visible width, and scrolls back to the start. */
+  const fitToView = () => {
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    const nextScale = layout.end > 0 ? clampZoom((scroll.clientWidth - 20) / (Math.ceil(layout.end) + 2)) : PPS;
+    pendingScroll.current = 0;
+    scaleRef.current = nextScale;
+    setPps(nextScale);
+    scroll.scrollLeft = 0;
+  };
 
   /** Where a context menu opened at the pointer goes, kept inside the timeline. */
   const menuSpot = (e: MouseEvent, height: number) => {
@@ -390,7 +403,7 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
         <div className="spacer" />
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />{translate('videoTrack')}</button>
         <button className="ib outlined chip"><Plus size={12} strokeWidth={2.4} />{translate('audioTrack')}</button>
-        <button className="ib outlined chip">{translate('fit')}</button>
+        <button className="ib outlined chip" onClick={fitToView}>{translate('fit')}</button>
       </div>
 
       <div className="tl-body">
