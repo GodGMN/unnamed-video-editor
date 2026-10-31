@@ -5,6 +5,7 @@ import { removeMediaFiles } from './files';
 import { probeMedia } from './import';
 import type { Probe } from './import';
 import type { PickedFile } from './links';
+import { pushError } from '../toast/store';
 
 /** Where dropped files go on the timeline: a track, and where a first clip of `duration` seconds starts. */
 export interface Placement { trackId: string; timeFor: (duration: number) => number }
@@ -21,12 +22,14 @@ export function useImports(editor: Editor | null) {
   ref.current = editor;
   const queue = useRef(Promise.resolve());
   const [pending, setPending] = useState(0);
-  const [errors, setErrors] = useState<string[]>([]);
 
   const ingest = useCallback(async (batch: PickedFile[], place?: Placement) => {
     if (!batch.length) return;
     setPending((n) => n + batch.length);
-    const fail = (file: File, error: unknown) => setErrors((items) => [...items, message(file, error)]);
+    const fail = (file: File, error: unknown) => {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      pushError({ title: translate('importFailed'), message: message(file, error) });
+    };
     const probes = await Promise.all(batch.map(({ file, handle }) => probeMedia(file, handle).catch((error: unknown): Probe | null => {
       fail(file, error);
       setPending((n) => n - 1);
@@ -49,5 +52,5 @@ export function useImports(editor: Editor | null) {
     });
   }, []);
 
-  return { ingest, pending, errors };
+  return { ingest, pending };
 }

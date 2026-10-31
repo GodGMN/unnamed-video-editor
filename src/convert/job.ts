@@ -1,12 +1,13 @@
 import { useSyncExternalStore } from 'react';
+import { t as translate } from '../i18n/core';
 import { OutOfMemoryError, convertToMp4, outputSpec } from './convert';
 import type { ConvertOptions, ConvertProgress, OutputSpec } from './convert';
 import type { SourceInfo } from './probe';
+import { pushError } from '../toast/store';
 
 export type JobState =
   | { status: 'running'; progress: ConvertProgress }
-  | { status: 'done'; output: File; elapsed: number }
-  | { status: 'error'; message: string; outOfMemoryAt?: number };
+  | { status: 'done'; output: File; elapsed: number };
 
 export interface Job {
   /** The Media library item being converted, so the dialog can be reopened from elsewhere. */
@@ -34,6 +35,12 @@ function set(next: Job | null) {
   listeners.forEach((l) => l());
 }
 
+const mmss = (s: number) => {
+  const t = Math.max(0, Math.round(s));
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+};
+const fpsLabel = (fps: number) => translate('fps', { value1: Math.round(fps * 100) / 100 });
+
 export function startConversion(mediaId: string, file: File, source: SourceInfo, options: ConvertOptions, addToTimeline: boolean) {
   controller?.abort();
   const ctrl = controller = new AbortController();
@@ -50,9 +57,19 @@ export function startConversion(mediaId: string, file: File, source: SourceInfo,
     (e: unknown) => {
       if (ctrl.signal.aborted) return;
       console.error('[convert]', e);
-      update(e instanceof OutOfMemoryError
-        ? { status: 'error', message: e.message, outOfMemoryAt: e.at }
-        : { status: 'error', message: e instanceof Error ? e.message : String(e) });
+      const oom = e instanceof OutOfMemoryError;
+      pushError({
+        key: `convert:${mediaId}`,
+        title: translate('conversionStopped'),
+        message: oom
+          ? translate('conversionOutOfMemoryToast', { time: mmss(e.at), height: base.out.height, fps: fpsLabel(base.out.fps) })
+          : translate('nothingInYourProjectChanged2', { value1: e instanceof Error ? e.message : String(e) }),
+        action: oom && Math.min(base.out.width, base.out.height) > 720 ? {
+          label: translate('tryAgainAt720p'),
+          run: () => { startConversion(mediaId, file, source, { ...options, shortSide: 720 }, addToTimeline); },
+        } : undefined,
+      });
+      cancelConversion();
     },
   );
 }

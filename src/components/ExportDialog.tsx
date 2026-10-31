@@ -5,10 +5,11 @@ import { exportSize, fmtTime } from '../editor/model';
 import { ExportError, exportMp4, probeExportSupport } from '../export';
 import type { ExportErrorCode, ExportOptions, ExportResult, SupportReport } from '../export';
 import { Download } from './icons';
-import { Alert, CheckRow, Choice, Dialog, Progress, ResultCard } from './Dialog';
+import { CheckRow, Choice, Dialog, Progress, ResultCard } from './Dialog';
 import type { StageStatus } from './Dialog';
+import { reportError } from '../toast/store';
 
-type Step = 'settings' | 'rendering' | 'done' | 'error';
+type Step = 'settings' | 'rendering' | 'done';
 type Res = '720' | '1080';
 
 /** What the editor hands the dialog: a frame renderer and an audio mixdown for the current timeline. */
@@ -32,7 +33,6 @@ const COPY: Record<Step, [string, string]> = {
   get settings(): [string, string] { return [translate('exportVideo'), translate('renderedOnThisDeviceNothingIsUploaded')]; },
   get rendering(): [string, string] { return [translate('rendering'), translate('encodingFramesAndMixingAudioLocally')]; },
   get done(): [string, string] { return [translate('yourVideoIsReady'), translate('savedInMemoryDownloadItBeforeClosingTheTab')]; },
-  get error(): [string, string] { return [translate('exportStopped'), translate('nothingWasSavedYourTimelineIsUnchanged')]; },
 };
 
 const ERROR_TITLES: Record<ExportErrorCode | 'unknown', string> = {
@@ -52,11 +52,6 @@ interface RenderState {
   t0: number;
 }
 
-interface Failure {
-  code: ExportErrorCode | 'unknown';
-  message: string;
-}
-
 interface Props {
   projectSlug: string;
   source: ExportSource;
@@ -73,7 +68,6 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
   const [support, setSupport] = useState<SupportReport | 'failed' | null>(null);
   const [progress, setProgress] = useState<RenderState | null>(null);
   const [result, setResult] = useState<{ res: Res; out: ExportResult; url: string } | null>(null);
-  const [failure, setFailure] = useState<Failure | null>(null);
   const controller = useRef<AbortController | null>(null);
   const [title, subtitle] = COPY[step];
   const { width, height } = size(res);
@@ -114,10 +108,11 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
       setStep('done');
     } catch (err) {
       if (ctl.signal.aborted) return;
-      setFailure(err instanceof ExportError
-        ? { code: err.code, message: err.message }
-        : { code: 'unknown', message: err instanceof Error ? err.message : String(err) });
-      setStep('error');
+      const code = err instanceof ExportError ? err.code : 'unknown';
+      reportError(ERROR_TITLES[code], err, code === 'unsupported-video' && res === '1080'
+        ? { label: translate('try720p'), run: () => setRes('720') }
+        : undefined);
+      setStep('settings');
     } finally {
       prepared?.dispose();
       if (controller.current === ctl) controller.current = null;
@@ -140,7 +135,7 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
   const supported = support !== null && support !== 'failed' && support.h264 && support.aac !== null;
 
   return (
-    <Dialog id="exp-title" title={title} subtitle={subtitle} warn={step === 'error'} width={520} onClose={onClose}>
+    <Dialog id="exp-title" title={title} subtitle={subtitle} width={520} onClose={onClose}>
       {step === 'settings' && (
         <div className="dialog-body" style={{ paddingTop: 22 }}>
           <Choice label={translate('resolution')} value={res} onChange={setRes} options={[
@@ -182,18 +177,6 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
               <button className="gb" onClick={onClose}>{translate('backToEditor')}</button>
               <button className="primary" onClick={download}><Download size={15} strokeWidth={2.4} />{translate('download')}</button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {step === 'error' && failure && (
-        <div className="dialog-body" style={{ paddingTop: 22 }}>
-          <Alert title={ERROR_TITLES[failure.code]}>{failure.message}</Alert>
-          <div className="dialog-actions">
-            {failure.code === 'unsupported-video' && res === '1080' && (
-              <button className="gb" onClick={() => { setRes('720'); setStep('settings'); }}>{translate('try720p')}</button>
-            )}
-            <button className="primary" onClick={() => setStep('settings')}>{translate('backToSettings')}</button>
           </div>
         </div>
       )}

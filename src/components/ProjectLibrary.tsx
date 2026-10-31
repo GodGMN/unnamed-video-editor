@@ -17,6 +17,7 @@ import { Brand } from './Brand';
 import { Dialog } from './Dialog';
 import { SettingsDialog } from './SettingsDialog';
 import { ChevronDown, ChevronRight, Clock, Film, LibraryGrid, Play, Plus, Search, Cog, Star } from './icons';
+import { reportError } from '../toast/store';
 
 type Filter = 'all' | 'recent' | 'favorites';
 function ProjectArtwork({ project, hero = false }: { project: Project; hero?: boolean }) {
@@ -48,7 +49,8 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
   useT();
   const [entries, setEntries] = useState<ProjectEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
@@ -63,13 +65,29 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
   const reconnectInput = useRef<HTMLInputElement>(null);
   const reconnectTarget = useRef<ProjectEntry | null>(null);
   const search = useRef<HTMLInputElement>(null);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => { live.current = false; };
+  }, []);
   const refresh = async () => { setEntries(await listProjects()); };
   useEffect(() => {
     let live = true;
-    void listProjects().then(items => { if (live) { setEntries(items); setLoading(false); } }, e => { if (live) { setError(String(e)); setLoading(false); } });
+    setLoading(true);
+    void listProjects().then(
+      items => { if (live) { setEntries(items); setLoadFailed(false); } },
+      e => {
+        if (!live) return;
+        setLoadFailed(true);
+        reportError(translate('couldNotLoadYourProjects'), e, { label: translate('projectHomeRetry'), run: () => setReload(n => n + 1) });
+      },
+    ).finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
+  }, [reload]);
+  useEffect(() => {
     const key = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); search.current?.focus(); } };
     window.addEventListener('keydown', key);
-    return () => { live = false; window.removeEventListener('keydown', key); };
+    return () => { window.removeEventListener('keydown', key); };
   }, []);
   useEffect(() => {
     if (!busy) return;
@@ -77,12 +95,15 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
     window.addEventListener('beforeunload', leave);
     return () => window.removeEventListener('beforeunload', leave);
   }, [busy]);
-  const run = async (label: string, action: () => Promise<void>) => {
-    if (operation.current) return;
-    operation.current = true; setBusy(label); setError('');
-    try { await action(); } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) setError(e instanceof Error ? e.message : String(e)); }
-    finally { operation.current = false; setBusy(''); }
-  };
+  async function run(label: string, action: () => Promise<void>, title = translate('projectActionFailed')) {
+    if (!live.current || operation.current) return;
+    operation.current = true; setBusy(label);
+    try { await action(); } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        reportError(title, e, { label: translate('projectHomeRetry'), run: () => void run(label, action, title) });
+      }
+    } finally { operation.current = false; setBusy(''); }
+  }
   const open = async (id: string) => {
     const project = await loadProject(id);
     if (!project) throw new Error(translate('projectHomeNoLongerAvailable'));
@@ -92,11 +113,11 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
   const importFile = async (picked: PickedFile) => { await create(await openProjectFile(picked)); };
   const importProject = () => {
     if (!window.showOpenFilePicker) { importInput.current?.click(); return; }
-    void run(translate('projectHomeOpeningProject'), async () => { const files = await pickFiles(); if (files[0]) await importFile(files[0]); });
+    void run(translate('projectHomeOpeningProject'), async () => { const files = await pickFiles(); if (files[0]) await importFile(files[0]); }, translate('couldNotImportTheProject'));
   };
   const reconnect = (entry: ProjectEntry) => {
     if (!window.showOpenFilePicker) { reconnectTarget.current = entry; reconnectInput.current?.click(); return; }
-    void run(translate('projectHomeReconnectingMedia'), async () => { const files = await pickFiles(); if (files[0]) { await reconnectPackage(entry.project, files[0]); await refresh(); } });
+    void run(translate('projectHomeReconnectingMedia'), async () => { const files = await pickFiles(); if (files[0]) { await reconnectPackage(entry.project, files[0]); await refresh(); } }, translate('couldNotReconnectTheProjectMedia'));
   };
   const remove = async (entry: ProjectEntry) => {
     await clearProject(entry.id);
@@ -106,10 +127,10 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
   };
   const actions = (entry: ProjectEntry) => [
     { label: translate('projectHomeRename'), run: () => { setName(entry.project.name); setRename(entry); } },
-    { label: entry.favorite ? translate('projectHomeRemoveFromFavorites') : translate('projectHomeAddToFavorites'), run: () => void run(translate('projectHomeUpdatingFavorite'), async () => { await updateProjectDetails(entry.id, { favorite: !entry.favorite }); await refresh(); }) },
-    { label: translate('duplicate'), run: () => void run(translate('projectHomeDuplicatingProject'), async () => { const p = await loadProject(entry.id); if (!p) throw new Error(translate('projectNoLongerExists')); await create({ ...p, name: translate('projectHomeCopyName', { name: p.name }) }); }) },
-    { label: translate('projectHomeDownloadProject'), separator: true, run: () => downloadProject(entry.project) },
-    { label: translate('projectHomePackageWithMedia'), run: () => void run(translate('projectHomePackagingMedia'), async () => { const c = new AbortController(); controller.current = c; try { await packageProject(entry.project, c.signal); } finally { controller.current = null; } }) },
+    { label: entry.favorite ? translate('projectHomeRemoveFromFavorites') : translate('projectHomeAddToFavorites'), run: () => void run(translate('projectHomeUpdatingFavorite'), async () => { await updateProjectDetails(entry.id, { favorite: !entry.favorite }); await refresh(); }, translate('couldNotUpdateTheProject')) },
+    { label: translate('duplicate'), run: () => void run(translate('projectHomeDuplicatingProject'), async () => { const p = await loadProject(entry.id); if (!p) throw new Error(translate('projectNoLongerExists')); await create({ ...p, name: translate('projectHomeCopyName', { name: p.name }) }); }, translate('couldNotDuplicateTheProject')) },
+    { label: translate('projectHomeDownloadProject'), separator: true, run: () => void run(translate('projectHomeDownloadProject'), async () => { downloadProject(entry.project); }, translate('couldNotDownloadTheProject')) },
+    { label: translate('projectHomePackageWithMedia'), run: () => void run(translate('projectHomePackagingMedia'), async () => { const c = new AbortController(); controller.current = c; try { await packageProject(entry.project, c.signal); } finally { controller.current = null; } }, translate('couldNotPackageTheProject')) },
     { label: translate('projectHomeReconnectPackage'), run: () => reconnect(entry) },
     { label: translate('projectHomeDeleteProject2'), separator: true, danger: true, run: () => setDeleting(entry) },
   ];
@@ -137,15 +158,15 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
         <header className="home-heading"><div><h1>{translate('projectHomeWelcomeBack')}<span>.</span></h1><p>{translate('projectHomePickUpYourEditOrStartSomethingNew')}</p></div><div className="home-create"><button className="home-primary" disabled={!!busy || loading} onClick={() => onOpen(newId(), blankProject(), true)}><Plus size={17} />{translate('projectHomeNewProject')}</button><ActionMenu label={translate('projectHomeMoreCreationOptions')} disabled={!!busy || loading} actions={[{ label: translate('projectHomeImportProjectFile'), run: importProject }]}><ChevronDown size={17} /></ActionMenu></div></header>
         {last && <section className="home-resume" aria-label={translate('projectHomeLastOpenedProject')}>
           <ProjectArtwork project={last.project} hero />
-          <div className="resume-details"><span className="home-eyebrow">{translate('projectHomeLastOpened')}</span><h2 title={last.project.name}>{last.project.name}</h2><p>{durations.get(last.id) ? `${fmtShortDuration(durations.get(last.id)!)} · ` : ''}{translate('projectHomeEdited')}{' '}{dateLabel(last.updatedAt).toLocaleLowerCase()}</p><button className="home-primary" disabled={!!busy} onClick={() => void run(translate('projectHomeOpeningProject'), () => open(last.id))}><Play size={15} />{translate('projectHomeContinueEditing')}</button></div>
+          <div className="resume-details"><span className="home-eyebrow">{translate('projectHomeLastOpened')}</span><h2 title={last.project.name}>{last.project.name}</h2><p>{durations.get(last.id) ? `${fmtShortDuration(durations.get(last.id)!)} · ` : ''}{translate('projectHomeEdited')}{' '}{dateLabel(last.updatedAt).toLocaleLowerCase()}</p><button className="home-primary" disabled={!!busy} onClick={() => void run(translate('projectHomeOpeningProject'), () => open(last.id), translate('couldNotOpenTheProject'))}><Play size={15} />{translate('projectHomeContinueEditing')}</button></div>
           <div className="resume-menu"><ActionMenu label={translate('projectHomeActionsFor', { name: last.project.name })} actions={actions(last)} disabled={!!busy} /></div>
         </section>}
-        {!loading && !entries.length && <section className="home-first-project"><Film size={44} strokeWidth={1} /><h2>{translate('projectHomeAFreshStart')}</h2><p>{translate('projectHomeCreateAProjectToStartEditingOrImportAProjectFileFromTheNewProjectMenu')}</p></section>}
+        {!loading && !loadFailed && !entries.length && <section className="home-first-project"><Film size={44} strokeWidth={1} /><h2>{translate('projectHomeAFreshStart')}</h2><p>{translate('projectHomeCreateAProjectToStartEditingOrImportAProjectFileFromTheNewProjectMenu')}</p></section>}
         <section className="home-projects" aria-labelledby="project-list-title">
           <div className="home-list-heading"><h2 id="project-list-title">{filterName}<span>{filtered.length}</span></h2><div className="home-search"><Search size={17} /><input ref={search} aria-label={translate('projectHomeSearchProjects')} placeholder={translate('projectHomeSearchCount', { count: entries.length })} value={query} onChange={e => setQuery(e.target.value)} /><kbd>{shortcut('K')}</kbd></div><select aria-label={translate('projectHomeSortProjects')} value={sort} onChange={e => setSort(e.target.value)}><option value="updated">{translate('projectHomeLastEdited')}</option><option value="name">{translate('projectHomeNameAZ')}</option><option value="created">{translate('projectHomeDateCreated')}</option></select></div>
           <div className="home-project-list" role="list" aria-label={translate('projectHomeProjects')}>
             {filtered.map(entry => <article key={entry.id} className="home-project-row" role="listitem">
-              <button className="project-open" disabled={!!busy} aria-label={translate('projectHomeOpen', { name: entry.project.name })} onClick={() => void run(translate('projectHomeOpeningProject'), () => open(entry.id))}>
+              <button className="project-open" disabled={!!busy} aria-label={translate('projectHomeOpen', { name: entry.project.name })} onClick={() => void run(translate('projectHomeOpeningProject'), () => open(entry.id), translate('couldNotOpenTheProject'))}>
                 <ProjectArtwork project={entry.project} /><span className="project-row-name"><strong><span>{entry.project.name}</span>{entry.favorite && <Star size={12} fill="currentColor" />}</strong><small>{durations.get(entry.id) ? `${fmtShortDuration(durations.get(entry.id)!)} · ${entry.project.output.width} × ${entry.project.output.height}` : translate('projectHomeEmptyProject')}</small></span><time dateTime={new Date(entry.updatedAt).toISOString()}>{dateLabel(entry.updatedAt)}</time><ChevronRight size={16} />
               </button>
               <ActionMenu label={translate('projectHomeActionsFor', { name: entry.project.name })} actions={actions(entry)} disabled={!!busy} />
@@ -155,14 +176,13 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
           </div>
           <footer className="home-list-footer"><span>{query ? translate('projectHomeMatchingCount', { count: filtered.length }) : translate('projectHomeDeviceCount', { count: entries.length })}</span><span>{translate('projectHomeYourOriginalsStayWhereYouKeepThem')}</span></footer>
         </section>
-        {error && <div role="alert" className="home-error">{error}<button onClick={() => setError('')} aria-label={translate('projectHomeDismissError')}>×</button></div>}
         {busy && <div role="status" className="home-operation">{busy}{controller.current && <button className="home-text-button" onClick={() => controller.current?.abort()}>{translate('cancel')}</button>}</div>}
       </div>
     </main>
-    <input ref={importInput} aria-label={translate('projectHomeImportProjectFile')} type="file" accept=".json,.uvepack" hidden onChange={e => { const file = e.target.files?.[0]; if (file) void run(translate('projectHomeOpeningProject'), () => importFile({ file })); e.target.value = ''; }} />
-    <input ref={reconnectInput} aria-label={translate('projectHomeReconnectPackage')} type="file" accept=".uvepack" hidden onChange={e => { const file = e.target.files?.[0], target = reconnectTarget.current; if (file && target) void run(translate('projectHomeReconnectingMedia'), async () => { await reconnectPackage(target.project, { file }); await refresh(); }); e.target.value = ''; }} />
+    <input ref={importInput} aria-label={translate('projectHomeImportProjectFile')} type="file" accept=".json,.uvepack" hidden onChange={e => { const file = e.target.files?.[0]; if (file) void run(translate('projectHomeOpeningProject'), () => importFile({ file }), translate('couldNotImportTheProject')); e.target.value = ''; }} />
+    <input ref={reconnectInput} aria-label={translate('projectHomeReconnectPackage')} type="file" accept=".uvepack" hidden onChange={e => { const file = e.target.files?.[0], target = reconnectTarget.current; if (file && target) void run(translate('projectHomeReconnectingMedia'), async () => { await reconnectPackage(target.project, { file }); await refresh(); }, translate('couldNotReconnectTheProjectMedia')); e.target.value = ''; }} />
     {settings && <SettingsDialog output={last?.project.output ?? { width: 1920, height: 1080 }} onClose={() => setSettings(false)} />}
-    {rename && <Dialog id="rename-project" title={translate('renameProject2')} subtitle={translate('projectHomeChooseANameYouCanFindLater')} width={440} onClose={() => { if (!busy) setRename(null); }}><form className="dialog-body" onSubmit={e => { e.preventDefault(); const next = name.trim(); if (next) void run(translate('projectHomeRenamingProject'), async () => { await updateProjectDetails(rename.id, { name: next }); await refresh(); setRename(null); }); }}><label className="field-label">{translate('projectName')}<input className="fld" aria-label={translate('projectName')} autoFocus onFocus={e => e.target.select()} maxLength={80} value={name} onChange={e => setName(e.target.value)} /></label>{error && <p role="alert" className="error">{error}</p>}<div className="dialog-actions"><button type="button" className="gb" disabled={!!busy} onClick={() => setRename(null)}>{translate('cancel')}</button><button className="primary" disabled={!!busy || !name.trim()}>{translate('projectHomeSaveName')}</button></div></form></Dialog>}
-    {deleting && <Dialog id="delete-project" title={translate('projectHomeDeleteProject')} subtitle={deleting.project.name} warn width={450} onClose={() => { if (!busy) setDeleting(null); }}><div className="dialog-body"><p>{translate('projectHomeThisRemovesTheSavedEditFromThisBrowserYourOriginalMediaStaysOnDiskDownloadABackupFirstIfYouWantToKeepTheProject')}</p>{error && <p role="alert" className="error">{error}</p>}<div className="dialog-actions"><button className="gb" disabled={!!busy} onClick={() => setDeleting(null)}>{translate('projectHomeKeepProject')}</button><button className="home-delete" disabled={!!busy} onClick={() => void run(translate('projectHomeDeletingProject'), () => remove(deleting))}>{translate('projectHomeDeleteProject2')}</button></div></div></Dialog>}
+    {rename && <Dialog id="rename-project" title={translate('renameProject2')} subtitle={translate('projectHomeChooseANameYouCanFindLater')} width={440} onClose={() => { if (!busy) setRename(null); }}><form className="dialog-body" onSubmit={e => { e.preventDefault(); const next = name.trim(); if (next) void run(translate('projectHomeRenamingProject'), async () => { await updateProjectDetails(rename.id, { name: next }); await refresh(); setRename(null); }, translate('couldNotRenameTheProject')); }}><label className="field-label">{translate('projectName')}<input className="fld" aria-label={translate('projectName')} autoFocus onFocus={e => e.target.select()} maxLength={80} value={name} onChange={e => setName(e.target.value)} /></label><div className="dialog-actions"><button type="button" className="gb" disabled={!!busy} onClick={() => setRename(null)}>{translate('cancel')}</button><button className="primary" disabled={!!busy || !name.trim()}>{translate('projectHomeSaveName')}</button></div></form></Dialog>}
+    {deleting && <Dialog id="delete-project" title={translate('projectHomeDeleteProject')} subtitle={deleting.project.name} warn width={450} onClose={() => { if (!busy) setDeleting(null); }}><div className="dialog-body"><p>{translate('projectHomeThisRemovesTheSavedEditFromThisBrowserYourOriginalMediaStaysOnDiskDownloadABackupFirstIfYouWantToKeepTheProject')}</p><div className="dialog-actions"><button className="gb" disabled={!!busy} onClick={() => setDeleting(null)}>{translate('projectHomeKeepProject')}</button><button className="home-delete" disabled={!!busy} onClick={() => void run(translate('projectHomeDeletingProject'), () => remove(deleting), translate('couldNotDeleteTheProject'))}>{translate('projectHomeDeleteProject2')}</button></div></div></Dialog>}
   </div>;
 }

@@ -9,11 +9,12 @@ import { ASPECTS, aspectOf, clipEnd, findMediaClip, findVideoClip, fmtTime } fro
 import type { Media, MediaClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { Check, Checker, ChevronDown, ChevronLeft, ChevronRight, Close, Dropper, Maximize, Minimize, Mute, Pause, Play, SkipEnd, SkipStart, Volume, Warning } from './icons';
+import { Check, Checker, ChevronDown, ChevronLeft, ChevronRight, Close, Dropper, Maximize, Minimize, Mute, Pause, Play, SkipEnd, SkipStart, Volume } from './icons';
 import { NumberField } from './NumberField';
 import { Slider } from './Slider';
 import { previewSize, useSettings } from '../settings';
 import { useFullscreen } from './useFullscreen';
+import { reportError } from '../toast/store';
 
 interface Props {
   editor: Editor;
@@ -54,6 +55,13 @@ export function PreviewPanel({ editor, totalTime }: Props) {
     : { time: ui.playhead, total: totalTime, playing: playback.playing, toggle: playback.toggle,
         seek: playback.seek, start: editor.range.start, end: editor.range.end, status: playback.status };
 
+  // Playback and source errors used to sit over the stage; they go to the toast queue now.
+  const previewStatus = transport.status;
+  useEffect(() => {
+    if (!previewStatus) return;
+    reportError(source ? translate('couldNotPreviewThisSource') : translate('previewProblem'), previewStatus, undefined, 'preview');
+  }, [previewStatus, source]);
+
   return (
     <section className="panel preview" ref={panel}>
       <div className="preview-head">
@@ -79,12 +87,6 @@ export function PreviewPanel({ editor, totalTime }: Props) {
             {still && stillSource.url && (
               <img className="source-video" src={stillSource.url} alt={translate('sourcePreview', { value1: still.name })}
                 onError={() => stillSource.setStatus(translate('couldNotBeDecoded', { value1: still.name }))} />
-            )}
-            {transport.status && (
-              <div role="alert" className="stage-alert">
-                <Warning size={18} strokeWidth={2.2} />
-                <span>{transport.status}</span>
-              </div>
             )}
           </div>
         </div>
