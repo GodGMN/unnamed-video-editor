@@ -2,7 +2,7 @@ import { useT } from '../i18n';
 import { t as translate, formatNumber } from '../i18n/core';
 import { usePlayback } from '../playback/usePlayback';
 import { useSourcePlayer, useStillSource } from '../playback/useSourcePlayer';
-import { PreviewStrip } from '../media/PreviewStrip';
+import { PreviewStrip, SourceFrameStrip } from '../media/PreviewStrip';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, PointerEvent } from 'react';
 import { ASPECTS, aspectOf, clipEnd, findMediaClip, findVideoClip, fmtTime } from '../editor/model';
@@ -238,7 +238,7 @@ function SourceScrub({ src, time, seek }: { src: Media; time: number; seek: (tim
       <div className="trim-row">
         <span className="trim-time">{fmtTime(0)}</span>
         <div className="trim-bar" style={{ background: src.tone }}>
-          <PreviewStrip media={src} width={560} />
+          <SourceFrameStrip media={src} />
           <input type="range" min={0} max={src.duration} step={0.01} value={Math.min(time, src.duration)}
             onChange={(e) => seek(Number(e.target.value))} aria-label={translate('playheadWithinTheSource')}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', margin: 0, opacity: 0, cursor: 'pointer', zIndex: 2 }} />

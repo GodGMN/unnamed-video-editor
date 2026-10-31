@@ -608,3 +608,7 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .settings-panels { display: grid; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 .settings-panels > .settings-panel { grid-area: 1 / 1; align-self: start; min-width: 0; }
 .settings-panels > .settings-panel[aria-hidden=true] { visibility: hidden; }
+
+.source-frame-strip { position: absolute; inset: 0; display: flex; justify-content: space-between; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.source-frame-strip img { height: 100%; width: 78px; max-width: 100%; object-fit: cover; flex: none; }
+.trim-bar:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
