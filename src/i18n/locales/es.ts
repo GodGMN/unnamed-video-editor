@@ -694,4 +694,9 @@ export const es: Record<TranslationKey, Message> = {
   "exportStuckOn": "Detenido en: {value1}. Copia el diagnóstico para ver cada paso y cuánto tardó.",
   "copyDiagnostics": "Copiar diagnóstico",
   "diagnosticsCopied": "Copiado",
+  "dropOnLibrary": "Suelta para abrir o empezar un proyecto",
+  "dropOnLibraryHint": "Los archivos de proyecto se abren tal cual. El vídeo, el audio y las imágenes empiezan un proyecto nuevo.",
+  "dropSkippedFiles": "Se han omitido algunos archivos",
+  "dropUnsupportedFiles": "No es un archivo de proyecto ni multimedia: {value1}",
+  "dropMediaWithProject": "El contenido multimedia no se añade si lo sueltas junto a un archivo de proyecto: {value1}",
 };

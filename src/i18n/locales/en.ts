@@ -692,4 +692,9 @@ export const en = {
   "exportStuckOn": "Stuck on: {value1}. Copy the diagnostics to see each step and how long it took.",
   "copyDiagnostics": "Copy diagnostics",
   "diagnosticsCopied": "Copied",
+  "dropOnLibrary": "Drop to open or start a project",
+  "dropOnLibraryHint": "Project files open as they are. Video, audio and images start a new project.",
+  "dropSkippedFiles": "Some files were skipped",
+  "dropUnsupportedFiles": "Not a project or media file: {value1}",
+  "dropMediaWithProject": "Media isn’t added when you drop a project file with it: {value1}",
 };

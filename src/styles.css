@@ -597,6 +597,10 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .home-empty h3 { color: var(--text-soft); font-size: 14px; margin: 4px 0 0; font-weight: 500; }
 .home-empty p { margin: 0; font-size: 12px; }
 .home-text-button { border: 0; background: none; padding: 5px; color: var(--accent); font-size: 12px; }
+.home-drop { position: fixed; inset: 14px; z-index: 120; pointer-events: none; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--accent); border-radius: 12px; background: rgba(198, 240, 191, 0.06); backdrop-filter: blur(3px); }
+.home-drop > div { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 360px; text-align: center; color: var(--accent); }
+.home-drop strong { font-size: 18px; font-weight: 600; color: var(--text); }
+.home-drop span { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
 .home-operation { position: fixed; bottom: 22px; left: calc(50% + 100px); transform: translateX(-50%); display: flex; gap: 24px; align-items: center; padding: 12px 18px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line-strong); box-shadow: 0 6px 24px #0004; z-index: 100; font-size: 12px; }
 .home-delete { border: 1px solid var(--danger); background: rgb(240 168 152 / .1); color: var(--danger); border-radius: 7px; padding: 11px 17px; font-weight: 600; }
 .storage-dialog h3 { font-size: 14px; margin: 0 0 8px; font-weight: 550; }

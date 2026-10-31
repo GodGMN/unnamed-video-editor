@@ -1,6 +1,7 @@
 import { useT } from '../i18n';
 import { t as translate, formatDateTime } from '../i18n/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEvent } from 'react';
 import type { Project } from '../editor/model';
 import { fmtShortDuration, layoutTimeline, newId } from '../editor/model';
 import { seedProject } from '../editor/seed';
@@ -10,6 +11,7 @@ import { removeMediaFiles } from '../media/files';
 import { pickFiles } from '../media/links';
 import type { PickedFile } from '../media/links';
 import { renderPoster } from '../projects/poster';
+import { classifyDrop, projectNameFor } from '../projects/drop';
 import { downloadProject, openProjectFile, packageProject, reconnectPackage } from '../projects/portable';
 import { shortcut } from '../platform';
 import { ActionMenu } from './ActionMenu';
@@ -17,7 +19,7 @@ import { Brand } from './Brand';
 import { Dialog } from './Dialog';
 import { SettingsDialog } from './SettingsDialog';
 import { ChevronDown, ChevronRight, Clock, Film, LibraryGrid, Play, Plus, Search, Cog, Star } from './icons';
-import { reportError } from '../toast/store';
+import { errorMessage, pushError, reportError } from '../toast/store';
 
 type Filter = 'all' | 'recent' | 'favorites';
 function ProjectArtwork({ project, hero = false }: { project: Project; hero?: boolean }) {
@@ -45,7 +47,7 @@ function blankProject(): Project {
   return { ...project, name: translate('projectHomeUntitledProject'), media: {}, tracks: project.tracks.map(t => ({ ...t, clips: [] })) };
 }
 
-export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string; onOpen: (id: string, project: Project, draft?: boolean) => void }) {
+export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string; onOpen: (id: string, project: Project, draft?: boolean, files?: PickedFile[]) => void }) {
   useT();
   const [entries, setEntries] = useState<ProjectEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +67,8 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
   const reconnectInput = useRef<HTMLInputElement>(null);
   const reconnectTarget = useRef<ProjectEntry | null>(null);
   const search = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepth = useRef(0);
   const live = useRef(true);
   useEffect(() => {
     live.current = true;
@@ -115,6 +119,23 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
     if (!window.showOpenFilePicker) { importInput.current?.click(); return; }
     void run(translate('projectHomeOpeningProject'), async () => { const files = await pickFiles(); if (files[0]) await importFile(files[0]); }, translate('couldNotImportTheProject'));
   };
+  /** Opens dropped project files, or starts a new project with dropped media. Project files win over media. */
+  const drop = (files: File[]) => {
+    if (busy || loading) return;
+    const { projects, media, unsupported } = classifyDrop(files);
+    if (unsupported.length) pushError({ title: translate('dropSkippedFiles'), message: translate('dropUnsupportedFiles', { value1: unsupported.map(f => f.name).join(', ') }) });
+    if (projects.length && media.length) pushError({ title: translate('dropSkippedFiles'), message: translate('dropMediaWithProject', { value1: media.map(f => f.name).join(', ') }) });
+    if (projects.length === 1) void run(translate('projectHomeOpeningProject'), () => importFile({ file: projects[0] }), translate('couldNotImportTheProject'));
+    else if (projects.length) void run(translate('projectHomeOpeningProject'), async () => {
+      for (const file of projects) {
+        try { await createProject(await openProjectFile({ file })); }
+        catch (e) { pushError({ title: translate('couldNotImportTheProject'), message: `${file.name}: ${errorMessage(e)}` }); }
+      }
+      await refresh();
+    }, translate('couldNotImportTheProject'));
+    else if (media.length) onOpen(newId(), { ...blankProject(), name: projectNameFor(media[0]) }, true, media.map(file => ({ file })));
+  };
+  const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
   const reconnect = (entry: ProjectEntry) => {
     if (!window.showOpenFilePicker) { reconnectTarget.current = entry; reconnectInput.current?.click(); return; }
     void run(translate('projectHomeReconnectingMedia'), async () => { const files = await pickFiles(); if (files[0]) { await reconnectPackage(entry.project, files[0]); await refresh(); } }, translate('couldNotReconnectTheProjectMedia'));
@@ -144,7 +165,12 @@ export function ProjectLibrary({ lastOpenedId, onOpen }: { lastOpenedId: string;
   }, [entries, filter, query, sort]);
   const filterName = filter === 'favorites' ? translate('projectHomeFavorites') : filter === 'recent' ? translate('projectHomeRecentlyEdited') : translate('projectHomeAllProjects');
 
-  return <div className="project-home">
+  return <div className="project-home"
+    onDragEnter={e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDragOver(true); }}
+    onDragOver={e => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = busy || loading ? 'none' : 'copy'; }}
+    onDragLeave={e => { if (hasFiles(e) && --dragDepth.current === 0) setDragOver(false); }}
+    onDrop={e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragOver(false); drop(Array.from(e.dataTransfer.files)); }}>
+    {dragOver && !busy && !loading && <div className="home-drop"><div><Plus size={28} strokeWidth={1.5} /><strong>{translate('dropOnLibrary')}</strong><span>{translate('dropOnLibraryHint')}</span></div></div>}
     <aside className="home-sidebar">
       <Brand />
       <div className="home-nav-label">{translate('projectHomeLibrary')}</div>
