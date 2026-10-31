@@ -3,7 +3,7 @@ import { t as translate, formatNumber } from '../i18n/core';
 import type { CSSProperties, ReactNode } from 'react';
 import { useRef, useState } from 'react';
 import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, dbToFader, faderToDb, fmtDb, MISSING_MEDIA, NO_KEY, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
-import type { AudioClip, ChromaKey, Fades, FitMode, TextAnchor, TextClip, TransitionType, VideoClip } from '../editor/model';
+import type { Media, AudioClip, ChromaKey, Fades, FitMode, TextAnchor, TextClip, TransitionType, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { Dropper, Mute, Waveform } from './icons';
 import { ColorPopover, HexField } from './ColorPicker';
@@ -20,6 +20,7 @@ export function PropertiesPanel({ editor }: { editor: Editor }) {
   useT();
   const { project, ui } = editor;
   const sel = ui.sel;
+  const source = ui.source ? project.media[ui.source] : null;
   const video = sel?.kind === 'clip' || sel?.kind === 'trans' ? findVideoClip(project, sel.id) : null;
   const audio = sel?.kind === 'audio' ? findAudioClip(project, sel.id) : null;
   const text = sel?.kind === 'text' ? findTextClip(project, sel.id) : null;
@@ -27,7 +28,11 @@ export function PropertiesPanel({ editor }: { editor: Editor }) {
   const [videoTab, setVideoTab] = useState<VideoTab>('transform');
   return (
     <aside className="panel props">
-      <div className="props-head"><span className="panel-title">{sel ? TITLES()[sel.kind] : translate('properties')}</span></div>
+      <div className="props-head"><span className="panel-title">{source ? translate('sourceInfo') : sel ? TITLES()[sel.kind] : translate('properties')}</span></div>
+      {source && <>
+        <div className="props-clip"><div className="props-swatch" style={{ background: source.tone }} /><strong>{source.name}</strong></div>
+        <SourceInfo src={source} />
+      </>}
       {sel?.kind === 'clip' && video && <VideoClipProps key={video.id} editor={editor} clip={video} tab={videoTab} onTab={setVideoTab} />}
       {audio && <AudioClipProps key={audio.id} editor={editor} clip={audio} />}
       {sel?.kind === 'trans' && video && <TransitionProps key={video.id} editor={editor} clip={video} />}
@@ -178,24 +183,30 @@ function VideoClipProps({ editor, clip: cs, tab, onTab }: { editor: Editor; clip
       </div>
       </>}
 
-      {tab === 'info' && <div className="props-section" style={{ gap: 8 }}>
+      {tab === 'info' && <SourceInfo src={src} />}
+    </Tabs>
+  </>;
+}
+
+function SourceInfo({ src }: { src: Media }) {
+  useT();
+  const inf = src.video;
+  return <div className="props-section" style={{ gap: 8 }}>
         <span className="eyebrow">{translate('sourceInfo')}</span>
         <dl className="info-list">
           {(src.still ? [
-            [translate('file2'), src.name], [translate('format'), `${src.container} ${src.animation ? translate('uiAnimation') : translate('uiImage')}`], [translate('resolution'), `${inf.width}×${inf.height}`],
-            ...(src.animation ? [[translate('loop'), translate('sFrames', { value1: formatNumber(src.animation, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), value2: Math.round(src.animation * inf.fps) })]] : []), [translate('size'), fmtSize(src.size)],
+            [translate('file2'), src.name], [translate('format'), `${src.container} ${src.animation ? translate('uiAnimation') : translate('uiImage')}`], [translate('resolution'), `${inf?.width}×${inf?.height}`],
+            ...(src.animation ? [[translate('loop'), translate('sFrames', { value1: formatNumber(src.animation, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), value2: Math.round(src.animation * (inf?.fps ?? 0)) })]] : []), [translate('size'), fmtSize(src.size)],
           ] : [
             [translate('file2'), src.name], [translate('container'), src.container], [translate('video2'), src.video ? codecName(src.video.codec) : '—'],
-            [translate('resolution'), src.video ? `${inf.width}×${inf.height}` : '—'], [translate('frameRate'), src.video ? fmtFps(inf.fps) : '—'],
+            [translate('resolution'), src.video ? `${inf?.width}×${inf?.height}` : '—'], [translate('frameRate'), src.video ? fmtFps(inf?.fps ?? 0) : '—'],
             [translate('bitrate'), fmtBitrate(src.bitrate)], [translate('audio2'), src.audio ? fmtAudio(src.audio) : translate('none')],
             [translate('duration'), fmtTime(src.duration)], [translate('size'), fmtSize(src.size)],
           ]).map(([k, v]) => (
             <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>
           ))}
         </dl>
-      </div>}
-    </Tabs>
-  </>;
+      </div>;
 }
 
 /** Chroma key: removes one colour so the tracks underneath show through. */
