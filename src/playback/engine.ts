@@ -1,14 +1,24 @@
 import { t as translate } from '../i18n/core';
-import { clipEnd, findVideoClip } from '../editor/model';
+import { clipEnd, clipSpeed, findVideoClip, toSource } from '../editor/model';
 import type { AudioClip, MediaClip, Project } from '../editor/model';
 import { readMediaFile } from '../media/files';
 import { imageSize, sampleColor } from './chromaKey';
 import { audioGain, renderFrame, sourcePoint } from './compositor';
 import { imageType } from '../media/animation';
+import { liveStretch, pitchCorrection, stretches } from './stretch';
+import type { StretchNode } from './stretch';
 import { AnimatedFrame, FrameCache, StillFrame } from './frameCache';
 import type { Frames } from './frameCache';
 
-interface Player { element: HTMLAudioElement; url: string; gain: GainNode | null; source: MediaElementAudioSourceNode | null; ready: boolean; busy: boolean; wantedPlaying: boolean }
+interface Player {
+  element: HTMLAudioElement; url: string; gain: GainNode | null; source: MediaElementAudioSourceNode | null; ready: boolean; busy: boolean; wantedPlaying: boolean;
+  /** Pitch-corrects the element while it plays at a changed rate; loads on first use. */
+  stretch: StretchNode | 'loading' | null;
+  /** Seconds the stretcher delays the sound by. */
+  latency: number;
+  /** The correction the stretcher applies, or null while the element goes straight to `gain`. */
+  semitones: number | null;
+}
 interface Entry { mediaId: string; used: number; frames: Frames | null; audio: Player | null; disposed: boolean; abort: AbortController }
 /** `transparent` leaves uncovered and keyed-out pixels clear, so the stage's transparency grid shows through. */
 interface Request { project: Project; time: number; playing: boolean; volume: number; transparent: boolean }
@@ -114,7 +124,7 @@ export class PlaybackEngine {
       });
     }
     entry.used = ++this.serial;
-    const target = Math.max(0, clip.inS + time - clip.start);
+    const target = Math.max(0, toSource(clip, time));
     entry.frames?.request(target, playing);
     if (entry.audio?.ready) this.syncAudio(entry, clip as AudioClip, target, playing);
   }
@@ -133,7 +143,7 @@ export class PlaybackEngine {
       } else {
         const element = document.createElement('audio');
         const url = URL.createObjectURL(file);
-        const player: Player = { element, url, gain: null, source: null, ready: false, busy: false, wantedPlaying: false };
+        const player: Player = { element, url, gain: null, source: null, ready: false, busy: false, wantedPlaying: false, stretch: null, latency: 0, semitones: null };
         entry.audio = player;
         element.preload = 'auto'; element.muted = true;
         await waitFor(element, 'loadeddata', () => { element.src = url; element.load(); }, entry.abort.signal);
@@ -159,12 +169,15 @@ export class PlaybackEngine {
       player.gain = context.createGain();
       player.source.connect(player.gain).connect(context.destination);
     }
+    if (context && player.gain) this.route(player, context, clip);
     const request = this.latest!;
     if (context && player.gain) {
       player.gain.gain.setTargetAtTime(playing ? request.volume * audioGain(request.project, clip, request.time) : 0, context.currentTime, 0.01);
     }
     element.muted = !context;
     if (player.busy) return;
+    // The stretcher's sound comes out late, so its input runs that far ahead.
+    if (player.semitones !== null && playing) target += player.latency * clipSpeed(clip);
     const drift = Math.abs(element.currentTime - target);
     if (drift > (playing && !element.paused ? 0.25 : 0.002)) {
       player.busy = true;
@@ -189,6 +202,36 @@ export class PlaybackEngine {
         if (entry.disposed || !player.wantedPlaying || !latest?.playing || latest.time < clip.start || latest.time >= clipEnd(clip)) element.pause();
       }, (error) => { if (!entry.disposed) this.fail(entry, error); }).finally(() => { player.busy = false; });
     }
+  }
+
+  /**
+   * Plays the element at the clip's speed. Keeping pitch, it goes through the stretcher, which
+   * shifts the pitch back; the browser's own `preservesPitch` sounds robotic, so it only covers
+   * the moment the stretcher takes to load.
+   */
+  private route(player: Player, context: AudioContext, clip: AudioClip) {
+    const { element, source, gain } = player;
+    const speed = clipSpeed(clip);
+    if (element.playbackRate !== speed) element.playbackRate = speed;
+    const wanted = stretches(clip);
+    if (wanted && !player.stretch) {
+      player.stretch = 'loading';
+      void liveStretch(context).then(async (node) => {
+        player.latency = await node.latency();
+        player.stretch = node;
+        if (this.latest) this.update(this.latest);
+      }, () => { player.stretch = null; });
+    }
+    const node = wanted && player.stretch !== 'loading' ? player.stretch : null;
+    element.preservesPitch = wanted && !node;
+    const semitones = node ? pitchCorrection(speed) : null;
+    if (semitones === player.semitones) return;
+    source!.disconnect();
+    if (node) {
+      void node.schedule({ output: context.currentTime, active: true, semitones: semitones! });
+      source!.connect(node).connect(gain!);
+    } else source!.connect(gain!);
+    player.semitones = semitones;
   }
 
   /** The canvas changed size: decoders reopen at the new resolution. */
@@ -227,7 +270,7 @@ export class PlaybackEngine {
     const video = clip && project.media[clip.mediaId]?.video;
     if (!clip || !video || time < clip.start || time >= clipEnd(clip)) return null;
     const point = sourcePoint(project, clip, x, y, time);
-    const frame = point && this.entries.get(clipId)?.frames?.frame(clip.inS + time - clip.start, playing);
+    const frame = point && this.entries.get(clipId)?.frames?.frame(toSource(clip, time), playing);
     if (!point || !frame) return null;
     // Preview frames are decoded smaller than the source.
     const size = imageSize(frame);
@@ -240,8 +283,9 @@ export class PlaybackEngine {
     entry.abort.abort();
     entry.frames?.dispose();
     if (entry.audio) {
-      const { element, source, gain, url } = entry.audio;
+      const { element, source, gain, url, stretch } = entry.audio;
       element.pause(); source?.disconnect(); gain?.disconnect();
+      if (stretch && stretch !== 'loading') stretch.disconnect();
       element.removeAttribute('src'); element.load(); URL.revokeObjectURL(url);
     }
     this.entries.delete(id);

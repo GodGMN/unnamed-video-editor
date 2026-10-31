@@ -1,3 +1,4 @@
+import { clipDuration, clipEnd, toSource } from './model';
 import type { VideoClip } from './model';
 
 export const ANIMATED_PROPERTIES = ['x', 'y', 'scale', 'rot', 'cropT', 'cropR', 'cropB', 'cropL'] as const;
@@ -11,9 +12,10 @@ export type KeyframeTracks = Partial<Record<AnimatedProperty, Keyframe[]>>;
 const EPS = 1e-6;
 
 export function clipFrame(clip: VideoClip, time: number, fps: number) {
-  const count = Math.max(1, Math.ceil((clip.outS - clip.inS) * fps - EPS));
+  const count = Math.max(1, Math.ceil(clipDuration(clip) * fps - EPS));
   const index = Math.max(0, Math.min(count - 1, Math.floor((time - clip.start) * fps + EPS)));
-  return { index, count, sourceTime: clip.inS + index / fps, timelineTime: clip.start + index / fps };
+  const timelineTime = clip.start + index / fps;
+  return { index, count, sourceTime: toSource(clip, timelineTime), timelineTime };
 }
 
 export function keyframeAt(keys: readonly Keyframe[], time: number) {
@@ -30,10 +32,10 @@ export function saveKeyframe(clip: VideoClip, property: AnimatedProperty, time: 
 
 /** The first diamond opts a clip into automatic keying for subsequent property edits. */
 export function autoKeyframePatch(clip: VideoClip, patch: Partial<VideoClip>, timelineTime: number, fps: number): Partial<VideoClip> {
-  if (patch.keyframes || timelineTime < clip.start || timelineTime >= clip.start + clip.outS - clip.inS ||
+  if (patch.keyframes || timelineTime < clip.start || timelineTime >= clipEnd(clip) ||
       !ANIMATED_PROPERTIES.some(property => (clip.keyframes?.[property]?.length ?? 0) > 0)) return patch;
   const frame = clipFrame(clip, timelineTime, fps);
-  const sourceTime = clip.inS + timelineTime - clip.start;
+  const sourceTime = toSource(clip, timelineTime);
   let next = clip;
   for (const property of ANIMATED_PROPERTIES) {
     const value = patch[property];
@@ -92,7 +94,7 @@ export function evaluateVideoClip(clip: VideoClip, timelineTime: number): VideoC
   const resolved = { ...clip };
   for (const property of ANIMATED_PROPERTIES) {
     const keys = clip.keyframes[property] ?? [];
-    resolved[property] = evaluateProperty(clip[property], keys, clip.inS + timelineTime - clip.start);
+    resolved[property] = evaluateProperty(clip[property], keys, toSource(clip, timelineTime));
     if (keys.length >= 2 && (property === 'scale' || property === 'x' || property === 'y' || property === 'rot')) resolved.fit = 'custom';
   }
   return resolved;
