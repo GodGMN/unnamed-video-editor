@@ -1,3 +1,4 @@
+import { ANIMATED_PROPERTIES, EASINGS } from '../editor/keyframes';
 import { t as translate } from '../i18n/core';
 import { newId, VIDEO_CLIP_DEFAULTS, AUDIO_CLIP_DEFAULTS, NO_KEY, NO_FADES, gainToDb } from '../editor/model';
 import type { Project } from '../editor/model';
@@ -74,6 +75,19 @@ export function validateProject(value: unknown): asserts value is Project {
         if (c.linkId !== null) text(c.linkId); bool(c.linked);
         fields(c, t.kind === 'video' ? VIDEO_CLIP_DEFAULTS : AUDIO_CLIP_DEFAULTS);
         if (t.kind === 'video') {
+          if (c.keyframes !== undefined) {
+            const tracks = object(c.keyframes);
+            for (const [property, value] of Object.entries(tracks)) {
+              if (!ANIMATED_PROPERTIES.some(p => p === property) || !Array.isArray(value)) throw new Error(translate('documentInvalid'));
+              let previous = -1;
+              for (const item of value) {
+                const k = object(item); number(k.time); number(k.value);
+                if (k.easing !== undefined && !EASINGS.some(easing => easing === k.easing)) throw new Error(translate('documentInvalid'));
+                if (k.time < 0 || k.time <= previous || (property === 'scale' && k.value <= 0) || (property.startsWith('crop') && k.value < 0)) throw new Error(translate('documentInvalid'));
+                previous = k.time;
+              }
+            }
+          }
           const key = object(c.key); bool(key.enabled); text(key.color);
           for (const field of ['tolerance', 'softness', 'spill']) number(key[field]);
           if (!['fit', 'fill', 'custom'].includes(String(c.fit))) throw new Error(translate('documentInvalidFit'));

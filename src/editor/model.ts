@@ -1,3 +1,4 @@
+import type { KeyframeTracks } from './keyframes';
 import { t as translate, formatNumber } from '../i18n/core';
 /*
  * Project model. Everything in `Project` is plain, structured-clone-safe data (no class
@@ -100,6 +101,7 @@ export interface ChromaKey {
 }
 
 export interface VideoClip extends ClipBase, Fades {
+  keyframes?: KeyframeTracks;
   /** Output-pixel offset from centre. */
   x: number;
   y: number;

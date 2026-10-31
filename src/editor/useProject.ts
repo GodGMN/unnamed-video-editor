@@ -1,3 +1,4 @@
+import { autoKeyframePatch } from './keyframes';
 import { amend, createHistory, record, travel } from './history';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
@@ -163,6 +164,7 @@ export function useProject(id: string, initial: Project, draft = false) {
       }
     }).catch(error => console.warn('Could not remove unused media', error));
   }, [flush]);
+  const [intervalPlaybackRequest, setIntervalPlaybackRequest] = useState<PlayRange | null>(null);
   const projectRef = useRef(project);
   projectRef.current = project;
   const uiRef = useRef(ui);
@@ -180,6 +182,14 @@ export function useProject(id: string, initial: Project, draft = false) {
   const actions = useMemo(() => {
     const edit = (fn: (p: Project) => Project) => setProject((p) => (p ? settle(fn(p)) : p));
     return {
+      playKeyframeInterval: (from: number, to: number) => {
+        const range = rangeRef.current;
+        if (!range) return;
+        const start = Math.max(from, range.start), end = Math.min(to, range.end);
+        if (end <= start) return;
+        setUi(ui => ({ ...ui, source: null, playhead: start }));
+        setIntervalPlaybackRequest({ start, end });
+      },
       renameProject: (name: string) => edit((p) => ({ ...p, name })),
       setAspect: (aspect: Aspect) => edit((p) => setAspect(p, aspect)),
       addMedia: (media: Media) => edit((p) => ({ ...p, media: { ...p.media, [media.id]: media } })),
@@ -278,7 +288,12 @@ export function useProject(id: string, initial: Project, draft = false) {
 
       /** Moves a clip's source in/out points; linked partners follow. */
       trimClip: (id: string, patch: Partial<Pick<VideoClip | AudioClip, 'start' | 'inS' | 'outS'>>) => edit((p) => patchClip(p, id, patch)),
-      updateVideoClip: (id: string, patch: Partial<VideoClip>) => edit((p) => patchClip(p, id, patch)),
+      updateVideoClip: (id: string, patch: Partial<VideoClip>) => {
+        edit(p => {
+          const clip = findVideoClip(p, id);
+          return clip ? patchClip(p, id, autoKeyframePatch(clip, patch, uiRef.current.playhead, p.output.fps)) : p;
+        });
+      },
       updateAudioClip: (id: string, patch: Partial<AudioClip>) => edit((p) => patchClip(p, id, patch)),
       /** Updates the transition after video clip `id`, creating it from the default cut if needed. */
       updateTransition: (id: string, patch: Partial<Transition>) => edit((p) => {
@@ -338,7 +353,7 @@ export function useProject(id: string, initial: Project, draft = false) {
   }, [undo, redo]);
 
   if (!project || !layout || !range) return null;
-  return { project, ui, layout, range, saveState, flush, undo, redo, canUndo, canRedo, ...actions };
+  return { project, intervalPlaybackRequest, ui, layout, range, saveState, flush, undo, redo, canUndo, canRedo, ...actions };
 }
 
 export type Editor = NonNullable<ReturnType<typeof useProject>>;
