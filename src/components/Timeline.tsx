@@ -712,7 +712,7 @@ function Transitions({ editor, clips, pps, dropTarget }: { editor: Editor; clips
   );
 }
 
-const f1 = (x: number) => formatNumber(x, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const f1 = (x: number) => x.toFixed(1);
 
 function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<AudioClip>) {
   useT();
