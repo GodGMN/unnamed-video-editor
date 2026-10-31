@@ -2,45 +2,133 @@
 
 # Unnamed Video Editor
 
-Created in [T3 Code](https://t3.codes).
+A desktop browser video editor with a multitrack timeline, video and audio clips,
+text overlays, chroma key, and MP4 export. Media processing runs locally in your
+browser. There is no application backend or account to set up.
+
+Created by [Sergio Gimeno](https://gimeno.dev) in [T3 Code](https://t3.codes).
+Licensed under [AGPL-3.0-or-later](LICENSE).
+
+## Browser requirements and limitations
+
+Use a recent desktop Chromium browser such as Chrome or Edge. Codec decoding and
+WebCodecs encoding depend on your browser and operating system. A source that
+cannot be decoded can be converted with the built-in FFmpeg converter, subject
+to browser memory limits. Large files and exports can exhaust available memory.
+
+Serve the app over HTTPS outside localhost. Browser media and file-picker APIs
+may be unavailable on plain HTTP LAN addresses. Browsers without persistent
+file handles require reconnecting source files after reloading.
+
+Projects autosave in the current browser profile, with no cloud sync. Clearing
+site data removes saved edits. Download project backups and keep your original
+media. Concurrent editing of one project in multiple tabs is not synchronized.
+See [Project storage](#project-storage) for details.
 
 ## Development
 
-Start the dev server with Docker Compose:
+### With Node.js
+
+Use Node.js 24 and pnpm 10, matching the Docker setup:
 
 ```sh
-docker compose up
+npm install --global pnpm@10
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-The app is then available at:
+Open the local URL printed by Vite. No API keys or environment file are required.
 
-- http://localhost:5200 (this machine)
-- http://<this machine's LAN IP>:5200 (other devices on the local network)
+### With Docker Compose
 
-Compose builds the `dev` stage of the [Dockerfile](Dockerfile) and bind-mounts
-the source into it, so `node_modules` comes from the image and only code changes
-need a reload. After changing `package.json` or the lockfile, rebuild:
+Install Docker with Compose, then run:
 
 ```sh
 docker compose up --build
 ```
 
-## Export harness
+Open http://localhost:5200. Set `WEB_PORT` to change the host port:
 
-`src/export` turns rendered frames and an audio buffer into an H.264 + AAC MP4,
-entirely in the browser. While the dev server is running, open
-`/dev/export.html` (for example http://localhost:5200/dev/export.html) to
-export a synthetic A/V sync clip, check browser codec support and download the
-result. The page is dev-only: `vite build` does not include it.
+```sh
+WEB_PORT=5300 docker compose up
+```
 
-## Production image
+Compose builds the `dev` stage of the [Dockerfile](Dockerfile) and mounts the
+source for live reload. Dependencies live in a Docker volume. After changing
+`package.json` or the lockfile, rebuild the image and refresh that volume:
 
-The same Dockerfile builds a static bundle served by nginx:
+```sh
+docker compose down --volumes
+docker compose up --build
+```
+
+The Compose port is exposed on all host interfaces for LAN development. Use
+HTTPS when accessing it from another machine to enable secure-context APIs.
+
+## Deployment
+
+The production app is static. It needs no database, server-side credentials, or
+persistent server volume. User projects remain in each user's browser.
+
+### Docker
 
 ```sh
 docker build --target production -t unnamed-video-editor .
-docker run --rm -p 8080:80 unnamed-video-editor
+docker run --detach --name unnamed-video-editor --restart unless-stopped \
+  -p 127.0.0.1:8080:80 unnamed-video-editor
 ```
+
+Open http://localhost:8080 locally. For public access, put an HTTPS reverse proxy
+in front of port 8080. For example, this Caddy configuration obtains and renews
+a certificate when your domain points to the server and ports 80 and 443 are
+reachable:
+
+```caddyfile
+editor.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Replace the example domain with yours. This configuration assumes Caddy runs on
+the host; a containerized proxy should reach the app through its Docker network.
+The Compose service is a development server; use the production image to deploy.
+
+### Static hosting
+
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+```
+
+Publish the entire `dist/` directory at the root of an HTTPS site. Serve `.wasm`
+files as `application/wasm` and JavaScript modules with a JavaScript MIME type.
+Keep worker files and all generated assets. Allow revalidation of `index.html`;
+hashed files under `assets/` can use long-lived immutable caching. Enable gzip or
+Brotli, especially for the FFmpeg WASM asset.
+
+The default build targets `/`. Hosting below a path requires configuring Vite's
+`base` and checking asset and worker URLs. The converter uses the single-threaded
+FFmpeg core, so it does not require COOP/COEP headers.
+
+Keep deployments on a stable origin. Changing the scheme, domain, or port gives
+the browser a separate project library; download backups before moving a site.
+
+## License
+
+Original project code is licensed under the GNU Affero General Public License,
+version 3 or any later version. See [LICENSE](LICENSE) for the full terms.
+
+Dependencies and fonts retain their own licenses. In particular, the FFmpeg core
+is GPL-2.0-or-later, Mediabunny is MPL-2.0, the AAC encoder includes LGPL FFmpeg
+code, and the bundled fonts use the SIL Open Font License. Preserve their license
+notices and satisfy their source-distribution requirements when distributing a
+build. The project license does not replace those licenses.
+
+## Export harness
+
+While the dev server is running, open `/dev/export.html` to export a synthetic
+H.264 + AAC clip, check codec support, and download the result. This page is
+excluded from the production build.
 
 ## Project storage
 
@@ -55,25 +143,36 @@ the current save to commit. The former single `current` save migrates into the
 library when the database opens. A failed load never replaces a saved project
 with the demo.
 
-New imports do not copy source bytes into browser storage. On browsers with
-`showOpenFilePicker`, Import stores a read-only file handle. Access may need to
-be granted again after reopening. Dropped files and browsers without that picker
-use session references; select the originals again with **Reconnect** after a
-reload. Source handles stay outside project documents and worker messages.
+Imported source files are persisted in IndexedDB so media stays playable after
+reload, including dropped files and imports without a native file picker. This
+requirement from #86 supersedes #62's reference-only storage. Optional read-only
+handles remain available for older linked sources. Source bytes and handles stay
+outside project documents and worker messages.
+
+Source storage uses the browser's available quota, separately from the 128 MiB
+preview cache. If storage is full, the operation fails visibly and asks you to
+clear the preview cache in Settings > Storage or free disk space and retry.
+Existing sources and projects are retained. A failed package import removes its
+partially imported sources. The editor does not silently downgrade to session-only
+media or delete existing sources to make room.
 
 Reconnect checks the source size and a sampled content signature covering the
 beginning, middle, and end. This detects accidental substitutions without reading
 an entire multi-gigabyte file. It is not a full-file integrity checksum. Legacy
 media without signatures is checked against its name, size, duration, and stream
-metadata instead. A changed linked file needs reconnecting. Relinking a shared
+metadata instead. An older handle-only source needs reconnecting if its external
+file changes. Persisted bytes are unaffected by changes to the external original.
+**Relink original** (right-click a media item) points an available source at
+another copy. Relinking a shared
 source affects project duplicates that use that source.
 
 Only generated thumbnails and waveforms enter the new disposable cache. Writes
 and eviction share one IndexedDB transaction and cap it at 128 MiB across tabs.
-**Settings → Clear preview cache** removes them; **Rebuild previews** regenerates a source's previews.
+**Settings → Clear preview cache** removes them; right-click a media item and
+choose **Rebuild previews** to regenerate its previews.
 Old OPFS/IndexedDB source copies remain readable. Reconnecting an original or
 deleting its last saved reference removes that old copy, never the external
-original. Copies retained from older versions are outside the preview budget.
+original. All source files are outside the preview budget.
 Converted output stays available for the session; save the MP4 from its completed
 conversion dialog and relink that saved file to retain access across sessions.
 
@@ -81,10 +180,10 @@ The project menu's **Download project** writes a versioned `.uve.json` document 
 media identifiers, without browser handles or media. Reconnect sources after
 opening it. **Package with media** writes a self-contained `.uvepack`, streaming
 to the selected destination where a save picker is available. Other browsers use
-an explicit Blob download. Opening a package links byte ranges within that file;
-it does not extract source copies into browser storage. Keep the package on disk.
-Without persisted handles use **Reconnect package** after reloading to restore
-media access while keeping subsequent edits, or reconnect its original source files. Imported documents receive new media IDs so they
+an explicit Blob download. Opening a package persists its media slices in browser storage so they also play
+after reload. Keep the package on disk as a backup. **Reconnect package** restores
+missing or older linked media while keeping subsequent edits, or reconnect its
+original source files. Imported documents receive new media IDs so they
 cannot replace another project's links.
 
 The package format is eight ASCII bytes `UVEPACK1`, a little-endian uint32 JSON
@@ -94,7 +193,7 @@ exactly match the package size. Video is already compressed, so packaging does
 not transcode it or add a second compression pass.
 
 The library belongs to this origin and browser profile. Clearing site data also
-removes saved edits and handles. Keep downloadable project backups for work you
+removes saved edits, source files, previews, and handles. Keep downloadable project backups for work you
 need to retain. Concurrent editing of the same project in different tabs is not
 synchronized.
 
@@ -106,9 +205,9 @@ PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs \
 node scripts/verify-projects.mjs
 ```
 
-The script generates real A/V media with ffmpeg and checks imports without
-copies, session reconnect, mismatched-source rejection, shared references,
-package roundtrip, handle persistence, validation, migration, and cache eviction.
+The script generates real A/V media with ffmpeg and checks persistent imports and reload decoding, quota failures, mismatched-source
+rejection, shared references, package roundtrip, handle persistence, validation,
+migration, and cache eviction.
 Its handle-persistence fixture uses a genuine serializable OPFS handle as a
 controlled stand-in for a handle returned by the native picker. Native permission
 prompts and cross-browser picker behavior still need manual testing.
@@ -125,3 +224,16 @@ node scripts/verify-project-home.mjs
 This checks search, sorting, favorite persistence, rename, keyboard menus at the
 bottom of the list, settings, resume, save-before-navigation, deletion, and the
 1280×720 layout. Sample project covers are generated only in the test profile.
+
+## Promo video
+
+`demo/` holds a [Remotion](https://www.remotion.dev) promo of the editor
+(1920×1080, 30 fps, about 42 s, in Spanish). The editor UI in it is redrawn at the app's
+own sizes; the project and footage are invented.
+
+```sh
+cd demo
+npm install
+npm run studio   # preview and scrub in the browser
+npm run render   # writes out/unnamed-video-editor-promo.mp4
+```

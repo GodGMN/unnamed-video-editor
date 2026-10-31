@@ -1,4 +1,4 @@
-import { openEditor } from './browser-helpers.mjs';
+import { openEditor, ensureSource } from './browser-helpers.mjs';
 // Start Vite, then run with PLAYWRIGHT_MODULE and optional TEST_URL / ARTIFACT_DIR.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -135,8 +135,7 @@ try {
   // Exercise the actual dialog and its downloadable file too.
   await page.reload();
   await openEditor(page);
-  await page.locator('input[aria-label="Reconnect source.mp4"]').setInputFiles(file);
-  await page.locator('.media-item').filter({ hasText: 'source.mp4' }).getByRole('button', { name: 'Rebuild previews' }).waitFor();
+  await ensureSource(page, 'source.mp4', file);
   await page.getByRole('button', { name: 'Export', exact: true }).click();
   await page.getByRole('button', { name: '720p', exact: false }).click();
   await page.getByRole('button', { name: 'Start export', exact: true }).click();

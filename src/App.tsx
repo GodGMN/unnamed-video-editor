@@ -64,6 +64,7 @@ function useConvertedMedia(editor: Editor | null) {
         // V1 is magnetic, so the clip goes after its last clip whatever time is passed.
         if (addToTimeline && main) placeMedia(media.id, main, 0);
       }, (error: unknown) => {
+        imported.delete(file);
         reportError(translate('couldNotAddTheConvertedVideo'), error, { label: translate('projectHomeRetry'), run: attempt });
       }).finally(() => setPending(false));
     }

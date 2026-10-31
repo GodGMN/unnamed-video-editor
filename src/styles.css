@@ -381,7 +381,9 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 .menu-sep { height: 1px; background: var(--line-strong); margin: 4px 6px; }
 
 /* Dialogs */
-.scrim { position: fixed; inset: 0; background: rgba(10, 12, 11, 0.6); display: flex; align-items: center; justify-content: center; padding: 24px 16px; z-index: 50; }
+.scrim:not([open]) { display: none; }
+.scrim::backdrop { background: transparent; }
+.scrim { margin: 0; width: 100%; height: 100%; max-width: none; max-height: none; border: 0; color: inherit; position: fixed; inset: 0; background: rgba(10, 12, 11, 0.6); display: flex; align-items: center; justify-content: center; padding: 24px 16px; z-index: 50; }
 .dialog { width: 100%; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-xl); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5); overflow: hidden; }
 .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 24px 24px 0; }
 .dialog-head h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.03em; }
@@ -492,7 +494,8 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .snap-guide { position: absolute; top: 0; bottom: 0; width: 0; margin-left: -1px; border-left: 2px dashed var(--accent); pointer-events: none; z-index: 6; }
 
 .save-status { font-size: 11px; color: var(--text-muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.media-reconnect { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.media-reconnect { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 6px; }
+.media-reconnect .gb { --h: 26px; padding: 0 10px; font-size: 11px; }
 .startup-error { padding: 32px; }
 
 /* Error toasts: the one place errors surface. Persistent, bottom center, stack upward. */
@@ -573,8 +576,8 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .home-search input::placeholder { color: var(--text-muted); }
 .home-search kbd { font: 9px var(--sans); border: 1px solid var(--control); padding: 2px 4px; border-radius: 3px; white-space: nowrap; }
 .home-list-heading select { border: 0; background: var(--bg); color: var(--text-dim); font: 11px var(--sans); padding: 7px 4px; cursor: pointer; }
-.home-project-list { overflow-y: auto; min-height: 0; flex: 1; padding-right: 7px; }
-.home-project-row { display: flex; align-items: center; gap: 8px; padding: 3px 10px 3px 6px; border-bottom: 1px solid var(--line); border-radius: 6px; }
+.home-project-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; flex: 1; padding-right: 7px; }
+.home-project-row { display: flex; align-items: center; gap: 8px; padding: 3px 10px 3px 6px; flex-shrink: 0; border-radius: 6px; }
 .home-project-row:hover, .home-project-row:focus-within { background: rgb(198 240 191 / .025); }
 .project-open { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; background: none; border: 0; padding: 6px 0; text-align: left; }
 .project-row-name { display: block; flex: 1; min-width: 0; }

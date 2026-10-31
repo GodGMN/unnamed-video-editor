@@ -160,7 +160,7 @@ export function ColorPopover({ anchor, value, onChange, onClose }: Props) {
       const t = e.target as Node;
       if (!ref.current?.contains(t) && !anchor.current?.contains(t)) onClose();
     };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); anchor.current?.focus(); } };
     document.addEventListener('pointerdown', down, true);
     document.addEventListener('keydown', key);
     return () => {
@@ -223,6 +223,6 @@ export function ColorPopover({ anchor, value, onChange, onClose }: Props) {
         </div>
       )}
     </div>,
-    document.body,
+    anchor.current?.closest('dialog') ?? document.body,
   );
 }
