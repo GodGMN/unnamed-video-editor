@@ -499,8 +499,8 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .startup-error { padding: 32px; }
 
 /* Error toasts: the one place errors surface. Persistent, bottom center, stack upward. */
-.toaster { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column-reverse; gap: 8px; width: min(420px, calc(100vw - 32px)); pointer-events: none; }
-.toast { width: 100%; pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 9px 8px 9px 10px; border: 1px solid var(--danger-strong); border-radius: 11px; background: linear-gradient(180deg, var(--danger-surface), var(--danger-surface-deep)); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(229, 72, 77, 0.16); color: var(--danger-ink); font-size: 12px; animation: toast-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.toaster { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column-reverse; align-items: center; gap: 8px; width: min(420px, calc(100vw - 32px)); pointer-events: none; }
+.toast { width: fit-content; min-width: min(320px, 100%); max-width: 100%; pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 9px 8px 9px 10px; border: 1px solid var(--danger-strong); border-radius: 11px; background: linear-gradient(180deg, var(--danger-surface), var(--danger-surface-deep)); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(229, 72, 77, 0.16); color: var(--danger-ink); font-size: 12px; animation: toast-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .toast.leaving { animation: none; opacity: 0; transform: translateY(8px) scale(0.98); transition: opacity 0.16s ease, transform 0.16s ease; }
 .toast-icon { width: 22px; height: 22px; flex: none; border-radius: 50%; background: var(--danger-strong); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.16); }
 .toast-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
