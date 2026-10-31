@@ -130,7 +130,12 @@ export function PhoneTimeline({ editor, onAdd, onTransition }: { editor: Editor;
           <div className="ptl-ruler" style={{ left: half, width }} aria-hidden="true">
             {ticks.map((s) => <span key={s} style={{ left: s * pps }}>{fmtTick(s)}</span>)}
           </div>
-          {lanes.map(({ track: t, top, height }) => <div key={t.id} className="ptl-band" style={{ top, height }} aria-hidden="true" />)}
+          {lanes.map(({ track: t, top, height }) => (
+            <div key={t.id} className={'ptl-band' + (t.id === main ? ' main' : '')} style={{ top, height }} aria-hidden="true">
+              {/* Sticks to the left edge while the tracks scroll. */}
+              <span className="ptl-name">{t.name}</span>
+            </div>
+          ))}
           {lanes.map(({ track: t, top, height }) => (
             <div key={t.id} className={'ptl-lane ' + t.kind + (t.id === main ? ' main' : '')} data-track-id={t.id}
               style={{ top, height, left: half, width: Math.max(width, 1) }}>

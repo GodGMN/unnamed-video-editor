@@ -843,3 +843,5 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
   .editor.phone .phone-context { grid-column: 2; grid-row: 3; }
   .editor.phone .phone-bar { grid-column: 2; grid-row: 4; padding-top: 4px; padding-bottom: 4px; }
 }
+.ptl-name { position: sticky; left: 0; z-index: 3; display: inline-flex; align-items: center; height: 100%; padding: 0 8px; font: 600 10px var(--mono); color: var(--text-muted); background: linear-gradient(90deg, var(--inset) 70%, transparent); pointer-events: none; }
+.ptl-band.main .ptl-name { color: var(--text-soft); }
