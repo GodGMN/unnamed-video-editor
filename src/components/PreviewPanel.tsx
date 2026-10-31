@@ -9,7 +9,7 @@ import { ASPECTS, aspectOf, clipEnd, findMediaClip, findVideoClip, fmtTime } fro
 import type { Media, MediaClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
-import { Check, Checker, ChevronDown, ChevronLeft, ChevronRight, Close, Dropper, Maximize, Minimize, Mute, Pause, Play, SkipEnd, SkipStart, Volume } from './icons';
+import { Check, Checker, ChevronDown, ChevronLeft, ChevronRight, Close, Dropper, Maximize, Minimize, Mute, Pause, Play, Redo, SkipEnd, SkipStart, Undo, Volume } from './icons';
 import { NumberField } from './NumberField';
 import { Slider } from './Slider';
 import { previewSize, useSettings } from '../settings';
@@ -19,9 +19,11 @@ import { reportError } from '../toast/store';
 interface Props {
   editor: Editor;
   totalTime: string;
+  /** The phone layout: no panel header or trim strip, and a transport with undo and redo around play. */
+  compact?: boolean;
 }
 
-export function PreviewPanel({ editor, totalTime }: Props) {
+export function PreviewPanel({ editor, totalTime, compact }: Props) {
   useT();
   const { project, ui } = editor;
   const [volume, setVolume] = useState(70);
@@ -63,8 +65,8 @@ export function PreviewPanel({ editor, totalTime }: Props) {
   }, [previewStatus, source]);
 
   return (
-    <section className="panel preview" ref={panel}>
-      <div className="preview-head">
+    <section className={'panel preview' + (compact ? ' compact' : '')} ref={panel}>
+      {(!compact || source) && <div className="preview-head">
         <span className="panel-title">{translate('preview')}</span>
         <div className="preview-pills">
           {source && <>
@@ -74,9 +76,9 @@ export function PreviewPanel({ editor, totalTime }: Props) {
               {translate('backToTimeline')}
             </button>
           </>}
-          <AspectMenu editor={editor} />
+          {!compact && <AspectMenu editor={editor} />}
         </div>
-      </div>
+      </div>}
 
       <div className="stage-wrap">
         <div className="stage-fit">
@@ -92,41 +94,58 @@ export function PreviewPanel({ editor, totalTime }: Props) {
         </div>
       </div>
 
-      {still ? <StillInfo src={still} />
+      {compact ? null : still ? <StillInfo src={still} />
         : source ? <SourceScrub src={source} time={sourcePlayer.time} seek={sourcePlayer.seek} />
         : focus && focusMedia?.still ? <StillTrim editor={editor} clip={focus.clip} src={focusMedia} />
         : focus && focusMedia ? <Trim editor={editor} clip={focus.clip} src={focusMedia} /> : <div className="trim" />}
 
-      <div className="transport-bar">
-        <span className="mono" style={{ fontSize: 13, fontWeight: 500, minWidth: 160 }}>
-          {fmtTime(transport.time)}<span style={{ color: 'var(--text-muted)' }}> / {transport.total}</span>
-        </span>
-        <div style={{ flex: '1 1 auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
-          <button className="ib transport" onClick={() => transport.seek(transport.start)} aria-label={translate('goToStart')}><SkipStart fill='#C8CEC9' /></button>
-          <button className="ib transport" onClick={() => transport.seek(transport.time - frame)} aria-label={translate('backOneFrame')}><ChevronLeft stroke='#C8CEC9' strokeWidth={2.2} /></button>
-          <button className="play-btn" onClick={() => void transport.toggle()} aria-label={transport.playing ? translate('pauseSpace') : translate('playSpace')} title={translate('playPauseSpace')}>{transport.playing ? <Pause fill="var(--bg)" /> : <Play fill="var(--bg)" />}</button>
-          <button className="ib transport" onClick={() => transport.seek(transport.time + frame)} aria-label={translate('forwardOneFrame')}><ChevronRight stroke='#C8CEC9' strokeWidth={2.2} /></button>
-          <button className="ib transport" onClick={() => transport.seek(transport.end)} aria-label={translate('goToEnd')}><SkipEnd fill='#C8CEC9' /></button>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, justifyContent: 'flex-end' }}>
-          <button className="ib transport" aria-pressed={grid} disabled={!!source} onClick={() => setGrid(!grid)}
-            aria-label={translate('transparencyGrid')} title={grid ? translate('showTransparentAreasAsBlackLikeTheExport') : translate('showTransparentAreasAsACheckerboard')}>
-            <Checker stroke={grid ? 'var(--accent)' : '#C8CEC9'} />
-          </button>
-          <button className="ib transport" aria-label={silent ? translate('unmutePreview') : translate('mutePreview')} aria-pressed={silent}
-            onClick={() => { setMuted(!silent); if (silent && volume === 0) setVolume(70); }}>
-            {silent ? <Mute stroke="var(--warn)" /> : <Volume stroke='#C8CEC9' />}
-          </button>
-          <div style={{ width: 110 }}>
-            <Slider label={translate('previewVolume')} hideLabel className="compact" value={muted ? 0 : volume} unit={'%'} min={0} max={100}
-              onChange={(v) => { setVolume(v); setMuted(false); }} />
+      {compact ? (
+        <div className="transport-bar">
+          <span className="mono transport-time">
+            {fmtTime(transport.time)}<span style={{ color: 'var(--text-muted)' }}> / {transport.total}</span>
+          </span>
+          <div className="transport-main">
+            <button className="ib transport" onClick={editor.undo} disabled={!editor.canUndo} aria-label={translate('undoCtrlZ')}><Undo stroke="#C8CEC9" /></button>
+            <button className="play-btn" onClick={() => void transport.toggle()} aria-label={transport.playing ? translate('pauseSpace') : translate('playSpace')}>{transport.playing ? <Pause fill="var(--bg)" /> : <Play fill="var(--bg)" />}</button>
+            <button className="ib transport" onClick={editor.redo} disabled={!editor.canRedo} aria-label={translate('redoCtrlShiftZ')}><Redo stroke="#C8CEC9" /></button>
           </div>
           <button className="ib transport" onClick={onFullscreen} aria-pressed={fullscreen}
-            aria-label={fullscreen ? translate('exitFullScreenPreview') : translate('fullScreenPreview')} title={fullscreen ? translate('exitFullScreenPreviewEsc') : translate('fullScreenPreview')}>
+            aria-label={fullscreen ? translate('exitFullScreenPreview') : translate('fullScreenPreview')}>
             {fullscreen ? <Minimize stroke='#C8CEC9' /> : <Maximize stroke='#C8CEC9' />}
           </button>
         </div>
-      </div>
+      ) : (
+        <div className="transport-bar">
+          <span className="mono" style={{ fontSize: 13, fontWeight: 500, minWidth: 160 }}>
+            {fmtTime(transport.time)}<span style={{ color: 'var(--text-muted)' }}> / {transport.total}</span>
+          </span>
+          <div style={{ flex: '1 1 auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
+            <button className="ib transport" onClick={() => transport.seek(transport.start)} aria-label={translate('goToStart')}><SkipStart fill='#C8CEC9' /></button>
+            <button className="ib transport" onClick={() => transport.seek(transport.time - frame)} aria-label={translate('backOneFrame')}><ChevronLeft stroke='#C8CEC9' strokeWidth={2.2} /></button>
+            <button className="play-btn" onClick={() => void transport.toggle()} aria-label={transport.playing ? translate('pauseSpace') : translate('playSpace')} title={translate('playPauseSpace')}>{transport.playing ? <Pause fill="var(--bg)" /> : <Play fill="var(--bg)" />}</button>
+            <button className="ib transport" onClick={() => transport.seek(transport.time + frame)} aria-label={translate('forwardOneFrame')}><ChevronRight stroke='#C8CEC9' strokeWidth={2.2} /></button>
+            <button className="ib transport" onClick={() => transport.seek(transport.end)} aria-label={translate('goToEnd')}><SkipEnd fill='#C8CEC9' /></button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 160, justifyContent: 'flex-end' }}>
+            <button className="ib transport" aria-pressed={grid} disabled={!!source} onClick={() => setGrid(!grid)}
+              aria-label={translate('transparencyGrid')} title={grid ? translate('showTransparentAreasAsBlackLikeTheExport') : translate('showTransparentAreasAsACheckerboard')}>
+              <Checker stroke={grid ? 'var(--accent)' : '#C8CEC9'} />
+            </button>
+            <button className="ib transport" aria-label={silent ? translate('unmutePreview') : translate('mutePreview')} aria-pressed={silent}
+              onClick={() => { setMuted(!silent); if (silent && volume === 0) setVolume(70); }}>
+              {silent ? <Mute stroke="var(--warn)" /> : <Volume stroke='#C8CEC9' />}
+            </button>
+            <div style={{ width: 110 }}>
+              <Slider label={translate('previewVolume')} hideLabel className="compact" value={muted ? 0 : volume} unit={'%'} min={0} max={100}
+                onChange={(v) => { setVolume(v); setMuted(false); }} />
+            </div>
+            <button className="ib transport" onClick={onFullscreen} aria-pressed={fullscreen}
+              aria-label={fullscreen ? translate('exitFullScreenPreview') : translate('fullScreenPreview')} title={fullscreen ? translate('exitFullScreenPreviewEsc') : translate('fullScreenPreview')}>
+              {fullscreen ? <Minimize stroke='#C8CEC9' /> : <Maximize stroke='#C8CEC9' />}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -9,7 +9,6 @@ import { useConversionJob } from './convert/job';
 import { importMedia } from './media/import';
 import { useImports } from './media/useImports';
 import { ConvertDialog } from './components/ConvertDialog';
-import { DesktopOnly } from './components/DesktopOnly';
 import { ExportDialog } from './components/ExportDialog';
 import { MediaPanel } from './components/MediaPanel';
 import { PreviewPanel } from './components/PreviewPanel';
@@ -18,20 +17,11 @@ import { PropertiesPanel } from './components/PropertiesPanel';
 import { Timeline } from './components/Timeline';
 import { TopBar } from './components/TopBar';
 import { ProjectLibrary } from './components/ProjectLibrary';
+import { PhoneEditor } from './components/phone/PhoneEditor';
+import { LibraryGrid, TextT } from './components/icons';
+import { useLayoutMode } from './components/useLayoutMode';
 import { activeProjectId, listProjects, loadProject, selectProject } from './editor/storage';
 import { reportError } from './toast/store';
-
-const MIN_WIDTH = 1280;
-
-function useWindowWidth() {
-  const [width, setWidth] = useState(window.innerWidth);
-  useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-  return width;
-}
 
 const imported = new WeakSet<File>();
 
@@ -74,7 +64,7 @@ function useConvertedMedia(editor: Editor | null) {
 }
 
 function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Project; draft: boolean; onHome: (project: Project) => void }) {
-  const width = useWindowWidth();
+  const mode = useLayoutMode();
   const editor = useProject(id, initial, draft);
   const [pendingImports, setPendingImports] = useState(false);
   const [mediaRevision, setMediaRevision] = useState(0);
@@ -84,8 +74,9 @@ function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Projec
   const [converting, setConverting] = useState<Pick<Media, 'id' | 'name'> | null>(null);
   const converted = useConvertedMedia(editor);
   const imports = useImports(editor);
+  // Tablets keep the media library in a drawer over the preview, opened from a rail.
+  const [library, setLibrary] = useState(false);
 
-  if (width < MIN_WIDTH) return <DesktopOnly width={width} />;
   if (!editor) return null;
 
   const { project } = editor;
@@ -94,7 +85,7 @@ function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Projec
   const clipCount = videoTracks(project).reduce((n, t) => n + t.clips.length, 0);
 
   function leave() {
-    if (pendingImports || converted.pending || job) {
+    if (pendingImports || imports.pending || converted.pending || job) {
       reportError(translate('cannotLeaveTheEditorYet'), translate('finishBeforeLeavingEditor'));
       return;
     }
@@ -103,22 +94,43 @@ function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Projec
     });
   }
 
+  const dialogs = <>
+    {exporting && (
+      <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project, editor.layout)}
+        onClose={() => setExporting(false)} />
+    )}
+    {settings && <SettingsDialog output={project.output} onClose={() => setSettings(false)} />}
+    {converting && <ConvertDialog mediaId={converting.id} fileName={converting.name} onClose={() => setConverting(null)} />}
+  </>;
+
+  if (mode === 'phone') {
+    return <>
+      <PhoneEditor key={mediaRevision} editor={editor} totalTime={totalTime} onLeave={leave} onExport={() => setExporting(true)} onSettings={() => setSettings(true)}
+        onImport={imports.ingest} importing={imports.pending} onConvert={setConverting} />
+      {dialogs}
+    </>;
+  }
+
+  const media = <MediaPanel onBusy={setPendingImports} onReconnect={() => setMediaRevision(n => n + 1)} onImport={imports.ingest} importing={imports.pending} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting}
+    onAdd={mode === 'tablet' ? (id) => editor.appendMedia([id]) : undefined} />;
   return (
-    <div className="editor">
+    <div className={'editor' + (mode === 'tablet' ? ' tablet' : '')}>
       <TopBar onUndo={editor.undo} onRedo={editor.redo} canUndo={editor.canUndo} canRedo={editor.canRedo} onProjects={leave} onSettings={() => setSettings(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onShowConversion={(id, name) => setConverting({ id, name })} />
       <div className="workspace">
-        <MediaPanel onBusy={setPendingImports} onReconnect={() => setMediaRevision(n => n + 1)} onImport={imports.ingest} importing={imports.pending} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
+        {mode === 'tablet' ? <>
+          <nav className="rail" aria-label={translate('library')}>
+            <button className="ib square" aria-pressed={library} aria-label={translate('library')} title={translate('library')} onClick={() => setLibrary(!library)}><LibraryGrid size={18} /></button>
+            <button className="ib square" aria-label={translate('addTextAtThePlayheadT')} title={translate('addTextAtThePlayheadT')} onClick={() => editor.addText(editor.ui.playhead)}><TextT size={18} /></button>
+          </nav>
+          {/* Kept mounted while closed so imports and source checks carry on. */}
+          <div className="library-drawer" hidden={!library}>{media}</div>
+        </> : media}
         <PreviewPanel key={mediaRevision} editor={editor} totalTime={totalTime} />
         <PropertiesPanel editor={editor} />
       </div>
       <Timeline key={mediaRevision} editor={editor} onDropFiles={imports.ingest} />
-      {exporting && (
-        <ExportDialog projectSlug={project.name.toLowerCase().replace(/\s+/g, '-')} source={exportSource(project, editor.layout)}
-          onClose={() => setExporting(false)} />
-      )}
-      {settings && <SettingsDialog output={project.output} onClose={() => setSettings(false)} />}
-      {converting && <ConvertDialog mediaId={converting.id} fileName={converting.name} onClose={() => setConverting(null)} />}
+      {dialogs}
     </div>
   );
 }
@@ -140,7 +152,6 @@ export function App() {
   const [error, setError] = useState('');
   const [initialized, setInitialized] = useState(false);
   const [screen, setScreen] = useState<'home' | 'editor'>('home');
-  const width = useWindowWidth();
   useEffect(() => {
     let live = true;
     initialProject ??= initialize();
@@ -148,7 +159,6 @@ export function App() {
     return () => { live = false; };
   }, []);
   if (error) return <div role="alert" className="startup-error">{translate('projectHomeCouldNotOpenProjectStorage')}{error}<button className="gb" onClick={() => location.reload()}>{translate('projectHomeRetry')}</button></div>;
-  if (width < MIN_WIDTH) return <DesktopOnly width={width} />;
   if (!initialized) return <p role="status">{translate('projectHomeOpeningProjects')}</p>;
   return screen === 'home' || !active
     ? <ProjectLibrary lastOpenedId={active?.id ?? ''} onOpen={(id, project, draft) => { setActive({ id, project, draft }); setScreen('editor'); }} />

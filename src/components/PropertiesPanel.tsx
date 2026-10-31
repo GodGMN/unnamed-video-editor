@@ -15,9 +15,10 @@ import { useFieldDraft } from './useFieldDraft';
 
 const TITLES = () => ({ clip: translate('videoClip'), audio: translate('audioClip'), trans: translate('transition'), text: translate('textOverlay') } as const);
 
-type VideoTab = 'transform' | 'crop' | 'key' | 'timing' | 'info';
+export type VideoTab = 'transform' | 'crop' | 'key' | 'timing' | 'info';
 
-export function PropertiesPanel({ editor }: { editor: Editor }) {
+/** `tab` and `onTab` let the phone layout open a video clip on a given tab; otherwise the panel keeps its own. */
+export function PropertiesPanel({ editor, tab, onTab }: { editor: Editor; tab?: VideoTab; onTab?: (tab: VideoTab) => void }) {
   useT();
   const { project, ui } = editor;
   const sel = ui.sel;
@@ -26,7 +27,9 @@ export function PropertiesPanel({ editor }: { editor: Editor }) {
   const audio = sel?.kind === 'audio' ? findAudioClip(project, sel.id) : null;
   const text = sel?.kind === 'text' ? findTextClip(project, sel.id) : null;
   // Kept here so the tab stays put while you click between clips.
-  const [videoTab, setVideoTab] = useState<VideoTab>('transform');
+  const [ownTab, setOwnTab] = useState<VideoTab>('transform');
+  const videoTab = tab ?? ownTab;
+  const setVideoTab = onTab ?? setOwnTab;
   return (
     <aside className="panel props">
       <div className="props-head"><span className="panel-title">{source ? translate('sourceInfo') : sel ? TITLES()[sel.kind] : translate('properties')}</span></div>

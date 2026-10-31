@@ -2,7 +2,7 @@ import { autoKeyframePatch } from './keyframes';
 import { amend, createHistory, record, travel } from './history';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, dropMedia, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, setAspect, settle, trimClipEdge, videoTracks } from './model';
+import { newId, acceptsMedia, dropMedia, freeAudioTrack, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, setAspect, settle, trimClipEdge, videoTracks } from './model';
 import type { Aspect, AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
 import { removeMediaFiles } from '../media/files';
 import { SEED_SELECTION } from './seed';
@@ -238,6 +238,48 @@ export function useProject(id: string, initial: Project, draft = false) {
       cancelMedia: (mediaId: string) => {
         amendProject(p => removeMedia(p, mediaId));
         setUi(u => reconcileUi(removeMedia(projectRef.current, mediaId), u));
+      },
+      /**
+       * Adds sources to the end of the sequence, in order: video and images on the main video track,
+       * audio-only sources on the first audio track. Selects the first clip placed.
+       */
+      appendMedia: (mediaIds: string[]) => {
+        let p = projectRef.current;
+        if (!p) return;
+        let first: ClipSelection | null = null;
+        for (const mediaId of mediaIds) {
+          const media = p.media[mediaId];
+          const main = videoTracks(p).find((t) => t.magnetic) ?? videoTracks(p).at(-1);
+          const track = [main, ...p.tracks].find((t) => !!t && t.kind !== 'text' && acceptsMedia(t, media));
+          if (!track || track.kind === 'text') continue;
+          const id = newId();
+          const end = Math.max(0, ...track.clips.map(clipEnd));
+          p = placeMedia(p, mediaId, track.id, end, id);
+          first ??= { kind: clipKind(track.kind), id };
+        }
+        if (!first) return;
+        const sel = first;
+        setProject(settle(p));
+        setUi((u) => ({ ...u, source: null, sel, picked: [sel], focusClip: focusOf(sel, u.focusClip), menu: null }));
+      },
+      /** Adds sound sources back to back from `time`, each on an audio track that's free there, so nothing lands on other audio. */
+      addAudio: (mediaIds: string[], time: number) => {
+        let p = projectRef.current;
+        if (!p) return;
+        let first: ClipSelection | null = null;
+        for (const mediaId of mediaIds) {
+          const media = p.media[mediaId];
+          if (!media?.audio || !media.decodable) continue;
+          const free = freeAudioTrack(p, time, time + media.duration, newId());
+          const id = newId();
+          p = placeMedia(free.project, mediaId, free.trackId, time, id);
+          first ??= { kind: 'audio', id };
+          time += media.duration;
+        }
+        if (!first) return;
+        const sel = first;
+        setProject(settle(p));
+        setUi((u) => ({ ...u, source: null, sel, picked: [sel], focusClip: focusOf(sel, u.focusClip), menu: null }));
       },
       placeMedia: (mediaId: string, trackId: string, time: number) => {
         const id = newId();
