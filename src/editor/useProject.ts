@@ -213,7 +213,7 @@ export function useProject(id: string, initial: Project, draft = false) {
       pickClips: (clips: ClipSelection[]) => setUi((u) => {
         const kept = clips.find((x) => x.kind === u.sel?.kind && x.id === u.sel.id);
         const sel = kept ?? clips.at(-1) ?? null;
-        return { ...u, sel, picked: clips, menu: null, focusClip: focusOf(sel, u.focusClip) };
+        return { ...u, source: null, sel, picked: clips, menu: null, focusClip: focusOf(sel, u.focusClip) };
       }),
       /** Moves clip `id` to `start`, `trackShift` tracks down; `others` shift by the same amount. */
       moveClip: (snapshot: Project, id: string, start: number, others: string[] = [], trackShift = 0) =>
@@ -224,7 +224,7 @@ export function useProject(id: string, initial: Project, draft = false) {
       /** Double-click: locks the playhead to a clip's range. */
       lockTo: (id: string) => setUi((u) => ({ ...u, lockClip: id, source: null, menu: null })),
       /** Plays a Media item in the preview on its own, without touching the timeline. */
-      previewSource: (mediaId: string) => setUi((u) => ({ ...u, source: mediaId, keyPick: null })),
+      previewSource: (mediaId: string) => setUi((u) => ({ ...u, source: mediaId, sel: null, picked: [], menu: null, keyPick: null })),
       /** Arms the preview eyedropper for video clip `id`'s key colour; null disarms it. */
       pickKey: (id: string | null) => setUi((u) => ({ ...u, keyPick: id, source: id ? null : u.source })),
       /** Puts the timeline back in the preview. */
