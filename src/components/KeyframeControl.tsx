@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Editor } from '../editor/useProject';
+import { clipEnd, toSource, toTimeline } from '../editor/model';
 import type { VideoClip } from '../editor/model';
 import { clipFrame, evaluateVideoClip, keyframeAt, removeKeyframe, saveKeyframe } from '../editor/keyframes';
 import type { AnimatedProperty } from '../editor/keyframes';
@@ -9,7 +10,7 @@ import { KeyframeEasing } from './KeyframeEasing';
 export function ClipFrameCounter({ editor, clip }: { editor: Editor; clip: VideoClip }) {
   const fps = editor.project.output.fps;
   const frame = clipFrame(clip, editor.ui.playhead, fps);
-  const outside = editor.ui.playhead < clip.start || editor.ui.playhead >= clip.start + clip.outS - clip.inS;
+  const outside = editor.ui.playhead < clip.start || editor.ui.playhead >= clipEnd(clip);
   const seek = (index: number) => { editor.closeSource(); editor.setPlayhead(clip.start + index / fps); };
   return <div className="clip-frame-counter">
     <button className="ib" aria-label={t('previousFrame')} disabled={frame.index === 0 && !outside} onClick={() => seek(Math.max(0, frame.index - 1))}>‹</button>
@@ -25,14 +26,14 @@ export function KeyframeControl({ editor, clip, property, label, unit, children 
   const fps = editor.project.output.fps;
   const frame = clipFrame(clip, editor.ui.playhead, fps);
   const keys = clip.keyframes?.[property] ?? [];
-  const sourceTime = clip.inS + editor.ui.playhead - clip.start;
+  const sourceTime = toSource(clip, editor.ui.playhead);
   const key = keyframeAt(keys, sourceTime) ?? keyframeAt(keys, frame.sourceTime);
   const keyTime = key?.time ?? frame.sourceTime;
-  const outside = editor.ui.playhead < clip.start || editor.ui.playhead >= clip.start + clip.outS - clip.inS;
+  const outside = editor.ui.playhead < clip.start || editor.ui.playhead >= clipEnd(clip);
   const visible = keys.filter(k => k.time >= clip.inS - 1e-6 && k.time < clip.outS - 1e-6);
   const prev = visible.filter(k => k.time < sourceTime - 1e-6).at(-1);
   const next = visible.find(k => k.time > sourceTime + 1e-6);
-  const seek = (time: number) => { editor.closeSource(); editor.setPlayhead(clip.start + time - clip.inS); };
+  const seek = (time: number) => { editor.closeSource(); editor.setPlayhead(toTimeline(clip, time)); };
   const current = evaluateVideoClip(clip, editor.ui.playhead)[property];
   const toggleLabel = key ? `${t('removeKeyframe')} · ${label}` : t('addPropertyKeyframe', { property: label });
   return <div className="keyframe-control" data-property={property}>

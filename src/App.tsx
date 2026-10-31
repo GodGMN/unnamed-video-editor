@@ -8,6 +8,7 @@ import type { Editor } from './editor/useProject';
 import { useConversionJob } from './convert/job';
 import { importMedia } from './media/import';
 import { useImports } from './media/useImports';
+import type { PickedFile } from './media/links';
 import { ConvertDialog } from './components/ConvertDialog';
 import { ExportDialog } from './components/ExportDialog';
 import { MediaPanel } from './components/MediaPanel';
@@ -63,7 +64,8 @@ function useConvertedMedia(editor: Editor | null) {
   return { pending };
 }
 
-function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Project; draft: boolean; onHome: (project: Project) => void }) {
+/** `files` were dropped on the project library to start this project; they are imported once and placed on V1. */
+function EditorApp({ id, initial, draft, files, onHome }: { id: string; initial: Project; draft: boolean; files?: PickedFile[]; onHome: (project: Project) => void }) {
   const mode = useLayoutMode();
   const editor = useProject(id, initial, draft);
   const [pendingImports, setPendingImports] = useState(false);
@@ -76,6 +78,14 @@ function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Projec
   const imports = useImports(editor);
   // Tablets keep the media library in a drawer over the preview, opened from a rail.
   const [library, setLibrary] = useState(false);
+  const ready = !!editor;
+  const dropped = useRef(files);
+  useEffect(() => {
+    const batch = dropped.current, main = editor?.project.tracks.find((t) => t.kind === 'video' && t.magnetic)?.id;
+    if (!ready || !batch || !main) return;
+    dropped.current = undefined;
+    void imports.ingest(batch, { trackId: main, timeFor: () => 0 });
+  }, [ready]);
 
   if (!editor) return null;
 
@@ -148,7 +158,7 @@ async function initialize() {
   return null;
 }
 export function App() {
-  const [active, setActive] = useState<{ id: string; project: Project; draft?: boolean } | null>(null);
+  const [active, setActive] = useState<{ id: string; project: Project; draft?: boolean; files?: PickedFile[] } | null>(null);
   const [error, setError] = useState('');
   const [initialized, setInitialized] = useState(false);
   const [screen, setScreen] = useState<'home' | 'editor'>('home');
@@ -161,6 +171,6 @@ export function App() {
   if (error) return <div role="alert" className="startup-error">{translate('projectHomeCouldNotOpenProjectStorage')}{error}<button className="gb" onClick={() => location.reload()}>{translate('projectHomeRetry')}</button></div>;
   if (!initialized) return <p role="status">{translate('projectHomeOpeningProjects')}</p>;
   return screen === 'home' || !active
-    ? <ProjectLibrary lastOpenedId={active?.id ?? ''} onOpen={(id, project, draft) => { setActive({ id, project, draft }); setScreen('editor'); }} />
-    : <EditorApp key={active.id} id={active.id} initial={active.project} draft={!!active.draft} onHome={project => { setActive({ id: active.id, project }); setScreen('home'); }} />;
+    ? <ProjectLibrary lastOpenedId={active?.id ?? ''} onOpen={(id, project, draft, files) => { setActive({ id, project, draft, files }); setScreen('editor'); }} />
+    : <EditorApp key={active.id} id={active.id} initial={active.project} draft={!!active.draft} files={active.files} onHome={project => { setActive({ id: active.id, project }); setScreen('home'); }} />;
 }

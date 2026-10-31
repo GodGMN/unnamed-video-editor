@@ -72,6 +72,8 @@ interface ClipBase {
   /** Source in/out points. */
   inS: number;
   outS: number;
+  /** Playback rate, from SPEED_MIN to SPEED_MAX; missing means 1. Source seconds per timeline second. */
+  speed?: number;
   /** Video and audio clips cut from the same source together share a link id. */
   linkId: string | null;
   /** Linked clips trim together. Kept in sync across every clip sharing `linkId`. */
@@ -124,6 +126,8 @@ export interface AudioClip extends ClipBase, Fades {
   /** Decibels, from GAIN_MIN_DB (silence) to GAIN_MAX_DB. */
   gainDb: number;
   muted: boolean;
+  /** Whether a sped-up or slowed-down clip keeps its pitch (time-stretch) or shifts it like tape; missing means true. */
+  keepPitch?: boolean;
 }
 
 export interface TextClip {
@@ -235,6 +239,11 @@ export const STILL_DURATION = 5;
 /** How long an animation dropped on the timeline lasts: whole loops, at least `STILL_DURATION`. */
 export const animationDuration = (loop: number) => Math.round(Math.ceil(STILL_DURATION / loop - 1e-9) * loop * 1e6) / 1e6;
 export const DEFAULT_TRANSITION: Transition = { type: 'cut', duration: 0.5 };
+export const SPEED_MIN = 0.25;
+export const SPEED_MAX = 4;
+export const SPEED_PRESETS = [0.25, 0.5, 1, 1.5, 2, 4];
+/** Below this speed even good time-stretching audibly smears the sound. */
+export const SPEED_AUDIO_WARNING = 0.5;
 
 type ClipDefaults<C> = Omit<C, 'id' | 'mediaId' | 'start' | 'inS' | 'outS' | 'linkId'>;
 /** Property values of a fresh clip; also what the properties panel's reset buttons restore. */
@@ -263,7 +272,12 @@ export const MISSING_MEDIA: Media = {
 /* ---------- Queries ---------- */
 
 export const isMediaClip = (c: Clip): c is MediaClip => 'mediaId' in c;
-export const clipDuration = (c: Clip) => (isMediaClip(c) ? c.outS - c.inS : c.duration);
+export const clipSpeed = (c: MediaClip) => c.speed ?? 1;
+export const clipDuration = (c: Clip) => (isMediaClip(c) ? (c.outS - c.inS) / clipSpeed(c) : c.duration);
+/** The source time a clip shows at sequence time `time`. */
+export const toSource = (c: MediaClip, time: number) => c.inS + (time - c.start) * clipSpeed(c);
+/** The sequence time at which a clip shows source time `source`. */
+export const toTimeline = (c: MediaClip, source: number) => c.start + (source - c.inS) / clipSpeed(c);
 export const clipEnd = (c: Clip) => c.start + clipDuration(c);
 /** The selection kind for clips on a track of this kind. */
 export const clipKind = (track: Track['kind']): ClipKind => (track === 'video' ? 'clip' : track);
@@ -425,7 +439,7 @@ export function settle(p: Project): Project {
 }
 
 /** Clip fields that apply to every linked partner when `linked` is on. */
-const LINKED_KEYS = ['inS', 'outS', 'start'] as const;
+const LINKED_KEYS = ['inS', 'outS', 'start', 'speed'] as const;
 
 /** Patches one clip. Trims carry over to linked partners, and `linked` itself always does. */
 export function patchClip<C extends Clip>(p: Project, id: string, patch: Partial<C>): Project {
@@ -566,12 +580,13 @@ export function splitClip(p: Project, id: string, time: number, rightId: string)
         const left = round6(time - c.start);
         return [{ ...c, duration: left }, { ...c, id: newId, start: round6(time), duration: round6(c.duration - left) }];
       }
-      const cut = round6(c.inS + time - c.start);
+      const cut = round6(toSource(c, time));
       const left = { ...c, outS: cut };
       const right = { ...c, id: newId, start: round6(time), inS: cut, linkId, linked: !!linkId && c.linked };
+      // Fades are in sequence seconds.
       return [
-        { ...left, fadeIn: Math.min(c.fadeIn, cut - c.inS), fadeOut: 0, ...(t.kind === 'video' && { transitionOut: null }) },
-        { ...right, fadeIn: 0, fadeOut: Math.min(c.fadeOut, c.outS - cut) },
+        { ...left, fadeIn: Math.min(c.fadeIn, time - c.start), fadeOut: 0, ...(t.kind === 'video' && { transitionOut: null }) },
+        { ...right, fadeIn: 0, fadeOut: Math.min(c.fadeOut, clipEnd(c) - time) },
       ];
     });
   });
@@ -639,11 +654,48 @@ export function trimClipEdge(p: Project, id: string, edge: 'in' | 'out', time: n
     return patchClip<MediaClip>(p, id, { start, outS: round6(c.outS + c.start - start) });
   }
   const source = media.duration;
-  const min = Math.min(MIN_TRIM_DURATION, source);
-  if (edge === 'out') return patchClip<MediaClip>(p, id, { outS: round6(Math.min(source, Math.max(c.inS + min, c.outS + time - end))) });
-  // The start edge moves the clip's start along with its in point.
-  const d = Math.max(-c.inS, -c.start, Math.min(c.outS - min - c.inS, time - c.start));
-  return patchClip<MediaClip>(p, id, { inS: round6(c.inS + d), start: round6(c.start + d) });
+  const speed = clipSpeed(c);
+  // In source seconds.
+  const min = Math.min(MIN_TRIM_DURATION * speed, source);
+  if (edge === 'out') return patchClip<MediaClip>(p, id, { outS: round6(Math.min(source, Math.max(c.inS + min, c.outS + (time - end) * speed))) });
+  // The start edge moves the clip's start along with its in point; `d` is in sequence seconds.
+  const d = Math.max(-c.inS / speed, -c.start, Math.min((c.outS - min - c.inS) / speed, time - c.start));
+  return patchClip<MediaClip>(p, id, { inS: round6(c.inS + d * speed), start: round6(c.start + d) });
+}
+
+/**
+ * Sets the speed of clip `id`, and of its linked partners, keeping its source range and start.
+ * The clip grows or shrinks at its end, and the clips after it on each changed track move by
+ * the same amount, so nothing ends up overlapping. Stills have no speed.
+ */
+export function setClipSpeed(p: Project, id: string, speed: number): Project {
+  const found = findMediaClip(p, id);
+  if (!found || p.media[found.clip.mediaId]?.still) return p;
+  const next = round6(Math.max(SPEED_MIN, Math.min(SPEED_MAX, speed)));
+  const group = [found.clip, ...(isLinked(found.clip) ? partnersOf(p, found.clip) : [])];
+  const changed = new Map(group.map((c) => [c.id, c]));
+  const shifts = new Map<string, number>();
+  // A clip pushed from several tracks moves by the largest push, and takes its partners along.
+  const push = (c: Clip, delta: number) => {
+    for (const x of [c, ...partnersOf(p, c)]) {
+      if (changed.has(x.id)) continue;
+      const prev = shifts.get(x.id) ?? 0;
+      if (Math.abs(delta) > Math.abs(prev)) shifts.set(x.id, delta);
+    }
+  };
+  for (const track of p.tracks) {
+    const own = (track.clips as Clip[]).find((c) => changed.has(c.id)) as MediaClip | undefined;
+    if (!own) continue;
+    const end = clipEnd(own);
+    const delta = (own.outS - own.inS) / next - (end - own.start);
+    // Later clips keep their distance from the end, so crossfade overlaps survive.
+    for (const c of track.clips as Clip[]) if (c.start > own.start + EPS) push(c, delta);
+  }
+  return settle(mapClips(p, (clips) => clips.map((c) => {
+    if (changed.has(c.id)) return { ...c, speed: next };
+    const shift = shifts.get(c.id);
+    return shift ? { ...c, start: round6(Math.max(0, c.start + shift)) } : c;
+  })));
 }
 
 export function patchTrack(p: Project, id: string, patch: Partial<{ hidden: boolean; muted: boolean }>): Project {

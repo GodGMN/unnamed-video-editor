@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { Editor } from '../editor/useProject';
+import { clipEnd, toTimeline } from '../editor/model';
 import type { VideoClip } from '../editor/model';
 import { clipFrame, keyframeInterval, setKeyframeEasing } from '../editor/keyframes';
 import type { AnimatedProperty, Easing, Keyframe } from '../editor/keyframes';
@@ -29,7 +30,7 @@ function EasingCurve({ curve }: { curve: string }) {
 function frameLabel(clip: VideoClip, key: Keyframe, fps: number) {
   if (key.time < clip.inS - EPS) return t('easingBeforeClip');
   if (key.time >= clip.outS - EPS) return t('easingAfterClip');
-  return t('easingFrame', { frame: Math.round((key.time - clip.inS) * fps) + 1 });
+  return t('easingFrame', { frame: Math.round((toTimeline(clip, key.time) - clip.start) * fps) + 1 });
 }
 
 export function KeyframeEasing({ editor, clip, property, label, keys, sourceTime }: {
@@ -48,9 +49,8 @@ export function KeyframeEasing({ editor, clip, property, label, keys, sourceTime
   const start = keys[index], end = keys[index + 1];
   const current = preset(start?.easing);
   const summary = `${t('keyframeCount', { count: keys.length })} · ${t(current.name)}`;
-  const clipEnd = clip.start + clip.outS - clip.inS;
-  const playFrom = Math.max(clip.start, clip.start + (start?.time ?? 0) - clip.inS);
-  const playTo = Math.min(clipFrame(clip, clipEnd, fps).timelineTime, clip.start + (end?.time ?? 0) - clip.inS);
+  const playFrom = Math.max(clip.start, toTimeline(clip, start?.time ?? 0));
+  const playTo = Math.min(clipFrame(clip, clipEnd(clip), fps).timelineTime, toTimeline(clip, end?.time ?? 0));
   const playable = playTo - playFrom > EPS;
 
   const close = (refocus: boolean) => { setOpen(false); if (refocus) trigger.current?.focus(); };

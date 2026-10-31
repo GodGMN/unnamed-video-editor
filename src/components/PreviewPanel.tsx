@@ -5,7 +5,7 @@ import { useSourcePlayer, useStillSource } from '../playback/useSourcePlayer';
 import { PreviewStrip, SourceFrameStrip } from '../media/PreviewStrip';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, PointerEvent } from 'react';
-import { ASPECTS, aspectOf, clipEnd, findMediaClip, findVideoClip, fmtTime } from '../editor/model';
+import { ASPECTS, aspectOf, clipEnd, findMediaClip, findVideoClip, fmtTime, toSource, toTimeline } from '../editor/model';
 import type { Media, MediaClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
@@ -335,14 +335,14 @@ function Trim({ editor, clip: cs, src }: { editor: Editor; clip: MediaClip; src:
   const startDrag = useDrag();
   const accent = 'var(--accent)';
   const clipId = cs.id;
-  const at = cs.inS + ui.playhead - cs.start;
+  const at = toSource(cs, ui.playhead);
   // Where the timeline playhead sits relative to this clip; outside it there's no scrub position to show.
   const outside = at < cs.inS - 1e-6 ? 'before' : at > cs.outS + 1e-6 ? 'after' : null;
   const scrub = Math.max(cs.inS, Math.min(cs.outS, at));
   const p = (s: number) => (s / src.duration * 100).toFixed(2) + '%';
   const usePct = p(cs.outS - cs.inS);
   const round = (x: number) => Math.round(x * 100) / 100;
-  const seek = (time: number) => { setScrub(time); setPlayhead(cs.start + time - cs.inS); };
+  const seek = (time: number) => { setScrub(time); setPlayhead(toTimeline(cs, time)); };
 
   const dragHandle = (which: 'in' | 'out') => (e: PointerEvent<HTMLButtonElement>) => {
     const bar = e.currentTarget.parentElement!.getBoundingClientRect();
