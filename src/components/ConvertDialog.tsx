@@ -1,9 +1,9 @@
 import { useT } from '../i18n';
 import { t as translate, formatNumber } from '../i18n/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ArrowRight } from './icons';
-import { Alert, Choice, Dialog, Note, Progress, ResultCard } from './Dialog';
+import { Choice, Dialog, Note, Progress, ResultCard } from './Dialog';
 import type { StageStatus } from './Dialog';
 import { outputSpec } from '../convert/convert';
 import type { ConvertOptions } from '../convert/convert';
@@ -11,6 +11,7 @@ import { cancelConversion, progressPercent, startConversion, useConversionJob } 
 import type { Job } from '../convert/job';
 import type { SourceInfo } from '../convert/probe';
 import { readMediaFile } from '../media/files';
+import { reportError } from '../toast/store';
 
 type Res = 'keep' | '1080' | '720';
 const SHORT_SIDE: Record<Res, number | null> = { keep: null, '1080': 1080, '720': 720 };
@@ -34,6 +35,11 @@ const outName = (name: string) => name.replace(/\.[^.]+$/, '') + '.mp4';
 export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
   useT();
   const job = useConversionJob();
+  const hadJob = useRef(!!job);
+  useEffect(() => {
+    if (job) { hadJob.current = true; return; }
+    if (hadJob.current) { hadJob.current = false; onClose(); }
+  }, [job, onClose]);
   // Reopened during a background job: cancelling should land back on the same file and settings.
   const [file, setFile] = useState<File | null>(job?.file ?? null);
   // The library keeps imported sources; only media without a stored copy (the demo project) needs picking.
@@ -43,7 +49,7 @@ export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
     let live = true;
     readMediaFile(mediaId).then(
       (stored) => { if (live) { if (stored) setFile(new File([stored], fileName, { type: stored.type })); else setMissing(true); } },
-      () => { if (live) setMissing(true); },
+      (error: unknown) => { if (live) { setMissing(true); reportError(translate('couldNotReadThisMediaFile'), error); } },
     );
     return () => { live = false; };
   }, [mediaId, fileName, file]);
@@ -67,6 +73,11 @@ export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
     return () => { live = false; };
   }, [file]);
 
+  const probeError = probe?.file === file ? probe?.error : undefined;
+  useEffect(() => {
+    if (probeError) reportError(translate('couldnTReadThisFile'), probeError);
+  }, [probeError]);
+
   const info = probe?.file === file ? probe?.info : undefined;
   const resOptions = (() => {
     if (!info) return [];
@@ -83,14 +94,13 @@ export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
   const cancel = () => cancelConversion();
   const finish = () => { cancelConversion(); onClose(); };
 
-  if (job) {
-    const retry = () => startConversion(job.mediaId, job.file, job.source, { ...job.options, shortSide: 720 }, job.addToTimeline);
-    return <JobView job={job} onClose={onClose} onCancel={cancel} onFinish={finish} onRetry720={retry} />;
-  }
+  if (job) return <JobView job={job} onClose={onClose} onCancel={cancel} onFinish={finish} />;
 
   const name = file?.name ?? fileName;
-  const error = probe?.file === file ? probe?.error : undefined;
-  const subtitle = info?.decodable
+  const error = probeError;
+  const subtitle = error
+    ? translate('chooseAnotherFile')
+    : info?.decodable
     ? translate('thisBrowserCanAlreadyPlayThisFileButAn')
     : translate('thisBrowserCanTPlayVideoWeCanMake', { value1: info?.videoCodec.split(' ')[0] ?? translate('uiThis') });
 
@@ -106,12 +116,7 @@ export function ConvertDialog({ mediaId, fileName, onClose }: Props) {
           </>
         )}
 
-        {file && error && (
-          <>
-            <Alert title={translate('couldnTReadThisFile')}>{error}</Alert>
-            <FilePicker onPick={setFile} label={translate('chooseAnotherFile')} />
-          </>
-        )}
+        {file && error && <FilePicker onPick={setFile} label={translate('chooseAnotherFile')} />}
 
         {file && !info && !error && <Note>{translate('reading3', { value1: file.name })}</Note>}
 
@@ -164,12 +169,11 @@ function OutputCard({ name, info, options }: { name: string; info: SourceInfo; o
   );
 }
 
-function JobView({ job, onClose, onCancel, onFinish, onRetry720 }: {
+function JobView({ job, onClose, onCancel, onFinish }: {
   job: Job;
   onClose: () => void;
   onCancel: () => void;
   onFinish: () => void;
-  onRetry720: () => void;
 }) {
   useT();
   const { state, source, out } = job;
@@ -226,25 +230,6 @@ function JobView({ job, onClose, onCancel, onFinish, onRetry720 }: {
       </Dialog>
     );
   }
-
-  const oom = state.outOfMemoryAt !== undefined;
-  return (
-    <Dialog id="cv-title" title={translate('conversionStopped')} subtitle={oom ? translate('yourBrowserRanOutOfMemory') : translate('somethingWentWrongWhileConverting')} warn width={560} onClose={onClose}>
-      <div className="dialog-body">
-        {oom ? (
-          <Alert title={translate('ranOutOfMemoryAt', { value1: mmss(state.outOfMemoryAt!) })}>{translate('convertingPAtNeedsMoreMemoryThanThisTabHas', { value1: out.height, value2: fpsLabel(out.fps) })}</Alert>
-        ) : (
-          <Alert title={translate('theConverterCouldnTFinish')}>{translate('nothingInYourProjectChanged2', { value1: state.message })}</Alert>
-        )}
-        <div className="dialog-actions">
-          <button className="gb" onClick={onCancel}>{translate('close')}</button>
-          {oom && Math.min(out.width, out.height) > 720 && (
-            <button className="primary" onClick={onRetry720}>{translate('tryAgainAt720p')}</button>
-          )}
-        </div>
-      </div>
-    </Dialog>
-  );
 }
 
 function FilePicker({ onPick, label }: { onPick: (f: File) => void; label: string }) {

@@ -5,6 +5,8 @@ import type { Aspect, AudioClip, ClipSelection, EditorUi, Media, MenuState, Proj
 import { removeMediaFiles } from '../media/files';
 import { SEED_SELECTION } from './seed';
 import { createProject, listProjects, saveProject, selectProject } from './storage';
+import { t as translate } from '../i18n/core';
+import { reportError } from '../toast/store';
 
 const SAVE_DELAY_MS = 250;
 
@@ -38,7 +40,7 @@ function reconcileUi(p: Project, ui: EditorUi): EditorUi {
   return { ...ui, sel, picked, focusClip, lockClip, source, keyPick, menu: null };
 }
 
-export type SaveState = { status: 'saved' | 'saving' | 'failed'; error?: string };
+export type SaveState = { status: 'saved' | 'saving' | 'failed' };
 
 /** Media whose import was cut off by a reload never finished linking its file, so it goes, clips and all. */
 function dropUnfinished(p: Project): Project {
@@ -60,6 +62,7 @@ function usePersistentProject(id: string, initial: Project, draft: boolean) {
   const latest = useRef(project);
   latest.current = project;
   const stored = useRef<Promise<void> | null>(draft ? null : Promise.resolve());
+  const saveRef = useRef<() => Promise<void>>(async () => {});
   const persist = useCallback(async (snapshot: Project) => {
     if (!stored.current) {
       if (snapshot === initial) return;
@@ -77,10 +80,15 @@ function usePersistentProject(id: string, initial: Project, draft: boolean) {
       await persist(snapshot);
       if (snapshot === latest.current) setSaveState({ status: 'saved' });
     } catch (error) {
-      setSaveState({ status: 'failed', error: error instanceof Error ? error.message : undefined });
+      setSaveState({ status: 'failed' });
+      reportError(translate('couldNotSaveTheProject'), error, {
+        label: translate('projectHomeRetrySave'),
+        run: () => { void saveRef.current().catch(() => undefined); },
+      }, 'save-project');
       throw error;
     }
   }, [persist]);
+  saveRef.current = save;
   useEffect(() => {
     setSaveState({ status: 'saving' });
     const timer = setTimeout(() => { void save().catch(() => undefined); }, SAVE_DELAY_MS);

@@ -27,8 +27,8 @@ function ConversionProgress({ onShow }: { onShow: Props['onShowConversion'] }) {
   useT();
   const job = useConversionJob();
   if (!job) return null;
-  const p = job.state.status === 'running' ? Math.round(progressPercent(job.state.progress, job.source.duration)) : job.state.status === 'done' ? 100 : 0;
-  const label = job.state.status === 'running' ? translate('converting2', { value1: job.sourceName }) : job.state.status === 'done' ? translate('saveConverted', { name: job.sourceName }) : translate('conversionStopped');
+  const p = job.state.status === 'running' ? Math.round(progressPercent(job.state.progress, job.source.duration)) : 100;
+  const label = job.state.status === 'running' ? translate('converting2', { value1: job.sourceName }) : translate('saveConverted', { name: job.sourceName });
   return (
     <>
       <button className="ib conversion" onClick={() => onShow(job.mediaId, job.sourceName)} title={`${label} · ${p}%`}>
@@ -71,10 +71,10 @@ function ProjectName({ name, onRename }: { name: string; onRename: Props['onRena
   );
 }
 
-function saveStatus({ status, error }: SaveState) {
+function saveStatus({ status }: SaveState) {
   if (status === 'saved') return translate('saveSaved');
   if (status === 'saving') return translate('saveSaving');
-  return error ? translate('saveFailedWith', { error }) : translate('saveFailed');
+  return translate('saveFailed');
 }
 
 export function TopBar({ onProjects, saveState, onSave, projectName, onRename, clipCount, totalTime, onExport, onSettings, onShowConversion }: Props) {

@@ -1,5 +1,5 @@
 import { t as translate } from './i18n/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fmtTime, videoTracks } from './editor/model';
 import type { Media, Project } from './editor/model';
 import { exportSource } from './editor/exportSource';
@@ -19,6 +19,7 @@ import { Timeline } from './components/Timeline';
 import { TopBar } from './components/TopBar';
 import { ProjectLibrary } from './components/ProjectLibrary';
 import { activeProjectId, listProjects, loadProject, selectProject } from './editor/storage';
+import { reportError } from './toast/store';
 
 const MIN_WIDTH = 1280;
 
@@ -37,7 +38,11 @@ const imported = new WeakSet<File>();
 /** Puts each finished conversion into the Media library, and at the end of V1 if the user asked for that. */
 function useConvertedMedia(editor: Editor | null) {
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const job = useConversionJob();
   const output = job?.state.status === 'done' ? job.state.output : null;
   const addToTimeline = job?.addToTimeline ?? false;
@@ -47,20 +52,30 @@ function useConvertedMedia(editor: Editor | null) {
   useEffect(() => {
     if (!output || !add || !place || imported.has(output)) return;
     imported.add(output);
-    setPending(true); setError('');
-    importMedia(output).then((media) => {
-      add(media);
-      // V1 is magnetic, so the clip goes after its last clip whatever time is passed.
-      if (addToTimeline && main) place(media.id, main, 0);
-    }, (error: unknown) => setError(error instanceof Error ? error.message : translate('couldNotImportConvertedMedia'))).finally(() => setPending(false));
+    const file = output;
+    const addMedia = add;
+    const placeMedia = place;
+    function attempt() {
+      if (!mounted.current) return;
+      setPending(true);
+      importMedia(file).then((media) => {
+        if (!mounted.current) return;
+        addMedia(media);
+        // V1 is magnetic, so the clip goes after its last clip whatever time is passed.
+        if (addToTimeline && main) placeMedia(media.id, main, 0);
+      }, (error: unknown) => {
+        imported.delete(file);
+        reportError(translate('couldNotAddTheConvertedVideo'), error, { label: translate('projectHomeRetry'), run: attempt });
+      }).finally(() => setPending(false));
+    }
+    attempt();
   }, [output, add, place, addToTimeline, main]);
-  return { pending, error };
+  return { pending };
 }
 
 function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Project; draft: boolean; onHome: (project: Project) => void }) {
   const width = useWindowWidth();
   const editor = useProject(id, initial, draft);
-  const [navigationError, setNavigationError] = useState('');
   const [pendingImports, setPendingImports] = useState(false);
   const [mediaRevision, setMediaRevision] = useState(0);
   const job = useConversionJob();
@@ -74,20 +89,26 @@ function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Projec
   if (!editor) return null;
 
   const { project } = editor;
+  const current = editor;
   const totalTime = fmtTime(editor.layout.end);
   const clipCount = videoTracks(project).reduce((n, t) => n + t.clips.length, 0);
 
+  function leave() {
+    if (pendingImports || converted.pending || job) {
+      reportError(translate('cannotLeaveTheEditorYet'), translate('finishBeforeLeavingEditor'));
+      return;
+    }
+    void current.flush().then(() => onHome(current.project), (error) => {
+      reportError(translate('couldNotSaveTheProject'), error, { label: translate('projectHomeRetry'), run: leave }, 'save-project');
+    });
+  }
+
   return (
     <div className="editor">
-      <TopBar onProjects={() => {
-        if (pendingImports || converted.pending || job) { setNavigationError(translate('finishBeforeLeavingEditor')); return; }
-        void editor.flush().then(() => onHome(editor.project), e => setNavigationError(String(e)));
-      }} onSettings={() => setSettings(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
+      <TopBar onProjects={leave} onSettings={() => setSettings(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onShowConversion={(id, name) => setConverting({ id, name })} />
-      {navigationError && <div role="alert" className="editor-navigation-error">{navigationError}<button onClick={() => setNavigationError('')} aria-label={translate('projectHomeDismissError')}>×</button></div>}
-      {converted.error && <p role="alert" className="error">{converted.error}</p>}
       <div className="workspace">
-        <MediaPanel onBusy={setPendingImports} onReconnect={() => setMediaRevision(n => n + 1)} onImport={imports.ingest} importing={imports.pending} importErrors={imports.errors} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
+        <MediaPanel onBusy={setPendingImports} onReconnect={() => setMediaRevision(n => n + 1)} onImport={imports.ingest} importing={imports.pending} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />
         <PreviewPanel key={mediaRevision} editor={editor} totalTime={totalTime} />
         <PropertiesPanel editor={editor} />
       </div>
