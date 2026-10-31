@@ -100,12 +100,14 @@ async function start(settings: EncodeSettings, audio: PlanarAudio | null) {
     throw new WorkerError('unsupported-video', translate('thisBrowserHasNoWebCodecsVideoEncoder'));
   }
   const videoQuality = new Quality(settings.videoQuality);
+  post({ type: 'status', status: 'video-check' });
   if (!await canEncodeVideo('avc', { width, height, frameRate: fps, quality: videoQuality })) {
     throw new WorkerError('unsupported-video', translate('thisBrowserCanTEncodeH264At', { value1: width, value2: height }));
   }
 
   let aac: AacEncoderKind | null = null;
   if (audio) {
+    post({ type: 'status', status: 'audio-encoder' });
     aac = await resolveAac(audio.sampleRate, audio.channels.length);
     if (!aac) {
       throw new WorkerError('unsupported-audio',
@@ -129,6 +131,7 @@ async function start(settings: EncodeSettings, audio: PlanarAudio | null) {
     audioJob = { source, data: audio, written: 0, total };
   }
 
+  post({ type: 'status', status: 'muxer' });
   await output.start();
   job = { settings, output, video, audio: audioJob };
   post({ type: 'ready', aac });

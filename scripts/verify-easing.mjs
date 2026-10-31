@@ -69,7 +69,7 @@ try {
     const { layoutTimeline } = await import('/src/editor/model.ts');
     const { exportSource } = await import('/src/editor/exportSource.ts');
     const p = await loadProject();
-    const renderer = await exportSource(p, layoutTimeline(p)).prepare(640, 360, 48000, new AbortController().signal);
+    const renderer = await exportSource(p, layoutTimeline(p)).prepare(640, 360, 48000, new AbortController().signal, new (await import('/src/export/trace.ts')).ExportTrace());
     try {
       const image = await renderer.renderFrame({ index: 18, time: 0.75 });
       return [...image.getContext('2d').getImageData(225, 180, 1, 1).data];

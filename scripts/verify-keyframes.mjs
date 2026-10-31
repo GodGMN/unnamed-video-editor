@@ -33,7 +33,7 @@ try {
     renderFrame(p, 0.5, ctx, () => source);
     const crop = [sample(25, 50), sample(75, 50)];
     const point = sourcePoint(p, c, 25, 50, 0.5);
-    const prepared = await exportSource(p, layoutTimeline(p)).prepare(200, 100, 48000, new AbortController().signal);
+    const prepared = await exportSource(p, layoutTimeline(p)).prepare(200, 100, 48000, new AbortController().signal, new (await import('/src/export/trace.ts')).ExportTrace());
     let exported;
     try {
       const image = await prepared.renderFrame({ index: 15, time: 0.5 });
@@ -151,7 +151,7 @@ try {
     const { layoutTimeline } = await import('/src/editor/model.ts');
     const { exportSource } = await import('/src/editor/exportSource.ts');
     const p = await loadProject();
-    const source = await exportSource(p, layoutTimeline(p)).prepare(200, 100, 48000, new AbortController().signal);
+    const source = await exportSource(p, layoutTimeline(p)).prepare(200, 100, 48000, new AbortController().signal, new (await import('/src/export/trace.ts')).ExportTrace());
     try {
       const image = await source.renderFrame({ index: 30, time: 1 });
       return { pixel: [...image.getContext('2d').getImageData(110, 50, 1, 1).data], keys: p.tracks[0].clips[0].keyframes };

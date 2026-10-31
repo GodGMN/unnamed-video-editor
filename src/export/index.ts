@@ -9,11 +9,12 @@ import type {
   FromWorker,
   PlanarAudio,
   QualitySetting,
+  StartStatus,
   SupportReport,
   ToWorker,
 } from './protocol';
 
-export type { AacEncoderKind, ExportErrorCode, PlanarAudio, QualitySetting, SupportReport };
+export type { AacEncoderKind, ExportErrorCode, PlanarAudio, QualitySetting, StartStatus, SupportReport };
 
 export interface FrameRequest {
   /** Zero-based frame number. */
@@ -53,6 +54,8 @@ export interface ExportOptions {
   /** Defaults to `'high'`. A number is a bitrate in bits per second. */
   audioQuality?: QualitySetting;
   onProgress?: (progress: ExportProgress) => void;
+  /** Called as the encoder starts up, before the first progress report. */
+  onStatus?: (status: StartStatus) => void;
   /** Aborting stops the export, tears down the worker and rejects with the signal's reason. */
   signal?: AbortSignal;
 }
@@ -108,7 +111,7 @@ export async function probeExportSupport(query: {
 }
 
 export async function exportMp4(options: ExportOptions): Promise<ExportResult> {
-  const { width, height, fps, duration, renderFrame, onProgress, signal } = options;
+  const { width, height, fps, duration, renderFrame, onProgress, onStatus, signal } = options;
   validate(options);
   signal?.throwIfAborted();
 
@@ -139,6 +142,7 @@ export async function exportMp4(options: ExportOptions): Promise<ExportResult> {
   worker.onmessage = (e: MessageEvent<FromWorker>) => {
     const msg = e.data;
     switch (msg.type) {
+      case 'status': onStatus?.(msg.status); break;
       case 'ready': ready = { aac: msg.aac }; break;
       case 'frame': framesDone = msg.index + 1; report(); break;
       case 'finalizing': finalizing = true; report(); break;

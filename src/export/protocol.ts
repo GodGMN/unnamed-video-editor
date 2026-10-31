@@ -49,8 +49,12 @@ export type ToWorker =
   | { type: 'frame'; index: number; frame: VideoFrame }
   | { type: 'finish' };
 
+/** What the worker is doing before it reports `ready`. */
+export type StartStatus = 'video-check' | 'audio-encoder' | 'muxer';
+
 export type FromWorker =
   | { type: 'probe'; report: SupportReport }
+  | { type: 'status'; status: StartStatus }
   | { type: 'ready'; aac: AacEncoderKind | null }
   | { type: 'frame'; index: number }
   | { type: 'finalizing' }

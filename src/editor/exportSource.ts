@@ -7,13 +7,14 @@ import { readMediaFile } from '../media/files';
 import { AnimationReader, imageType, openAnimation } from '../media/animation';
 import { audioGain, renderFrame } from '../playback/compositor';
 import type { RenderReply, RenderRequest } from './renderProtocol';
+import type { ExportTrace } from '../export/trace';
 
 export function exportSource(project: Project, layout: TimelineLayout): ExportSource {
   return {
     duration: layout.end,
     fps: project.output.fps,
     output: project.output,
-    async prepare(width, height, sampleRate, signal) {
+    async prepare(width, height, sampleRate, signal, trace) {
       const p = structuredClone(project);
       const ids = new Set([
         ...videoTracks(p).filter((t) => !t.hidden).flatMap((t) => t.clips.map((c) => c.mediaId)),
@@ -22,13 +23,15 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
       const importing = [...ids].find((id) => p.media[id]?.importing);
       if (importing) throw new Error(translate('stillImportingExportOnceItFinishes', { value1: p.media[importing].name }));
       const files: Record<string, File> = {};
-      for (const id of ids) {
+      for (const [i, id] of [...ids].entries()) {
         signal.throwIfAborted();
+        trace.step(translate('exportStepReadingFiles'), p.media[id]?.name ?? id, `${i + 1} / ${ids.size}`);
         const file = await readMediaFile(id);
         if (!file) throw new Error(translate('sourceFileIsMissingImportItBeforeExporting', { value1: p.media[id]?.name ?? id }));
         files[id] = file;
       }
       // Composite on the main thread so text uses the same loaded fonts as preview.
+      trace.step(translate('exportStepLoadingFonts'));
       await document.fonts.load('700 72px Figtree');
       signal.throwIfAborted();
       const stills = new Map<string, ImageBitmap>();
@@ -59,7 +62,9 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
         worker.postMessage({ ...message, locale: getLocale() });
       });
       try {
+        trace.step(translate('exportStepStartingRenderer'));
         await request({ type: 'init', project: p, files });
+        trace.step(translate('exportStepDecodingImages'));
         for (const track of videoTracks(p)) for (const clip of track.clips) {
           const media = p.media[clip.mediaId];
           if (track.hidden || !media?.animation) continue;
@@ -74,7 +79,8 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
           if (signal.aborted) { image.close(); signal.throwIfAborted(); }
           stills.set(id, image);
         }
-        const audio = await mixdown(p, layout.end, files, sampleRate, signal);
+        const audio = await mixdown(p, layout.end, files, sampleRate, signal, trace);
+        trace.end();
         const canvas = document.createElement('canvas');
         canvas.width = width; canvas.height = height;
         const ctx = canvas.getContext('2d')!;
@@ -101,13 +107,15 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
   };
 }
 
-async function mixdown(p: Project, duration: number, files: Record<string, File>, sampleRate: number, signal: AbortSignal) {
+async function mixdown(p: Project, duration: number, files: Record<string, File>, sampleRate: number, signal: AbortSignal, trace: ExportTrace) {
   const clips = audioTracks(p).filter((t) => !t.muted).flatMap((t) => t.clips)
     .filter((c) => !c.muted && c.gainDb > GAIN_MIN_DB && clipEnd(c) > 0 && c.start < duration);
   if (!clips.length) return null;
   const ctx = new OfflineAudioContext(2, Math.ceil(duration * sampleRate), sampleRate);
   for (const clip of clips) {
     signal.throwIfAborted();
+    const name = p.media[clip.mediaId]?.name ?? clip.mediaId;
+    trace.step(translate('exportStepDecodingAudio'), name);
     const input = new Input({ source: new BlobSource(files[clip.mediaId]), formats: ALL_FORMATS });
     try {
       const track = await input.getPrimaryAudioTrack();
@@ -121,9 +129,12 @@ async function mixdown(p: Project, duration: number, files: Record<string, File>
       gain.gain.setValueCurveAtTime(curve, start, end - start);
       gain.connect(ctx.destination);
       const sourceStart = clip.inS + start - clip.start, sourceEnd = clip.inS + end - clip.start;
+      const length = `${Math.round(sourceEnd - sourceStart)} s`;
+      trace.progress(`0 / ${length}`);
       for await (const { buffer, timestamp } of new AudioBufferSink(track).buffers(sourceStart, sourceEnd)) {
         signal.throwIfAborted();
         const from = Math.max(sourceStart, timestamp), to = Math.min(sourceEnd, timestamp + buffer.duration);
+        trace.progress(`${Math.round(Math.max(0, to - sourceStart))} / ${length}`);
         if (to <= from) continue;
         const source = ctx.createBufferSource();
         source.buffer = buffer; source.connect(gain);
@@ -132,7 +143,19 @@ async function mixdown(p: Project, duration: number, files: Record<string, File>
     } finally { input.dispose(); }
   }
   signal.throwIfAborted();
+  trace.step(translate('exportStepRenderingMix'), '', '0%');
+  watchRendering(ctx, duration, (fraction) => trace.progress(`${Math.round(fraction * 100)}%`));
   const result = await ctx.startRendering();
   signal.throwIfAborted();
   return result;
+}
+
+/** Pauses the offline render every few seconds of audio to report how far it got. */
+function watchRendering(ctx: OfflineAudioContext, duration: number, onProgress: (fraction: number) => void) {
+  // Not every browser can suspend an offline context; the step just shows no percentage there.
+  if (typeof ctx.suspend !== 'function') return;
+  const every = Math.max(5, duration / 50);
+  for (let at = every; at < duration; at += every) {
+    ctx.suspend(at).then(() => { onProgress(at / duration); return ctx.resume(); }).catch(() => {});
+  }
 }

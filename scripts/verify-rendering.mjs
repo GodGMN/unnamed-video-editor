@@ -22,6 +22,7 @@ try {
     const { VIDEO_CLIP_DEFAULTS, AUDIO_CLIP_DEFAULTS, layoutTimeline } = await import('/src/editor/model.ts');
     const { exportSource } = await import('/src/editor/exportSource.ts');
     const { exportMp4 } = await import('/src/export/index.ts');
+    const { ExportTrace } = await import('/src/export/trace.ts');
     const { renderFrame } = await import('/src/playback/compositor.ts');
     const { ALL_FORMATS, Input, BlobSource, CanvasSink, AudioBufferSink } = await import('/node_modules/.vite/deps/mediabunny.js');
     const media = await importMedia(new File([new Uint8Array(bytes)], 'source.mp4', { type: 'video/mp4' }));
@@ -41,7 +42,7 @@ try {
     ];
     const source = exportSource(p, layoutTimeline(p));
     const ctl = new AbortController();
-    const prepared = await source.prepare(320, 180, 48000, ctl.signal);
+    const prepared = await source.prepare(320, 180, 48000, ctl.signal, new ExportTrace());
     const mixed = prepared.audio;
     const rms = (t) => {
       const a = mixed.getChannelData(0), start = Math.round(t * 48000);
@@ -106,12 +107,12 @@ try {
     }
     encoded.dispose();
     const cancelled = new AbortController();
-    const partial = await source.prepare(320, 180, 48000, cancelled.signal);
+    const partial = await source.prepare(320, 180, 48000, cancelled.signal, new ExportTrace());
     const pending = partial.renderFrame({ index: 0, time: 0 }); cancelled.abort();
     let aborted = false; try { await pending; } catch (e) { aborted = e.name === 'AbortError'; } finally { partial.dispose(); }
     const missing = structuredClone(p); missing.tracks[2].clips[0].mediaId = 'missing';
-    let missingError = ''; try { await exportSource(missing, layoutTimeline(missing)).prepare(320, 180, 48000, new AbortController().signal); } catch (e) { missingError = e.message; }
-    const retry = await source.prepare(320, 180, 48000, new AbortController().signal);
+    let missingError = ''; try { await exportSource(missing, layoutTimeline(missing)).prepare(320, 180, 48000, new AbortController().signal, new ExportTrace()); } catch (e) { missingError = e.message; }
+    const retry = await source.prepare(320, 180, 48000, new AbortController().signal, new ExportTrace());
     await retry.renderFrame({ index: 0, time: 0 }); retry.dispose();
     const base64 = await new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result.split(',')[1]); r.readAsDataURL(out.blob); });
     await (await import('/src/editor/storage.ts')).saveProject(p);

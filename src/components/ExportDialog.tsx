@@ -3,9 +3,10 @@ import { t as translate, formatNumber } from '../i18n/core';
 import { useEffect, useRef, useState } from 'react';
 import { exportSize, fmtTime } from '../editor/model';
 import { ExportError, exportMp4, probeExportSupport } from '../export';
-import type { ExportErrorCode, ExportOptions, ExportResult, SupportReport } from '../export';
+import type { ExportErrorCode, ExportOptions, ExportResult, StartStatus, SupportReport } from '../export';
+import { ExportTrace } from '../export/trace';
 import { Download } from './icons';
-import { CheckRow, Choice, Dialog, Progress, ResultCard } from './Dialog';
+import { Alert, CheckRow, Choice, Dialog, Progress, ResultCard } from './Dialog';
 import type { StageStatus } from './Dialog';
 import { reportError } from '../toast/store';
 
@@ -19,7 +20,8 @@ export interface ExportSource {
   fps: number;
   /** The project's frame; export sizes keep its ratio. */
   output: { width: number; height: number };
-  prepare: (width: number, height: number, sampleRate: number, signal: AbortSignal) => Promise<{
+  /** Reports each preparation step to `trace`, so a hang shows where it stopped. */
+  prepare: (width: number, height: number, sampleRate: number, signal: AbortSignal, trace: ExportTrace) => Promise<{
     renderFrame: ExportOptions['renderFrame'];
     audio: AudioBuffer | null;
     dispose: () => void;
@@ -28,6 +30,14 @@ export interface ExportSource {
 
 const SAMPLE_RATE = 48000;
 const CHANNELS = 2;
+/** Seconds without any step or progress before the dialog warns that the export looks stuck. */
+const STALL_SECONDS = 15;
+
+const START_STATUS: Record<StartStatus, () => string> = {
+  'video-check': () => translate('exportStatusVideoCheck'),
+  'audio-encoder': () => translate('exportStatusAudioEncoder'),
+  muxer: () => translate('exportStatusMuxer'),
+};
 
 const COPY: Record<Step, [string, string]> = {
   get settings(): [string, string] { return [translate('exportVideo'), translate('renderedOnThisDeviceNothingIsUploaded')]; },
@@ -69,6 +79,9 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
   const [progress, setProgress] = useState<RenderState | null>(null);
   const [result, setResult] = useState<{ res: Res; out: ExportResult; url: string } | null>(null);
   const controller = useRef<AbortController | null>(null);
+  const trace = useRef<ExportTrace | null>(null);
+  const [, setTick] = useState(0);
+  const [copied, setCopied] = useState(false);
   const [title, subtitle] = COPY[step];
   const { width, height } = size(res);
   const totalFrames = Math.max(1, Math.round(source.duration * fps));
@@ -85,29 +98,68 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => () => { if (result) URL.revokeObjectURL(result.url); }, [result]);
 
+  // Re-render every second while rendering, so the stall warning appears even when nothing else changes.
+  useEffect(() => {
+    if (step !== 'rendering') return;
+    let warned = false;
+    const id = setInterval(() => {
+      setTick((n) => n + 1);
+      const t = trace.current;
+      if (!warned && t && t.idleSeconds() >= STALL_SECONDS) {
+        warned = true;
+        console.warn(`[export] no progress for ${STALL_SECONDS}s\n${diagnostics(t)}`);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [step]);
+
+  const diagnostics = (t: ExportTrace) => t.report({
+    browser: navigator.userAgent,
+    output: `${width}×${height} @ ${fps} fps, ${totalFrames} frames, ${source.duration.toFixed(2)} s`,
+    encoders: support && support !== 'failed' ? `h264 ${support.h264}, aac ${support.aac}` : String(support),
+  });
+
+  const copyDiagnostics = async () => {
+    if (!trace.current) return;
+    await navigator.clipboard.writeText(diagnostics(trace.current));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const start = async () => {
     const ctl = new AbortController();
     controller.current = ctl;
+    const t = new ExportTrace();
+    trace.current = t;
     setResult(null);
     setProgress({ phase: 'mixing', framesDone: 0, fraction: 0, t0: 0 });
     setStep('rendering');
     let prepared: Awaited<ReturnType<ExportSource['prepare']>> | undefined;
     try {
-      prepared = await source.prepare(width, height, SAMPLE_RATE, ctl.signal);
+      prepared = await source.prepare(width, height, SAMPLE_RATE, ctl.signal, t);
       ctl.signal.throwIfAborted();
+      t.step(translate('exportStepStartingEncoder'));
       const t0 = performance.now();
       const out = await exportMp4({
         width, height, fps, duration: source.duration,
         renderFrame: prepared.renderFrame,
         audio: prepared.audio ?? undefined,
         signal: ctl.signal,
-        onProgress: (p) => setProgress({ phase: p.phase, framesDone: p.framesDone, fraction: p.fraction, t0 }),
+        onStatus: (status) => t.step(translate('exportStepStartingEncoder'), '', START_STATUS[status]()),
+        onProgress: (p) => {
+          const label = p.phase === 'encoding' ? translate('composingAndEncodingFrames') : translate('writingMP4');
+          if (t.current?.label !== label) t.step(label);
+          t.progress(`${p.framesDone} / ${p.totalFrames}`);
+          setProgress({ phase: p.phase, framesDone: p.framesDone, fraction: p.fraction, t0 });
+        },
       });
+      t.end();
       ctl.signal.throwIfAborted();
       setResult({ res, out, url: URL.createObjectURL(out.blob) });
       setStep('done');
     } catch (err) {
       if (ctl.signal.aborted) return;
+      console.error(`[export] failed\n${diagnostics(t)}`, err);
       const code = err instanceof ExportError ? err.code : 'unknown';
       reportError(ERROR_TITLES[code], err, code === 'unsupported-video' && res === '1080'
         ? { label: translate('try720p'), run: () => setRes('720') }
@@ -159,8 +211,14 @@ export function ExportDialog({ projectSlug, source, onClose }: Props) {
       {step === 'rendering' && progress && (
         <div className="dialog-body" style={{ paddingTop: 24 }}>
           <Progress pct={progress.fraction * 100} detail={translate('frame', { value1: progress.framesDone, value2: totalFrames })} label={translate('exportProgress')}
-            stages={stages(progress, totalFrames)} note={translate('keepThisTabOpenRenderingHappensOnYourDevice', { value1: timeLeft(progress) })} />
-          <div className="dialog-actions">
+            stages={stages(progress, totalFrames, trace.current)} note={translate('keepThisTabOpenRenderingHappensOnYourDevice', { value1: timeLeft(progress) })} />
+          {trace.current && trace.current.idleSeconds() >= STALL_SECONDS && (
+            <Alert title={translate('exportLooksStuck', { value1: Math.round(trace.current.idleSeconds()) })}>
+              {translate('exportStuckOn', { value1: stepText(trace.current, true) })}
+            </Alert>
+          )}
+          <div className="dialog-actions split">
+            <button className="link-btn" onClick={copyDiagnostics}>{copied ? translate('diagnosticsCopied') : translate('copyDiagnostics')}</button>
             <button className="gb" onClick={cancel}>{translate('cancelExport')}</button>
           </div>
         </div>
@@ -206,15 +264,22 @@ function BrowserCheck({ support, width, height, fps }: { support: SupportReport 
   );
 }
 
-function stages(p: RenderState, totalFrames: number): { label: string; status: StageStatus; note: string }[] {
+function stages(p: RenderState, totalFrames: number, trace: ExportTrace | null): { label: string; status: StageStatus; note: string }[] {
   const order = ['mixing', 'encoding', 'finalizing'] as const;
   const at = order.indexOf(p.phase);
   const status = (i: number): StageStatus => (i < at ? 'done' : i === at ? 'active' : 'wait');
   return [
-    { label: translate('mixingAudio'), status: status(0), note: '48 kHz stereo' },
+    { label: translate('mixingAudio'), status: status(0), note: p.phase === 'mixing' && trace?.current ? stepText(trace, false) : '48 kHz stereo' },
     { label: translate('composingAndEncodingFrames'), status: status(1), note: `${p.framesDone} / ${totalFrames}` },
     { label: translate('writingMP4'), status: status(2), note: p.phase === 'finalizing' ? translate('uiFinishing') : '—' },
   ];
+}
+
+/** The running step, e.g. "Decoding audio 42 / 132 s", optionally with what it works on. */
+function stepText(trace: ExportTrace, withSubject: boolean) {
+  const step = trace.current;
+  if (!step) return '';
+  return [step.label, withSubject && step.subject ? `(${step.subject})` : '', step.progress].filter(Boolean).join(' ');
 }
 
 function timeLeft(p: RenderState) {
