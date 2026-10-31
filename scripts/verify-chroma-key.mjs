@@ -62,11 +62,11 @@ try {
     const off = px(10, 170);
     e.dispose();
 
-    const prepared = await exportSource(project, layoutTimeline(project)).prepare(320, 180, 48000, new AbortController().signal);
+    const prepared = await exportSource(project, layoutTimeline(project)).prepare(320, 180, 48000, new AbortController().signal, new (await import('/src/export/trace.ts')).ExportTrace());
     const out = await prepared.renderFrame({ index: 15, time: 0.5 });
     const exported = { corner: px(10, 170, out), subject: px(160, 90, out) };
     prepared.dispose();
-    const preparedAlone = await exportSource(alone, layoutTimeline(alone)).prepare(320, 180, 48000, new AbortController().signal);
+    const preparedAlone = await exportSource(alone, layoutTimeline(alone)).prepare(320, 180, 48000, new AbortController().signal, new (await import('/src/export/trace.ts')).ExportTrace());
     const exportedAlone = px(10, 170, await preparedAlone.renderFrame({ index: 15, time: 0.5 }));
     preparedAlone.dispose();
     return { over, transparent, black, sampled, off, exported, exportedAlone, fgId: fgMedia.id, bgId: bgMedia.id, fgMedia, bgMedia };
