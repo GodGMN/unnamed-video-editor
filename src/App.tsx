@@ -105,7 +105,7 @@ function EditorApp({ id, initial, draft, onHome }: { id: string; initial: Projec
 
   return (
     <div className="editor">
-      <TopBar onProjects={leave} onSettings={() => setSettings(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
+      <TopBar onUndo={editor.undo} onRedo={editor.redo} canUndo={editor.canUndo} canRedo={editor.canRedo} onProjects={leave} onSettings={() => setSettings(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onShowConversion={(id, name) => setConverting({ id, name })} />
       <div className="workspace">
         <MediaPanel onBusy={setPendingImports} onReconnect={() => setMediaRevision(n => n + 1)} onImport={imports.ingest} importing={imports.pending} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting} />

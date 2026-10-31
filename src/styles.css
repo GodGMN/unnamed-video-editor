@@ -678,3 +678,4 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .keyframe-easing-play:disabled { opacity: .45; cursor: default; border-color: var(--line); }
 .clip-keyframes { position: absolute; left: 0; right: 0; bottom: 5px; height: 9px; pointer-events: none; z-index: 1; }
 .clip-keyframe-indicator { position: absolute; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; transform: rotate(45deg); background: var(--accent); border: 1px solid rgba(12, 14, 13, 0.85); border-radius: 1px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18); }
+.topbar .ib:disabled { opacity: .4; cursor: default; background: transparent; }
