@@ -1,3 +1,4 @@
+import { evaluateVideoClip } from '../editor/keyframes';
 import { clipEnd, dbToGain, overlapAfter, findVideoClip, partnersOf, videoTracks } from '../editor/model';
 import type { AudioClip, MediaClip, Project, VideoClip, VideoStream } from '../editor/model';
 import { keyFrame } from './chromaKey';
@@ -81,7 +82,8 @@ function clipScale(p: Project, clip: VideoClip, video: VideoStream) {
  * The source pixel of `clip` drawn at output pixel (`x`, `y`), undoing its position, rotation and
  * scale. Null when that point is outside the clip's cropped frame.
  */
-export function sourcePoint(p: Project, clip: VideoClip, x: number, y: number): { x: number; y: number } | null {
+export function sourcePoint(p: Project, clip: VideoClip, x: number, y: number, time = clip.start): { x: number; y: number } | null {
+  clip = evaluateVideoClip(clip, time);
   const video = p.media[clip.mediaId]?.video;
   if (!video) return null;
   const scale = clipScale(p, clip, video);
@@ -127,7 +129,8 @@ export function renderFrame(p: Project, time: number, ctx: RenderContext, frameS
       }
       continue;
     }
-    for (const clip of track.clips) {
+    for (const original of track.clips) {
+      const clip = evaluateVideoClip(original, time);
       if (time < clip.start || time >= clipEnd(clip)) continue;
       const media = p.media[clip.mediaId];
       const video = media?.video;

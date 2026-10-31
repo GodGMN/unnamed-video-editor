@@ -226,7 +226,7 @@ export class PlaybackEngine {
     const clip = findVideoClip(project, clipId);
     const video = clip && project.media[clip.mediaId]?.video;
     if (!clip || !video || time < clip.start || time >= clipEnd(clip)) return null;
-    const point = sourcePoint(project, clip, x, y);
+    const point = sourcePoint(project, clip, x, y, time);
     const frame = point && this.entries.get(clipId)?.frames?.frame(clip.inS + time - clip.start, playing);
     if (!point || !frame) return null;
     // Preview frames are decoded smaller than the source.

@@ -12,7 +12,7 @@ import type { PickedFile } from '../media/links';
 import type { Placement } from '../media/useImports';
 import { shortcut } from '../platform';
 import { Dialog } from './Dialog';
-import { CutLine, Crossfade, Duplicate, Eye, FadeBlack, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
+import { CutLine, Crossfade, Duplicate, Eye, FadeBlack, KeyframeMarks, Link, Magnet, Mute, Plus, Scissors, TextT, Trash, Unlink, Volume } from './icons';
 
 const TEXT_TRACK_H = 44;
 const VIDEO_TRACK_H = 56;
@@ -142,6 +142,8 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
 
   const startDrag = useDrag();
   const [snapping, setSnapping] = useState(true);
+  // Only hides the timeline markers; keyframes keep animating either way.
+  const [showKeys, setShowKeys] = useState(true);
   // The time a trimmed edge is snapped to, drawn as a dashed line across every track.
   const [snapGuide, setSnapGuide] = useState<number | null>(null);
   // The video clip whose transition a dragged transition would replace, for drop highlighting.
@@ -382,6 +384,7 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
           </button>
           <span className="tool-separator" role="separator" aria-orientation="vertical" />
           <button aria-label={translate('snapClips')} aria-pressed={snapping} title={translate('snapClips')} onClick={() => setSnapping(v => !v)}><Magnet size={16} /></button>
+          <button className="timeline-keyframe-toggle" aria-label={translate('toggleKeyframeIndicators')} aria-pressed={showKeys} title={translate('toggleKeyframeIndicators')} onClick={() => setShowKeys(v => !v)}><KeyframeMarks size={16} /></button>
         </div>
         {(splitting || focused) && <span className="hint">{splitting ? translate('clickAClipToCutItCutsSnapTo') : translate('playheadLockedToAClipDoubleClickTheTime')}</span>}
         <div className="spacer" />
@@ -440,7 +443,7 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
                 )}
                 {t.kind === 'video' && (
                   <>
-                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} inset={insets!.get(c.id)} onMenu={onContextMenu('clip', c.id)} />)}
+                    {t.clips.map((c) => <VideoClipView key={c.id} editor={editor} pps={pps} snapping={snapping} clip={c} inset={insets!.get(c.id)} showKeys={showKeys} onMenu={onContextMenu('clip', c.id)} />)}
                     <Transitions pps={pps} editor={editor} clips={t.clips} dropTarget={dropTarget} />
                     <TrimHandles pps={pps} editor={editor} clips={t.clips} snapping={snapping} onGuide={setSnapGuide} />
                   </>
@@ -564,7 +567,7 @@ function partnerSelected({ project, ui }: Editor, clip: MediaClip, kind: 'clip' 
   return !!sel && sel.kind === kind && clip.linked && clip.linkId !== null && findMediaClip(project, sel.id)?.clip.linkId === clip.linkId;
 }
 
-function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipProps<VideoClip>) {
+function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu, showKeys }: ClipProps<VideoClip> & { showKeys: boolean }) {
   useT();
   const { project } = editor;
   const move = useClipMove(editor, cs, 'clip', snapping);
@@ -593,7 +596,33 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         <span className="mono">{src.importing ? translate('importing') : translate('s', { value1: formatNumber(dur, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}</span>
       </span>
       <FadeRamps clip={cs} width={width} height={VIDEO_CLIP_H} />
+      {showKeys && <KeyframeMarkers clip={cs} pps={pps} width={width} />}
     </button>
+  );
+}
+
+const KEY_EPS = 1e-6;
+/** Half a marker's width, so a key on the first or last frame stays fully inside the clip. */
+const KEY_MARK_HALF = 4;
+
+/** One diamond per keyed source time inside the clip's trimmed range, whatever properties share it. */
+function KeyframeMarkers({ clip, pps, width }: { clip: VideoClip; pps: number; width: number }) {
+  const times: number[] = [];
+  for (const keys of Object.values(clip.keyframes ?? {})) {
+    for (const k of keys ?? []) {
+      if (k.time < clip.inS - KEY_EPS || k.time >= clip.outS - KEY_EPS) continue;
+      if (!times.some(t => Math.abs(t - k.time) < KEY_EPS)) times.push(k.time);
+    }
+  }
+  if (!times.length) return null;
+  const max = Math.max(KEY_MARK_HALF, width - KEY_MARK_HALF);
+  return (
+    <span className="clip-keyframes" aria-hidden="true">
+      {times.sort((a, b) => a - b).map(t => (
+        <span key={t} className="clip-keyframe-indicator" data-keyframe-time={t}
+          style={{ left: Math.min(max, Math.max(KEY_MARK_HALF, (t - clip.inS) * pps)) }} />
+      ))}
+    </span>
   );
 }
 

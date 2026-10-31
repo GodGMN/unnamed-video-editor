@@ -60,6 +60,7 @@ export const Reset = (p: IconProps) => <Stroke {...p}><path d="M4 12a8 8 0 102.3
 export const Checker = (p: IconProps) => <Stroke {...p}><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 12h16M12 4v16" /><path d="M4.5 4.5h7.5v7.5H4.5zM12 12h7.5v7.5H12z" fill="currentColor" stroke="none" /></Stroke>;
 export const Dropper = (p: IconProps) => <Stroke {...p}><path d="M14.5 5.5l4 4" /><path d="M17 3a2.1 2.1 0 013 3l-2.5 2.5-3-3z" /><path d="M15.5 7.5L6 17l-1 3 3-1 9.5-9.5" /></Stroke>;
 export const Magnet = (p: IconProps) => <Stroke {...p}><path d="M4 3h5v10a3 3 0 006 0V3h5v10a8 8 0 01-16 0zM4 7h5M15 7h5" /></Stroke>;
+export const KeyframeMarks = (p: IconProps) => <Stroke {...p}><path d="M12 4.5 19.5 12 12 19.5 4.5 12Z" /><path d="M3 21h18" /></Stroke>;
 export const Search = (p: IconProps) => <Stroke {...p}><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></Stroke>;
 export const LibraryGrid = (p: IconProps) => <Stroke {...p}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></Stroke>;
 export const Star = (p: IconProps) => <Stroke {...p}><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" /></Stroke>;

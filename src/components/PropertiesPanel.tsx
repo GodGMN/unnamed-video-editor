@@ -1,3 +1,4 @@
+import { ClipFrameCounter, KeyframeControl } from './KeyframeControl';
 import { useT } from '../i18n';
 import { t as translate, formatNumber } from '../i18n/core';
 import type { CSSProperties, ReactNode } from 'react';
@@ -107,6 +108,7 @@ function VideoClipProps({ editor, clip: cs, tab, onTab }: { editor: Editor; clip
         <span className="hint" style={{ lineHeight: 1.4 }}>{translate('startsAtOnTheTimeline', { value1: fmtTime(layout.clips[id].start) })}</span>
       </div>
     </div>
+    <ClipFrameCounter editor={editor} clip={cs} />
     <Tabs tabs={tabs} value={tab} onChange={onTab} label={translate('videoClipSettings')} className="props-body">
       {tab === 'transform' && <>
       <div className="props-section">
@@ -125,11 +127,11 @@ function VideoClipProps({ editor, clip: cs, tab, onTab }: { editor: Editor; clip
           ))}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-          <NumberField lead={"X"} unit={"px"} aria-label={translate('xPosition')} value={cs.x} defaultValue={VIDEO_CLIP_DEFAULTS.x} onChange={num('x')} />
-          <NumberField lead={"Y"} unit={"px"} aria-label={translate('yPosition')} value={cs.y} defaultValue={VIDEO_CLIP_DEFAULTS.y} onChange={num('y')} />
+          <KeyframeControl editor={editor} clip={cs} property="x" label={translate('xPosition')} unit="px"><NumberField lead={"X"} unit={"px"} aria-label={translate('xPosition')} value={cs.x} defaultValue={VIDEO_CLIP_DEFAULTS.x} onChange={num('x')} /></KeyframeControl>
+          <KeyframeControl editor={editor} clip={cs} property="y" label={translate('yPosition')} unit="px"><NumberField lead={"Y"} unit={"px"} aria-label={translate('yPosition')} value={cs.y} defaultValue={VIDEO_CLIP_DEFAULTS.y} onChange={num('y')} /></KeyframeControl>
         </div>
-        <Slider label={translate('scale')} value={cs.scale} unit={'%'} defaultValue={VIDEO_CLIP_DEFAULTS.scale} min={25} max={300} onChange={(v) => upd({ scale: v, fit: 'custom' })} />
-        <Slider label={translate('rotation')} value={cs.rot} unit={"°"} defaultValue={VIDEO_CLIP_DEFAULTS.rot} min={-180} max={180} onChange={(v) => upd({ rot: v, fit: 'custom' })} />
+        <KeyframeControl editor={editor} clip={cs} property="scale" label={translate('scale')} unit="%"><Slider label={translate('scale')} value={cs.scale} unit={'%'} defaultValue={VIDEO_CLIP_DEFAULTS.scale} min={25} max={300} onChange={(v) => upd({ scale: v, fit: 'custom' })} /></KeyframeControl>
+        <KeyframeControl editor={editor} clip={cs} property="rot" label={translate('rotation')} unit="°"><Slider label={translate('rotation')} value={cs.rot} unit={"°"} defaultValue={VIDEO_CLIP_DEFAULTS.rot} min={-180} max={180} onChange={(v) => upd({ rot: v, fit: 'custom' })} /></KeyframeControl>
       </div>
       </>}
 
@@ -142,10 +144,8 @@ function VideoClipProps({ editor, clip: cs, tab, onTab }: { editor: Editor; clip
             {translate('reset')}</button>
         </div>
         <div className="crop-grid">
-          <span />
-          <label>{translate('top')}<NumberField min={0} step={2} value={cs.cropT} defaultValue={VIDEO_CLIP_DEFAULTS.cropT} onChange={crop('cropT')} /></label>
-          <span />
-          <label>{translate('left')}<NumberField min={0} step={2} value={cs.cropL} defaultValue={VIDEO_CLIP_DEFAULTS.cropL} onChange={crop('cropL')} /></label>
+          <KeyframeControl editor={editor} clip={cs} property="cropT" label={translate('top')} unit="px"><div className="crop-field">{translate('top')}<NumberField min={0} step={2} value={cs.cropT} defaultValue={VIDEO_CLIP_DEFAULTS.cropT} aria-label={`${translate('crop')} ${translate('top')}`} onChange={crop('cropT')} /></div></KeyframeControl>
+          <KeyframeControl editor={editor} clip={cs} property="cropL" label={translate('left')} unit="px"><div className="crop-field">{translate('left')}<NumberField min={0} step={2} value={cs.cropL} defaultValue={VIDEO_CLIP_DEFAULTS.cropL} aria-label={`${translate('crop')} ${translate('left')}`} onChange={crop('cropL')} /></div></KeyframeControl>
           {/* A box in the source's shape, so its corner's share of the width is height ÷ width times its share of the height. */}
           <div style={{ position: 'relative', width: '100%', maxWidth: Math.min(112, 63 * inf.width / inf.height), aspectRatio: `${inf.width} / ${inf.height}`, background: src.tone,
             borderRadius: `calc(var(--corner) * ${100 * inf.height / inf.width}%) / calc(var(--corner) * 100%)`, overflow: 'hidden' }} aria-hidden="true">
@@ -155,9 +155,8 @@ function VideoClipProps({ editor, clip: cs, tab, onTab }: { editor: Editor; clip
               top: cropPct(cs.cropT, inf.height), right: cropPct(cs.cropR, inf.width), bottom: cropPct(cs.cropB, inf.height), left: cropPct(cs.cropL, inf.width),
             }} />
           </div>
-          <label>{translate('right')}<NumberField min={0} step={2} value={cs.cropR} defaultValue={VIDEO_CLIP_DEFAULTS.cropR} onChange={crop('cropR')} /></label>
-          <span />
-          <label>{translate('bottom')}<NumberField min={0} step={2} value={cs.cropB} defaultValue={VIDEO_CLIP_DEFAULTS.cropB} onChange={crop('cropB')} /></label>
+          <KeyframeControl editor={editor} clip={cs} property="cropR" label={translate('right')} unit="px"><div className="crop-field">{translate('right')}<NumberField min={0} step={2} value={cs.cropR} defaultValue={VIDEO_CLIP_DEFAULTS.cropR} aria-label={`${translate('crop')} ${translate('right')}`} onChange={crop('cropR')} /></div></KeyframeControl>
+          <KeyframeControl editor={editor} clip={cs} property="cropB" label={translate('bottom')} unit="px"><div className="crop-field">{translate('bottom')}<NumberField min={0} step={2} value={cs.cropB} defaultValue={VIDEO_CLIP_DEFAULTS.cropB} aria-label={`${translate('crop')} ${translate('bottom')}`} onChange={crop('cropB')} /></div></KeyframeControl>
           <span />
         </div>
       </div>
