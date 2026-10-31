@@ -10,6 +10,10 @@ import { progressPercent, useConversionJob } from '../convert/job';
 const page = () => document.documentElement;
 
 interface Props {
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
   onProjects: () => void;
   saveState: SaveState;
   onSave: () => void;
@@ -77,7 +81,7 @@ function saveStatus({ status }: SaveState) {
   return translate('saveFailed');
 }
 
-export function TopBar({ onProjects, saveState, onSave, projectName, onRename, clipCount, totalTime, onExport, onSettings, onShowConversion }: Props) {
+export function TopBar({ onUndo, onRedo, canUndo, canRedo, onProjects, saveState, onSave, projectName, onRename, clipCount, totalTime, onExport, onSettings, onShowConversion }: Props) {
   useT();
   const [fullscreen, toggleFullscreen] = useFullscreen(page);
   return (
@@ -95,8 +99,8 @@ export function TopBar({ onProjects, saveState, onSave, projectName, onRename, c
       <div className="spacer" />
       <ConversionProgress onShow={onShowConversion} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <button className="ib square" aria-label={translate('undoCtrlZ')} title={translate('undoCtrlZ2')}><Undo stroke="#C8CEC9" /></button>
-        <button className="ib square" aria-label={translate('redoCtrlShiftZ')} title={translate('redoCtrlShiftZ2')}><Redo stroke="#C8CEC9" /></button>
+        <button className="ib square" onClick={onUndo} disabled={!canUndo} aria-label={translate('undoCtrlZ')} title={translate('undoCtrlZ2')}><Undo stroke="#C8CEC9" /></button>
+        <button className="ib square" onClick={onRedo} disabled={!canRedo} aria-label={translate('redoCtrlShiftZ')} title={translate('redoCtrlShiftZ2')}><Redo stroke="#C8CEC9" /></button>
         <button className="ib square" onClick={toggleFullscreen} aria-pressed={fullscreen}
           aria-label={fullscreen ? translate('exitFullScreenF11') : translate('fullScreenF11')} title={fullscreen ? translate('exitFullScreenF112') : translate('fullScreenF112')}>
           {fullscreen ? <Minimize stroke="#C8CEC9" /> : <Maximize stroke="#C8CEC9" />}

@@ -626,3 +626,5 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 .source-frame-strip { position: absolute; inset: 0; display: flex; justify-content: space-between; overflow: hidden; border-radius: inherit; pointer-events: none; }
 .source-frame-strip img { height: 100%; width: 78px; max-width: 100%; object-fit: cover; flex: none; }
 .trim-bar:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.topbar .ib:disabled { opacity: .4; cursor: default; background: transparent; }
