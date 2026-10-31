@@ -165,6 +165,16 @@ try {
   await nextFrame();
   assert.equal(await x.locator('.keyframe-current').innerText(), '23.33px');
   await waitPixel(110, true);
+  // Auto-keying and its timeline marker participate in the main branch's undo history.
+  await xBase.fill('40');
+  assert.equal(await x.locator('.keyframe-current').innerText(), '40px');
+  assert.equal(await markers.count(), 4);
+  await page.getByRole('button', { name: 'Undo (Ctrl+Z)', exact: true }).click();
+  assert.equal(await x.locator('.keyframe-current').innerText(), '23.33px');
+  assert.equal(await markers.count(), 3);
+  await page.getByRole('button', { name: 'Redo (Ctrl+Shift+Z)', exact: true }).click();
+  assert.equal(await x.locator('.keyframe-current').innerText(), '40px');
+  assert.equal(await markers.count(), 4);
   assert.deepEqual(errors, []);
-  console.log('PASS: first manual key, automatic second/third keys, same-frame updates, direct diamond toggles with no editor/hints, timeline markers/deduplication/toggle, save/reload, live pixels and export.');
+  console.log('PASS: first manual key, automatic second/third keys, same-frame updates, direct diamond toggles with no editor/hints, timeline markers/deduplication/toggle, save/reload, live pixels, export and undo/redo.');
 } finally { await browser.close(); }
