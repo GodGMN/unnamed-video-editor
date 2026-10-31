@@ -1,6 +1,6 @@
 import { ALL_FORMATS, BlobSource, CanvasSink, Input } from 'mediabunny';
 import { upgrade } from '../editor/storage';
-import { clipEnd, videoTracks } from '../editor/model';
+import { clipEnd, toSource, videoTracks } from '../editor/model';
 import type { Media, Project, VideoClip } from '../editor/model';
 import { loopTime } from '../media/animation';
 import { readMediaFile, readPreview, writePreview } from '../media/files';
@@ -85,7 +85,7 @@ export async function renderPoster(saved: Project, width: number): Promise<strin
   const frames = new Map<string, CanvasImageSource>();
   await Promise.all(showing.map(async clip => {
     const media = project.media[clip.mediaId];
-    const sourceTime = clip.inS + time - clip.start;
+    const sourceTime = toSource(clip, time);
     const preview = await readPreview(media.id);
     if (large && !media.animation) {
       if (preview?.poster?.time === sourceTime) { frames.set(clip.id, await decoded(preview.poster.src)); return; }

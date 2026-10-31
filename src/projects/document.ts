@@ -1,6 +1,6 @@
 import { ANIMATED_PROPERTIES, EASINGS } from '../editor/keyframes';
 import { t as translate } from '../i18n/core';
-import { newId, VIDEO_CLIP_DEFAULTS, AUDIO_CLIP_DEFAULTS, NO_KEY, NO_FADES, gainToDb } from '../editor/model';
+import { newId, VIDEO_CLIP_DEFAULTS, AUDIO_CLIP_DEFAULTS, NO_KEY, NO_FADES, gainToDb, SPEED_MAX, SPEED_MIN } from '../editor/model';
 import type { Project } from '../editor/model';
 
 function object(value: unknown): Record<string, unknown> {
@@ -72,6 +72,11 @@ export function validateProject(value: unknown): asserts value is Project {
         if (!(t.kind === 'video' && source.still === true) && Number(c.outS) - Number(source.duration) > 1e-6) {
           throw new Error(translate('documentInvalidRange'));
         }
+        if (c.speed !== undefined) {
+          number(c.speed);
+          if (Number(c.speed) < SPEED_MIN || Number(c.speed) > SPEED_MAX || (t.kind === 'video' && source.still === true)) throw new Error(translate('documentInvalid'));
+        }
+        if (c.keepPitch !== undefined) bool(c.keepPitch);
         if (c.linkId !== null) text(c.linkId); bool(c.linked);
         fields(c, t.kind === 'video' ? VIDEO_CLIP_DEFAULTS : AUDIO_CLIP_DEFAULTS);
         if (t.kind === 'video') {

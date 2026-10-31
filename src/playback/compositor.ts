@@ -1,5 +1,5 @@
 import { evaluateVideoClip } from '../editor/keyframes';
-import { clipEnd, dbToGain, overlapAfter, findVideoClip, partnersOf, videoTracks } from '../editor/model';
+import { clipEnd, toSource, dbToGain, overlapAfter, findVideoClip, partnersOf, videoTracks } from '../editor/model';
 import type { AudioClip, MediaClip, Project, VideoClip, VideoStream } from '../editor/model';
 import { keyFrame } from './chromaKey';
 
@@ -135,7 +135,7 @@ export function renderFrame(p: Project, time: number, ctx: RenderContext, frameS
       const media = p.media[clip.mediaId];
       const video = media?.video;
       if (!video) continue;
-      const raw = frameSource(clip, clip.inS + time - clip.start);
+      const raw = frameSource(clip, toSource(clip, time));
       if (!raw) continue;
       const frame = clip.key.enabled ? keyFrame(raw, clip.key) : raw;
       const sw = video.width, sh = video.height;

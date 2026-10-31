@@ -3,7 +3,7 @@ import { t as translate, formatNumber } from '../i18n/core';
 import { PreviewStrip, useMediaPreview } from '../media/PreviewStrip';
 import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, STILL_DURATION, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, clipKind, curveName, dbToFader, dbToGain, faderToDb, fmtDb, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, removeTrack as removeTrackModel, clipDuration, clipEnd, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
+import { DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, MIN_SPLIT_PIECE, MISSING_MEDIA, PPS, STILL_DURATION, TRANSITION_NAMES, acceptsMedia, audioFor, canRemoveTrack, clipKind, curveName, dbToFader, dbToGain, faderToDb, fmtDb, edgeTargets, findClip, findMediaClip, isLinked, isMediaClip, movingGroup, partnersOf, pickedPair, removeTrack as removeTrackModel, clipDuration, clipEnd, clipSpeed, toTimeline, mediaDropStart, snapClipStart, snapEdge, trimClipEdge } from '../editor/model';
 import type { AudioClip, Clip, ClipKind, Fades, ClipSelection, MediaClip, Project, TextClip, TransitionType, Track, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { useDrag } from '../editor/useProject';
@@ -574,7 +574,7 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu, showKey
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
   const width = clipDuration(cs) * pps - 3;
-  const dur = cs.outS - cs.inS;
+  const dur = clipDuration(cs);
   const selected = isPicked(editor, id);
   const partner = partnerSelected(editor, cs, 'audio');
 
@@ -593,12 +593,24 @@ function VideoClipView({ editor, pps, snapping, clip: cs, inset, onMenu, showKey
           {cs.linked && <Link size={11} stroke="#D8DED9" strokeWidth={2.4} style={{ flex: 'none' }} />}
           <span className="name">{src.name}</span>
         </span>
-        <span className="mono">{src.importing ? translate('importing') : translate('s', { value1: formatNumber(dur, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}</span>
+        <span className="mono">
+          <SpeedBadge clip={cs} />
+          {src.importing ? translate('importing') : translate('s', { value1: formatNumber(dur, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}
+        </span>
       </span>
       <FadeRamps clip={cs} width={width} height={VIDEO_CLIP_H} />
       {showKeys && <KeyframeMarkers clip={cs} pps={pps} width={width} />}
     </button>
   );
+}
+
+/** The clip's speed, shown only when it isn't 1×. */
+function SpeedBadge({ clip }: { clip: MediaClip }) {
+  useT();
+  const speed = clipSpeed(clip);
+  if (speed === 1) return null;
+  const label = formatNumber(speed, { maximumFractionDigits: 2 });
+  return <span className="clip-speed" title={translate('speedBadge', { value1: label })}>{translate('speedTimes', { value1: label })}</span>;
 }
 
 const KEY_EPS = 1e-6;
@@ -620,7 +632,7 @@ function KeyframeMarkers({ clip, pps, width }: { clip: VideoClip; pps: number; w
     <span className="clip-keyframes" aria-hidden="true">
       {times.sort((a, b) => a - b).map(t => (
         <span key={t} className="clip-keyframe-indicator" data-keyframe-time={t}
-          style={{ left: Math.min(max, Math.max(KEY_MARK_HALF, (t - clip.inS) * pps)) }} />
+          style={{ left: Math.min(max, Math.max(KEY_MARK_HALF, (toTimeline(clip, t) - clip.start) * pps)) }} />
       ))}
     </span>
   );
@@ -750,7 +762,6 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   const move = useClipMove(editor, cs, 'audio', snapping);
   const id = cs.id;
   const src = project.media[cs.mediaId] ?? MISSING_MEDIA;
-  const span = clipDuration(cs) || 1;
   const width = clipDuration(cs) * pps - 3;
   const H = AUDIO_CLIP_H;
   const picked = isPicked(editor, id);
@@ -760,7 +771,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
   const bars = [];
   for (let k = 0, n = Math.max(0, Math.floor((width - 24) / 4)); k < n; k++) {
     const n = Math.max(1, Math.floor((width - 24) / 4));
-    const time = cs.inS + k / n * span;
+    const time = cs.inS + k / n * (cs.outS - cs.inS);
     const v = preview?.peaks[Math.min(preview.peaks.length - 1, Math.floor(time / src.duration * preview.peaks.length))] ?? 0;
     bars.push(cs.muted ? 2 : Math.max(2, Math.min(40, Math.round((4 + v * 34) * Math.min(2, dbToGain(cs.gainDb))))));
   }
@@ -807,6 +818,7 @@ function AudioClipView({ editor, pps, snapping, clip: cs, inset, onMenu }: ClipP
         <span className="vol-mark" style={{ top: Math.max(0, Math.min(H - 2, volY - 1)) }} />
       </div>
       <span className="audio-badge" style={inset && { right: 8 + inset.tail * pps }}>
+        <SpeedBadge clip={cs} />
         {cs.muted && <Mute size={11} stroke='var(--warn)' strokeWidth={2.4} />}
         {level}
       </span>
@@ -854,7 +866,7 @@ function FadeHandles({ clip: cs, width, height: H, update }: { clip: MediaClip; 
   useT();
   const startDrag = useDrag();
   const span = clipDuration(cs) || 1;
-  const half = (cs.outS - cs.inS) / 2;
+  const half = clipDuration(cs) / 2;
   const { fiW, foW, ciM, coM } = fadeGeometry(cs, width, H);
 
   const fadeDown = (which: 'fadeIn' | 'fadeOut', sign: 1 | -1) => (e: PointerEvent<HTMLButtonElement>) => {

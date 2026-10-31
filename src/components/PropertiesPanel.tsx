@@ -3,8 +3,8 @@ import { useT } from '../i18n';
 import { t as translate, formatNumber } from '../i18n/core';
 import type { CSSProperties, ReactNode } from 'react';
 import { useRef, useState } from 'react';
-import { AUDIO_CLIP_DEFAULTS, DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, dbToFader, faderToDb, fmtDb, MISSING_MEDIA, NO_KEY, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
-import type { Media, AudioClip, ChromaKey, Fades, FitMode, TextAnchor, TextClip, TransitionType, VideoClip } from '../editor/model';
+import { AUDIO_CLIP_DEFAULTS, SPEED_AUDIO_WARNING, SPEED_MAX, SPEED_MIN, SPEED_PRESETS, audioFor, clipDuration, clipSpeed, DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, dbToFader, faderToDb, fmtDb, MISSING_MEDIA, NO_KEY, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
+import type { Media, MediaClip, AudioClip, ChromaKey, Fades, FitMode, TextAnchor, TextClip, TransitionType, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { Dropper, Mute, Waveform } from './icons';
 import { ColorPopover, HexField } from './ColorPicker';
@@ -90,7 +90,7 @@ function VideoClipProps({ editor, clip: cs, tab, onTab }: { editor: Editor; clip
   const crop = (k: 'cropT' | 'cropR' | 'cropB' | 'cropL') => (v: number) => upd({ [k]: v });
   const cropPct = (v: number, of: number) => (v / of * 100).toFixed(1) + '%';
   const fits: [FitMode, string][] = [['fit', translate('fit')], ['fill', translate('fill')], ['custom', translate('custom')]];
-  const dur = cs.outS - cs.inS;
+  const dur = clipDuration(cs);
 
   const tabs: { id: VideoTab; label: ReactNode }[] = [
     { id: 'transform', label: translate('transformTab') },
@@ -180,6 +180,7 @@ function VideoClipProps({ editor, clip: cs, tab, onTab }: { editor: Editor; clip
           <Stat label={translate('length')} value={formatNumber(dur, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' s'} />
         </div>
       </div>
+      {!src.still && <SpeedSection editor={editor} clip={cs} />}
       </>}
 
       {tab === 'info' && <SourceInfo src={src} />}
@@ -274,6 +275,40 @@ function AudioClipProps({ editor, clip: cs }: { editor: Editor; clip: AudioClip 
           taper={{ toPos: dbToFader, fromPos: faderToDb }} format={fmtDb} onChange={(v) => updateClip(id, { gainDb: Math.round(v * 10) / 10 })} />
       </div>
       <FadesSection clip={cs} what={'audio'} style={{ borderTop: 0, paddingTop: 14 }} />
+      <SpeedSection editor={editor} clip={cs} />
+    </div>
+  );
+}
+
+/** Playback speed of a media clip and its linked partners, and whether its sound keeps its pitch. */
+function SpeedSection({ editor, clip: cs }: { editor: Editor; clip: MediaClip }) {
+  useT();
+  const { project, setSpeed, updateAudioClip } = editor;
+  const speed = clipSpeed(cs);
+  const audio = audioFor(project, cs.id);
+  const keepPitch = audio?.keepPitch !== false;
+  return (
+    <div className="props-section" style={{ gap: 10 }}>
+      <span className="eyebrow">{translate('clipSpeed')}</span>
+      <NumberField unit="×" step={0.05} min={SPEED_MIN} max={SPEED_MAX} value={speed} defaultValue={1} aria-label={translate('clipSpeed')} onChange={(v) => setSpeed(cs.id, v)} />
+      <div className="seg" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }} role="group" aria-label={translate('speedPresets')}>
+        {SPEED_PRESETS.map((v) => (
+          <button key={v} aria-pressed={speed === v} onClick={() => setSpeed(cs.id, v)}>
+            {translate('speedTimes', { value1: formatNumber(v) })}
+          </button>
+        ))}
+      </div>
+      {audio && <>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span className="eyebrow" style={{ textTransform: 'none', letterSpacing: 0 }}>{translate('keepPitch')}</span>
+          <button className="ib outlined" style={{ ['--h' as string]: '26px', padding: '0 9px', fontSize: 11, color: keepPitch ? 'var(--accent)' : 'var(--text-dim)' }}
+            aria-pressed={keepPitch} aria-label={translate('keepPitch')} onClick={() => updateAudioClip(audio.id, { keepPitch: !keepPitch })}>
+            {keepPitch ? translate('on2') : translate('off')}
+          </button>
+        </div>
+        <span className="hint">{translate('keepPitchHelp')}</span>
+        {keepPitch && speed < SPEED_AUDIO_WARNING && <span className="hint" style={{ color: 'var(--warn)' }}>{translate('speedSlowAudioHint')}</span>}
+      </>}
     </div>
   );
 }

@@ -1,11 +1,12 @@
 import { t as translate, getLocale } from '../i18n/core';
 import { ALL_FORMATS, AudioBufferSink, BlobSource, Input } from 'mediabunny';
 import type { ExportSource } from '../components/ExportDialog';
-import { GAIN_MIN_DB, audioTracks, clipEnd, videoTracks } from './model';
+import { GAIN_MIN_DB, audioTracks, clipEnd, clipSpeed, toSource, videoTracks } from './model';
 import type { Project, TimelineLayout } from './model';
 import { readMediaFile } from '../media/files';
 import { AnimationReader, imageType, openAnimation } from '../media/animation';
 import { audioGain, renderFrame } from '../playback/compositor';
+import { bufferStretch, stretches } from '../playback/stretch';
 import type { RenderReply, RenderRequest } from './renderProtocol';
 import type { ExportTrace } from '../export/trace';
 
@@ -94,7 +95,7 @@ export function exportSource(project: Project, layout: TimelineLayout): ExportSo
               const images = new Map<string, CanvasImageSource>(reply.frames.map((f) => [f.clipId, f.image]));
               for (const [id, reader] of animations) {
                 const clip = videoTracks(p).flatMap((t) => t.clips).find((c) => c.id === id)!;
-                if (time >= clip.start && time < clipEnd(clip)) images.set(id, await reader.at(clip.inS + time - clip.start));
+                if (time >= clip.start && time < clipEnd(clip)) images.set(id, await reader.at(toSource(clip, time)));
               }
               renderFrame(p, time, ctx, (clip) => images.get(clip.id) ?? stills.get(clip.mediaId) ?? null);
               return canvas;
@@ -128,7 +129,7 @@ async function mixdown(p: Project, duration: number, files: Record<string, File>
         audioGain(p, clip, Math.min(end - 1 / sampleRate, start + i / (count - 1) * (end - start))));
       gain.gain.setValueCurveAtTime(curve, start, end - start);
       gain.connect(ctx.destination);
-      const sourceStart = clip.inS + start - clip.start, sourceEnd = clip.inS + end - clip.start;
+      const sourceStart = toSource(clip, start), sourceEnd = toSource(clip, end);
       const length = `${Math.round(sourceEnd - sourceStart)} s`;
       trace.progress(`0 / ${length}`);
       // Copy the decoded chunks into one buffer per clip: a source node per chunk (thousands for a long clip)
@@ -148,10 +149,21 @@ async function mixdown(p: Project, duration: number, files: Record<string, File>
           joined.copyToChannel(data.subarray(skip, skip + samples), ch, offset);
         }
       }
-      if (joined) {
+      if (joined && stretches(clip)) {
+        const node = await bufferStretch(ctx);
+        const input = await resampled(joined, sampleRate);
+        await node.addBuffers(Array.from({ length: input.numberOfChannels }, (_, ch) => input.getChannelData(ch)));
+        // The buffer holds just this clip's audio, so the node reads silence before and after it.
+        await node.schedule({ output: start, active: true, input: 0, rate: clipSpeed(clip) });
+        // Its analysis window still rings briefly past both ends; keep that out of the neighbours.
+        if (start > 0) gain.gain.setValueAtTime(0, 0);
+        gain.gain.setValueAtTime(0, end);
+        node.connect(gain);
+      } else if (joined) {
         const source = ctx.createBufferSource();
-        source.buffer = joined; source.connect(gain);
-        source.start(start, 0, end - start);
+        // Without keep pitch, the changed rate shifts pitch like tape.
+        source.buffer = joined; source.playbackRate.value = clipSpeed(clip); source.connect(gain);
+        source.start(start, 0, sourceEnd - sourceStart);
       }
     } finally { input.dispose(); }
   }
@@ -161,6 +173,15 @@ async function mixdown(p: Project, duration: number, files: Record<string, File>
   const result = await ctx.startRendering();
   signal.throwIfAborted();
   return result;
+}
+
+/** `buffer` at `rate`: the stretcher reads samples at its context's rate. */
+async function resampled(buffer: AudioBuffer, rate: number): Promise<AudioBuffer> {
+  if (buffer.sampleRate === rate) return buffer;
+  const ctx = new OfflineAudioContext(buffer.numberOfChannels, Math.ceil(buffer.duration * rate), rate);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer; source.connect(ctx.destination); source.start();
+  return ctx.startRendering();
 }
 
 /** Pauses the offline render every few seconds of audio to report how far it got. */

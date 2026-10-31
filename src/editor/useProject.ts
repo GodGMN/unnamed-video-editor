@@ -2,7 +2,7 @@ import { autoKeyframePatch } from './keyframes';
 import { amend, createHistory, record, travel } from './history';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { newId, dropMedia, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, setAspect, settle, trimClipEdge, videoTracks } from './model';
+import { newId, dropMedia, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, setAspect, setClipSpeed, settle, trimClipEdge, videoTracks } from './model';
 import type { Aspect, AudioClip, ClipSelection, EditorUi, Media, MenuState, Project, Selection, TextClip, Tool, Transition, VideoClip } from './model';
 import { removeMediaFiles } from '../media/files';
 import { SEED_SELECTION } from './seed';
@@ -295,6 +295,7 @@ export function useProject(id: string, initial: Project, draft = false) {
         });
       },
       updateAudioClip: (id: string, patch: Partial<AudioClip>) => edit((p) => patchClip(p, id, patch)),
+      setSpeed: (id: string, speed: number) => edit((p) => setClipSpeed(p, id, speed)),
       /** Updates the transition after video clip `id`, creating it from the default cut if needed. */
       updateTransition: (id: string, patch: Partial<Transition>) => edit((p) => {
         const clip = findVideoClip(p, id);

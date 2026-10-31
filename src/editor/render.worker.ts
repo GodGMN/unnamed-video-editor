@@ -1,7 +1,7 @@
 import { t as translate, setLocale } from '../i18n/core';
 import { ALL_FORMATS, BlobSource, Input, VideoSampleSink } from 'mediabunny';
 import type { VideoSample } from 'mediabunny';
-import { clipEnd, videoTracks } from './model';
+import { clipEnd, toSource, videoTracks } from './model';
 import type { Project, VideoClip } from './model';
 import type { RenderReply, RenderRequest } from './renderProtocol';
 
@@ -16,7 +16,7 @@ const streams = new Map<string, AsyncGenerator<VideoSample | null, void, unknown
 
 function* timestamps(clip: VideoClip) {
   for (let i = Math.max(0, Math.ceil(clip.start * project.output.fps)); i / project.output.fps < clipEnd(clip); i++) {
-    yield clip.inS + i / project.output.fps - clip.start;
+    yield toSource(clip, i / project.output.fps);
   }
 }
 
