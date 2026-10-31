@@ -1,3 +1,4 @@
+import { amend, createHistory, record, travel } from './history';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { newId, dropMedia, placeMedia, linkClips, addTextClip, deleteClips, duplicateClip, splitClip, DEFAULT_TRANSITION, clipEnd, clipKind, findClip, findMediaClip, findVideoClip, layoutTimeline, moveClip, patchClip, patchTrack, removeMedia, removeTrack, setAspect, settle, trimClipEdge, videoTracks } from './model';
@@ -57,7 +58,34 @@ function dropUnfinished(p: Project): Project {
  * edit, so leaving one untouched doesn't add an empty project to the library.
  */
 function usePersistentProject(id: string, initial: Project, draft: boolean) {
-  const [project, setProject] = useState(initial);
+  const [history, setHistory] = useState(() => createHistory(initial));
+  const project = history.present;
+  const historyRef = useRef(history);
+  historyRef.current = history;
+  const hasMedia = useCallback((id: string) => {
+    const h = historyRef.current;
+    return [h.present, ...h.past, ...h.future].some(p => Boolean(p.media[id]));
+  }, []);
+  const gesture = useRef<object | null>(null);
+  useEffect(() => {
+    const begin = () => { gesture.current = {}; };
+    const end = () => { gesture.current = null; };
+    window.addEventListener('pointerdown', begin, true);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointerdown', begin, true);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  }, []);
+  const setProject = useCallback((value: Project | ((p: Project) => Project)) => {
+    const group = gesture.current;
+    setHistory(h => record(h, typeof value === 'function' ? value(h.present) : value, group));
+  }, []);
+  const amendProject = useCallback((update: (p: Project) => Project) => setHistory(h => amend(h, update)), []);
+  const undo = useCallback(() => setHistory(h => travel(h, 'undo')), []);
+  const redo = useCallback(() => setHistory(h => travel(h, 'redo')), []);
   const [saveState, setSaveState] = useState<SaveState>({ status: 'saved' });
   const latest = useRef(project);
   latest.current = project;
@@ -100,7 +128,7 @@ function usePersistentProject(id: string, initial: Project, draft: boolean) {
     window.addEventListener('beforeunload', leave);
     return () => window.removeEventListener('beforeunload', leave);
   }, [saveState]);
-  return { project, setProject, saveState, flush: save, persist };
+  return { project, setProject, amendProject, hasMedia, undo, redo, canUndo: history.past.length > 0, canRedo: history.future.length > 0, saveState, flush: save, persist };
 }
 
 export interface PlayRange {
@@ -123,7 +151,18 @@ function playRange(p: Project, end: number, lockClip: string | null): PlayRange 
 export function useProject(id: string, initial: Project, draft = false) {
   const start = useMemo(() => dropUnfinished(initial), [initial]);
   const [ui, setUi] = useState<EditorUi>(() => reconcileUi(start, initialUi));
-  const { project, setProject, saveState, flush, persist } = usePersistentProject(id, start, draft);
+  const { project, setProject, amendProject, hasMedia, undo, redo, canUndo, canRedo, saveState, flush, persist } = usePersistentProject(id, start, draft);
+  const removedSources = useRef(new Set<string>());
+  useEffect(() => () => {
+    if (!removedSources.current.size) return;
+    const candidates = [...removedSources.current];
+    void flush().then(async () => {
+      const entries = await listProjects();
+      for (const mediaId of candidates) {
+        if (!entries.some(e => Object.hasOwn(e.project.media, mediaId))) await removeMediaFiles(mediaId);
+      }
+    }).catch(error => console.warn('Could not remove unused media', error));
+  }, [flush]);
   const projectRef = useRef(project);
   projectRef.current = project;
   const uiRef = useRef(ui);
@@ -144,17 +183,16 @@ export function useProject(id: string, initial: Project, draft = false) {
       renameProject: (name: string) => edit((p) => ({ ...p, name })),
       setAspect: (aspect: Aspect) => edit((p) => setAspect(p, aspect)),
       addMedia: (media: Media) => edit((p) => ({ ...p, media: { ...p.media, [media.id]: media } })),
-      /** Deletes a source, its clips on the timeline, and its stored files. */
+      /** Removes a source and its clips; files remain until the undo session ends. */
       removeMedia: (mediaId: string) => {
         const p = projectRef.current;
         if (!p) return;
         const next = removeMedia(p, mediaId);
+        removedSources.current.add(mediaId);
         setProject(next);
         setUi((u) => reconcileUi(next, u));
-        void persist(next).then(async () => {
-          const entries = await listProjects();
-          if (!entries.some(e => Object.hasOwn(e.project.media, mediaId))) await removeMediaFiles(mediaId);
-        }).catch(error => console.warn('Could not remove unused media', error));
+        // Keep source files available while history can restore the removed media.
+        void persist(next).catch(error => console.warn('Could not save media removal', error));
       },
       /** Deletes the selected clips, with their linked partners. */
       deleteSelection: () => {
@@ -182,13 +220,13 @@ export function useProject(id: string, initial: Project, draft = false) {
        * caller can drop the files it just linked.
        */
       finishMedia: (media: Media) => {
-        if (!projectRef.current?.media[media.id]) return false;
-        edit((p) => (p.media[media.id] ? { ...p, media: { ...p.media, [media.id]: media } } : p));
+        if (!hasMedia(media.id)) return false;
+        amendProject((p) => (p.media[media.id] ? { ...p, media: { ...p.media, [media.id]: media } } : p));
         return true;
       },
       /** Takes back media whose import failed, with any clips already placed from it. */
       cancelMedia: (mediaId: string) => {
-        setProject(p => removeMedia(p, mediaId));
+        amendProject(p => removeMedia(p, mediaId));
         setUi(u => reconcileUi(removeMedia(projectRef.current, mediaId), u));
       },
       placeMedia: (mediaId: string, trackId: string, time: number) => {
@@ -284,10 +322,23 @@ export function useProject(id: string, initial: Project, draft = false) {
         return t.kind === 'audio' ? patchTrack(p, id, { muted: !t.muted }) : patchTrack(p, id, { hidden: !t.hidden });
       }),
     };
-  }, [persist, setProject]);
+  }, [persist, setProject, amendProject, hasMedia]);
+
+  useEffect(() => { setUi(u => reconcileUi(project, u)); }, [project]);
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (event.defaultPrevented || event.altKey || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return;
+      if (target instanceof HTMLElement && (target.closest('input, textarea, select') || target.isContentEditable)) return;
+      event.preventDefault();
+      if (event.shiftKey) redo(); else undo();
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [undo, redo]);
 
   if (!project || !layout || !range) return null;
-  return { project, ui, layout, range, saveState, flush, ...actions };
+  return { project, ui, layout, range, saveState, flush, undo, redo, canUndo, canRedo, ...actions };
 }
 
 export type Editor = NonNullable<ReturnType<typeof useProject>>;
