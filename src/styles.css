@@ -196,7 +196,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; margin: 0; }
 /* The stage keeps the output ratio (`--ar`, width over height) and shrinks to whichever of the wrap's width or height runs out first. */
 .stage-wrap { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 4px 20px 12px; background: var(--inset); }
 .stage-fit { width: 100%; height: 100%; container-type: size; display: flex; align-items: center; justify-content: center; }
-.stage { position: relative; width: min(100cqw, 100cqh * var(--ar), 760px); aspect-ratio: var(--ar); background: #000; border-radius: var(--radius-sm); overflow: hidden; }
+.stage { position: relative; width: min(100cqw, 100cqh * var(--ar)); aspect-ratio: var(--ar); background: #000; border-radius: var(--radius-sm); overflow: hidden; }
 .stage.grid { background: repeating-conic-gradient(#3a3e3c 0 25%, #262928 0 50%) 0 0 / 16px 16px; }
 .key-picker { position: absolute; inset: 0; cursor: crosshair; z-index: 3; }
 .key-picker-banner { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; width: max-content; max-width: calc(100% - 20px); padding: 6px 12px; border-radius: calc((1lh + 14px) * var(--corner)); background: rgba(12, 14, 13, 0.85); border: 1px solid var(--control); font-size: 12px; pointer-events: none; }
@@ -845,3 +845,18 @@ button.overlap-band.drop-target { color: var(--accent); background-color: rgba(1
 }
 .ptl-name { position: sticky; left: 0; z-index: 3; display: inline-flex; align-items: center; height: 100%; padding: 0 8px; font: 600 10px var(--mono); color: var(--text-muted); background: linear-gradient(90deg, var(--inset) 70%, transparent); pointer-events: none; }
 .ptl-band.main .ptl-name { color: var(--text-soft); }
+
+/* Panel splitters: each sits in the gap it borders, so it adds no space. Dragged sizes override the layout's own, and can still shrink with the window. */
+.splitter { position: relative; z-index: 2; flex: none; touch-action: none; outline: none; }
+.splitter.x { width: 8px; margin: 0 -8px; cursor: col-resize; }
+.splitter.y { height: 8px; margin: -8px 8px 0; cursor: row-resize; }
+.splitter::after { content: ''; position: absolute; border-radius: 2px; background: var(--accent); opacity: 0; transition: opacity 0.12s; }
+.splitter.x::after { top: 50%; left: 3px; width: 2px; height: 48px; translate: 0 -50%; }
+.splitter.y::after { left: 50%; top: 3px; height: 2px; width: 48px; translate: -50% 0; }
+.splitter:hover::after, .splitter:focus-visible::after, .resizing-x .splitter.x:hover::after, .resizing-y .splitter.y:hover::after { opacity: 0.8; }
+.splitter:active::after { opacity: 1; }
+.resizing-x, .resizing-x * { cursor: col-resize !important; user-select: none; }
+.resizing-y, .resizing-y * { cursor: row-resize !important; user-select: none; }
+.editor.sized-media .media { flex: 0 1 var(--media-w); max-width: none; min-width: 200px; }
+.editor.sized-props .props { flex: 0 1 var(--props-w); max-width: none; min-width: 240px; }
+.editor.sized-timeline .timeline { flex: 0 1 var(--timeline-h); max-height: none; }

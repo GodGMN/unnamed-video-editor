@@ -1,5 +1,6 @@
 import { t as translate } from './i18n/core';
 import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { fmtTime, videoTracks } from './editor/model';
 import type { Media, Project } from './editor/model';
 import { exportSource } from './editor/exportSource';
@@ -20,11 +21,15 @@ import { TopBar } from './components/TopBar';
 import { ProjectLibrary } from './components/ProjectLibrary';
 import { PhoneEditor } from './components/phone/PhoneEditor';
 import { LibraryGrid, TextT } from './components/icons';
+import { Splitter } from './components/Splitter';
 import { useLayoutMode } from './components/useLayoutMode';
+import { setPanelSize, usePanelSizes } from './panelSizes';
 import { activeProjectId, listProjects, loadProject, selectProject } from './editor/storage';
 import { reportError } from './toast/store';
 
 const imported = new WeakSet<File>();
+// Smallest sizes a drag can leave: the panels' own minimums, and enough preview to keep editing.
+const MEDIA_MIN = 200, PROPS_MIN = 240, PREVIEW_MIN = 360, TIMELINE_MIN = 160, WORKSPACE_MIN = 380;
 
 /** Puts each finished conversion into the Media library, and at the end of V1 if the user asked for that. */
 function useConvertedMedia(editor: Editor | null) {
@@ -67,6 +72,8 @@ function useConvertedMedia(editor: Editor | null) {
 /** `files` were dropped on the project library to start this project; they are imported once and placed on V1. */
 function EditorApp({ id, initial, draft, files, onHome }: { id: string; initial: Project; draft: boolean; files?: PickedFile[]; onHome: (project: Project) => void }) {
   const mode = useLayoutMode();
+  const sizes = usePanelSizes();
+  const editorRoot = useRef<HTMLDivElement>(null);
   const editor = useProject(id, initial, draft);
   const [pendingImports, setPendingImports] = useState(false);
   const [mediaRevision, setMediaRevision] = useState(0);
@@ -121,10 +128,18 @@ function EditorApp({ id, initial, draft, files, onHome }: { id: string; initial:
     </>;
   }
 
+  const part = (selector: string) => () => editorRoot.current?.querySelector<HTMLElement>(selector) ?? null;
+  const spare = (selector: string, keep: number, axis: 'x' | 'y') => () => {
+    const el = editorRoot.current?.querySelector<HTMLElement>(selector);
+    if (!el) return 0;
+    return (axis === 'x' ? el.getBoundingClientRect().width : el.getBoundingClientRect().height) - keep;
+  };
+  const sized = (['media', 'props', 'timeline'] as const).filter((name) => sizes[name] !== undefined && (name !== 'media' || mode === 'desktop'));
   const media = <MediaPanel onBusy={setPendingImports} onReconnect={() => setMediaRevision(n => n + 1)} onImport={imports.ingest} importing={imports.pending} onPreview={editor.previewSource} previewing={editor.ui.source} onRemove={editor.removeMedia} project={project} onConvert={setConverting}
     onAdd={mode === 'tablet' ? (id) => editor.appendMedia([id]) : undefined} />;
   return (
-    <div className={'editor' + (mode === 'tablet' ? ' tablet' : '')}>
+    <div ref={editorRoot} className={'editor' + (mode === 'tablet' ? ' tablet' : '') + sized.map((name) => ' sized-' + name).join('')}
+      style={{ '--media-w': sizes.media + 'px', '--props-w': sizes.props + 'px', '--timeline-h': sizes.timeline + 'px' } as CSSProperties}>
       <TopBar onUndo={editor.undo} onRedo={editor.redo} canUndo={editor.canUndo} canRedo={editor.canRedo} onProjects={leave} onSettings={() => setSettings(true)} saveState={editor.saveState} onSave={() => { void editor.flush().catch(() => undefined); }} projectName={project.name} onRename={editor.renameProject} clipCount={clipCount} totalTime={totalTime} onExport={() => setExporting(true)}
         onShowConversion={(id, name) => setConverting({ id, name })} />
       <div className="workspace">
@@ -135,10 +150,18 @@ function EditorApp({ id, initial, draft, files, onHome }: { id: string; initial:
           </nav>
           {/* Kept mounted while closed so imports and source checks carry on. */}
           <div className="library-drawer" hidden={!library}>{media}</div>
-        </> : media}
+        </> : <>
+          {media}
+          <Splitter axis="x" label={translate('resizeLibrary')} panel={part('.media')} grow={1} min={MEDIA_MIN} room={spare('.preview', PREVIEW_MIN, 'x')}
+            size={sizes.media} onResize={(size) => setPanelSize('media', size)} />
+        </>}
         <PreviewPanel key={mediaRevision} editor={editor} totalTime={totalTime} />
+        <Splitter axis="x" label={translate('resizeProperties')} panel={part('.props')} grow={-1} min={PROPS_MIN} room={spare('.preview', PREVIEW_MIN, 'x')}
+          size={sizes.props} onResize={(size) => setPanelSize('props', size)} />
         <PropertiesPanel editor={editor} />
       </div>
+      <Splitter axis="y" label={translate('resizeTimeline')} panel={part('.timeline')} grow={-1} min={TIMELINE_MIN} room={spare('.workspace', WORKSPACE_MIN, 'y')}
+        size={sizes.timeline} onResize={(size) => setPanelSize('timeline', size)} />
       <Timeline key={mediaRevision} editor={editor} onDropFiles={imports.ingest} />
       {dialogs}
     </div>

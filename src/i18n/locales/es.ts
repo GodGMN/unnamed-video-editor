@@ -713,4 +713,8 @@ export const es: Record<TranslationKey, Message> = {
   "mobileTrimStart": "Recortar el inicio de {name}",
   "mobileTrimEnd": "Recortar el final de {name}",
   "mobileDelete": "Eliminar",
+  "resizeLibrary": "Cambiar el tamaño de la biblioteca",
+  "resizeProperties": "Cambiar el tamaño de las propiedades",
+  "resizeTimeline": "Cambiar el tamaño de la línea de tiempo",
+  "dragToResizeDoubleClickToReset": "Arrastra para cambiar el tamaño, doble clic para restablecer",
 };
