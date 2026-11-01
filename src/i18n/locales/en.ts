@@ -711,4 +711,8 @@ export const en = {
   "mobileTrimStart": "Trim start of {name}",
   "mobileTrimEnd": "Trim end of {name}",
   "mobileDelete": "Delete",
+  "resizeLibrary": "Resize library",
+  "resizeProperties": "Resize properties",
+  "resizeTimeline": "Resize timeline",
+  "dragToResizeDoubleClickToReset": "Drag to resize, double-click to reset",
 };
