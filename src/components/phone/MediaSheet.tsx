@@ -7,6 +7,7 @@ import type { Editor } from '../../editor/useProject';
 import type { PickedFile } from '../../media/links';
 import type { Placement } from '../../media/useImports';
 import { PreviewStrip } from '../../media/PreviewStrip';
+import { ImportBadge } from '../../media/ImportBadge';
 import { ConversionProgress } from '../TopBar';
 import { Convert, Plus, Warning } from '../icons';
 
@@ -66,7 +67,7 @@ export function MediaSheet({ editor, audio, onImport, importing, onConvert, onDo
               style={{ background: m.tone }} aria-pressed={n >= 0} aria-label={m.name} onClick={() => toggle(m)}>
               {m.video ? <PreviewStrip media={m} width={120} /> : <span className="media-tile-name">{m.name}</span>}
               {!m.decodable && <span className="media-tile-warn"><Warning stroke="var(--warn-icon)" /><Convert size={12} />{translate('convertToMP4')}</span>}
-              {m.importing && <span className="media-importing">{translate('importing')}</span>}
+              {m.importing && <ImportBadge id={m.id} />}
               <span className="media-dur">{m.still ? translate('still') : fmtShortDuration(m.duration)}</span>
               {n >= 0 && <span className="media-tile-order">{n + 1}</span>}
             </button>

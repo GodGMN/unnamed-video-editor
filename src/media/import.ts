@@ -7,6 +7,8 @@ import type { MediaPreview } from './files';
 import { fingerprint, linkFile } from './links';
 import type { ReadHandle } from './links';
 import { imageType, openAnimation } from './animation';
+import { trackImport } from './importProgress';
+import type { ImportStep } from './importProgress';
 
 const FORMAT_LABELS: Record<string, string> = { jpg: 'JPEG', apng: 'APNG', 'x-icon': 'ICO', 'vnd.microsoft.icon': 'ICO', 'x-ms-bmp': 'BMP' };
 const IMAGE_EXTENSIONS = /\.(a?png|jpe?g|webp|gif|avif|bmp|ico)$/i;
@@ -53,10 +55,13 @@ async function probeStill(file: File, handle?: ReadHandle): Promise<Probe> {
     if (!animation) thumbnails.push(thumbnail(image, image.width, image.height));
     const cover = thumbnail(image, image.width, image.height, 960);
     const finish = async () => {
-      await linkFile(id, file, handle);
-      try { await writePreview(id, { thumbnails, peaks: [], cover }); }
-      catch (error) { await removeMediaFiles(id).catch(() => undefined); throw error; }
-      return done(media);
+      const progress = trackImport(id, ['store']);
+      try {
+        await linkFile(id, file, handle, undefined, (written, total) => progress.report('store', total ? written / total : 1));
+        try { await writePreview(id, { thumbnails, peaks: [], cover }); }
+        catch (error) { await removeMediaFiles(id).catch(() => undefined); throw error; }
+        return done(media);
+      } finally { progress.clear(); }
     };
     return { media, finish };
   } finally { image.close(); }
@@ -83,15 +88,19 @@ export async function probeMedia(file: File, handle?: ReadHandle): Promise<Probe
     };
     const finish = async () => {
       let stored = false;
+      const steps: ImportStep[] = ['store'];
+      if (video && videoOk) steps.push('thumbnails');
+      if (audio && audioOk) steps.push('waveform');
+      const progress = trackImport(id, steps);
       try {
-        await linkFile(id, file, handle);
+        await linkFile(id, file, handle, undefined, (written, total) => progress.report('store', total ? written / total : 1));
         stored = true;
-        await generatePreview(media, video, audio, videoOk, audioOk);
+        await generatePreview(media, video, audio, videoOk, audioOk, progress.report);
         return done(media);
       } catch (error) {
         if (stored) await removeMediaFiles(id).catch(() => undefined);
         throw error;
-      } finally { input.dispose(); }
+      } finally { progress.clear(); input.dispose(); }
     };
     return { media, finish };
   } catch (error) {
@@ -104,16 +113,19 @@ export async function importMedia(file: File, handle?: ReadHandle): Promise<Medi
   return (await probeMedia(file, handle)).finish();
 }
 
-async function generatePreview(media: Media, video: Awaited<ReturnType<Input['getPrimaryVideoTrack']>>, audio: Awaited<ReturnType<Input['getPrimaryAudioTrack']>>, videoOk: boolean, audioOk: boolean) {
+async function generatePreview(media: Media, video: Awaited<ReturnType<Input['getPrimaryVideoTrack']>>, audio: Awaited<ReturnType<Input['getPrimaryAudioTrack']>>, videoOk: boolean, audioOk: boolean, report?: (step: ImportStep, fraction: number) => void) {
   const { duration, id } = media;
   const preview: MediaPreview = { thumbnails: [], peaks: [] };
   if (video && videoOk) {
+    report?.('thumbnails', 0);
     const cover = await new CanvasSink(video, { width: 960, height: 540, fit: 'contain' }).getCanvas(0);
     if (cover) preview.cover = thumbnail(cover.canvas, 960, 540, 960);
     const sink = new CanvasSink(video, { width: 160, height: 90, fit: 'contain' });
     const count = Math.min(40, Math.max(2, Math.ceil(duration)));
     const times = Array.from({ length: count }, (_, i) => i * duration / count);
+    let seen = 0;
     for await (const frame of sink.canvasesAtTimestamps(times)) {
+      report?.('thumbnails', ++seen / count);
       if (!frame) continue;
       const canvas = document.createElement('canvas');
       canvas.width = 160; canvas.height = 90;
@@ -124,7 +136,9 @@ async function generatePreview(media: Media, video: Awaited<ReturnType<Input['ge
   if (audio && audioOk) {
     const count = Math.min(20000, Math.max(100, Math.ceil(duration * 30)));
     preview.peaks = Array(count).fill(0);
+    report?.('waveform', 0);
     for await (const { buffer, timestamp } of new AudioBufferSink(audio).buffers()) {
+      report?.('waveform', (timestamp + buffer.duration) / duration);
       for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
         const samples = buffer.getChannelData(channel);
         for (let i = 0; i < samples.length; i++) {

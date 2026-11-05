@@ -13,6 +13,7 @@ import { pickFiles, requestSourcePermission, sourceKind } from '../media/links';
 import type { PickedFile } from '../media/links';
 import { reconnectMedia } from '../projects/portable';
 import { PreviewStrip } from '../media/PreviewStrip';
+import { ImportBadge, ImportDetail } from '../media/ImportBadge';
 import { MEDIA_MIME, mediaDrag } from '../media/drag';
 import { Tabs } from './Tabs';
 
@@ -184,12 +185,13 @@ export function MediaPanel({ onBusy, onReconnect, project, onConvert, onImport, 
             <div className="media-thumb" style={{ background: m.tone }}>
               <PreviewStrip media={m} width={100} />
               {!m.decodable && <div className="warn"><Warning stroke="var(--warn-icon)" /></div>}
-              {m.importing && <span className="media-importing">{translate('importing')}</span>}
+              {m.importing && <ImportBadge id={m.id} />}
               <span className="media-dur">{m.animation ? translate('sLoop', { value1: formatNumber(m.animation, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : m.still ? translate('still') : m.decodable ? fmtShortDuration(m.duration) : '—'}</span>
             </div>
             <div className="media-text">
               <span className="media-name">{m.name}</span>
               <span className={'media-meta' + (m.decodable ? '' : ' error')}>{mediaMeta(project, m)}</span>
+              {m.importing && <ImportDetail id={m.id} />}
               {!m.importing && <>
               {available[m.id] === false && <>
                 <span className="media-meta error">{translate('mediaReconnectNeeded')}</span>

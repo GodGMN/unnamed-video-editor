@@ -116,6 +116,19 @@ export const en = {
   "image": "Image",
   "importFailed": "Import failed",
   "importing": "Importing…",
+  "importWaiting": "Waiting…",
+  "importStepStore": "Saving to browser",
+  "importStepThumbnails": "Making thumbnails",
+  "importStepWaveform": "Reading audio",
+  "importStepOf": "Step {index} of {steps} · {label}",
+  "importSecondsLeft": {
+    "one": "about {count} second left",
+    "other": "about {count} seconds left"
+  },
+  "importMinutesLeft": {
+    "one": "about {count} minute left",
+    "other": "about {count} minutes left"
+  },
   "uiImporting": ", importing",
   "importDroppedFiles": {
     "one": "Import file",

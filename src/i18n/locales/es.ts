@@ -640,6 +640,19 @@ export const es: Record<TranslationKey, Message> = {
   "conversionOutOfMemoryToast": "Se ha agotado la memoria en {time}. Convertir a {height}p con {fps} necesita más memoria de la que tiene esta pestaña; una resolución menor suele funcionar. No ha cambiado nada en tu proyecto.",
   "library": "Biblioteca",
   "importing": "Importando…",
+  "importWaiting": "En espera…",
+  "importStepStore": "Guardando en el navegador",
+  "importStepThumbnails": "Creando miniaturas",
+  "importStepWaveform": "Analizando el audio",
+  "importStepOf": "Paso {index} de {steps} · {label}",
+  "importSecondsLeft": {
+    "one": "queda {count} segundo aprox.",
+    "other": "quedan unos {count} segundos"
+  },
+  "importMinutesLeft": {
+    "one": "queda {count} minuto aprox.",
+    "other": "quedan unos {count} minutos"
+  },
   "uiImporting": ", importando",
   "importDroppedFiles": {
     "one": "Importar archivo",

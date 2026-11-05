@@ -33,6 +33,19 @@ export interface LinkedSource {
   name: string;
   type: string;
   range?: { offset: number; size: number };
+  /** Large sources are stored as this many parts instead of `file`, so each write can be counted. */
+  parts?: number;
+}
+/** Bytes per stored part: small enough that progress moves often, big enough to keep writes few. */
+export const PART_SIZE = 32 * 1024 * 1024;
+const partKey = (id: string, i: number) => `${id}/part/${String(i).padStart(6, '0')}`;
+const partRange = (id: string) => IDBKeyRange.bound(`${id}/part/`, `${id}/part/\uffff`);
+const removeParts = (id: string) => mediaTransaction('sources', 'readwrite', s => s.delete(partRange(id)));
+/** The stored parts as one file, or null when some are missing. */
+async function readParts(id: string, source: LinkedSource): Promise<File | null> {
+  const parts = await mediaTransaction<Blob[]>('sources', 'readonly', s => s.getAll(partRange(id)));
+  if (parts.length !== source.parts) return null;
+  return new File(parts, source.name, { type: source.type, lastModified: source.lastModified });
 }
 let db: Promise<IDBDatabase> | undefined;
 export async function mediaTransaction<T>(store: 'sources' | 'previews', mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
@@ -55,18 +68,37 @@ export async function mediaTransaction<T>(store: 'sources' | 'previews', mode: I
   });
 }
 const session = new Map<string, File>();
-export async function linkFile(id: string, file: File, handle?: ReadHandle, range?: LinkedSource['range']) {
+/** Stores `file` under `id`, calling `onProgress` with the bytes written so far. */
+export async function linkFile(id: string, file: File, handle?: ReadHandle, range?: LinkedSource['range'], onProgress?: (written: number, total: number) => void) {
   const source: LinkedSource = { handle, range, file, size: file.size, lastModified: file.lastModified, name: file.name, type: file.type };
+  onProgress?.(0, file.size);
+  await removeParts(id);
+  if (file.size > PART_SIZE) {
+    const parts = Math.ceil(file.size / PART_SIZE);
+    try {
+      for (let i = 0; i < parts; i++) {
+        await mediaTransaction('sources', 'readwrite', s => s.put(file.slice(i * PART_SIZE, (i + 1) * PART_SIZE), partKey(id, i)));
+        onProgress?.(Math.min(file.size, (i + 1) * PART_SIZE), file.size);
+      }
+    } catch (error) { await removeParts(id).catch(() => undefined); throw error; }
+    delete source.file; source.parts = parts;
+  }
   // Keep the imported bytes so reloads do not depend on external file permissions.
   if (range && handle) {
     const archive = await handle.getFile();
     source.size = archive.size; source.lastModified = archive.lastModified;
   }
-  try { await mediaTransaction('sources', 'readwrite', s => s.put(source, id)); }
-  catch (error) {
-    if (!handle || !(error instanceof DOMException) || error.name !== 'DataCloneError') throw error;
-    await mediaTransaction('sources', 'readwrite', s => s.put({ ...source, handle: undefined }, id));
+  try {
+    try { await mediaTransaction('sources', 'readwrite', s => s.put(source, id)); }
+    catch (error) {
+      if (!handle || !(error instanceof DOMException) || error.name !== 'DataCloneError') throw error;
+      await mediaTransaction('sources', 'readwrite', s => s.put({ ...source, handle: undefined }, id));
+    }
+  } catch (error) {
+    if (source.parts) await removeParts(id).catch(() => undefined);
+    throw error;
   }
+  onProgress?.(file.size, file.size);
   session.set(id, file);
 }
 export async function linkedFile(id: string): Promise<{ linked: boolean; file: File | null }> {
@@ -74,6 +106,7 @@ export async function linkedFile(id: string): Promise<{ linked: boolean; file: F
   const source = await mediaTransaction<LinkedSource | undefined>('sources', 'readonly', s => s.get(id));
   if (!source) return { linked: false, file: null };
   if (source.file) return { linked: true, file: source.file };
+  if (source.parts) return { linked: true, file: await readParts(id, source) };
   if (!source.handle) return { linked: true, file: null };
   try {
     if (await source.handle.queryPermission({ mode: 'read' }) !== 'granted') return { linked: true, file: null };
@@ -88,22 +121,25 @@ export async function requestSourcePermission(id: string) {
 }
 export async function forgetLink(id: string) {
   session.delete(id);
-  await mediaTransaction('sources', 'readwrite', s => s.delete(id));
+  await mediaTransaction('sources', 'readwrite', s => { s.delete(partRange(id)); return s.delete(id); });
 }
 
 export async function sourceKind(id: string): Promise<'stored' | 'linked' | 'session' | 'legacy'> {
   const source = await mediaTransaction<LinkedSource | undefined>('sources', 'readonly', s => s.get(id));
-  return source ? source.file ? 'stored' : source.handle ? 'linked' : 'session' : 'legacy';
+  return source ? source.file || source.parts ? 'stored' : source.handle ? 'linked' : 'session' : 'legacy';
 }
 
 export async function copyLinks(matches: { from: string; to: string }[]) {
   await mediaTransaction('sources', 'readwrite', store => {
     for (const match of matches) {
+      store.delete(partRange(match.to));
       const request = store.get(match.from);
       request.onsuccess = () => {
         if (!request.result) { store.transaction.abort(); return; }
         store.put(request.result, match.to);
       };
+      const parts = store.getAll(partRange(match.from));
+      parts.onsuccess = () => parts.result.forEach((part: Blob, i) => store.put(part, partKey(match.to, i)));
     }
     return store.get(matches[0]?.from ?? '');
   });

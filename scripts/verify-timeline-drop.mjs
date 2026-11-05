@@ -35,7 +35,7 @@ try {
   const clip = page.getByRole('button', { name: /Video: long-take\.mp4, 12\.0 seconds, linked to audio, importing/ });
   await clip.waitFor({ timeout: 10000 });
   assert.equal(await page.locator('.drop-ghost').count(), 0, 'The ghost goes once the file is dropped');
-  assert.match(await page.locator('.media-item.importing').innerText(), /Importing…/);
+  assert.match(await page.locator('.media-item.importing').innerText(), /Waiting…|Saving to browser|\d\s?%/);
   assert.ok(await page.getByRole('button', { name: /Audio: long-take\.mp4.*importing/ }).count() === 1, 'Linked audio is reserved too');
   const pps = await page.evaluate(() => {
     const ticks = [...document.querySelectorAll('.tick')].map((t) => parseFloat(t.style.left));
