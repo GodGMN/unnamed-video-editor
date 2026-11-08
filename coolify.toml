@@ -1,0 +1,6 @@
+project = "Video Editor"
+domain = "video.gimeno.dev"
+
+[apps."unnamed-video-editor:main-vnslwadfxd2ex6ghhof6mzwe"]
+dockerfile = "Dockerfile"
+port = 80
