@@ -165,6 +165,8 @@ export function useProject(id: string, initial: Project, draft = false) {
     }).catch(error => console.warn('Could not remove unused media', error));
   }, [flush]);
   const [intervalPlaybackRequest, setIntervalPlaybackRequest] = useState<PlayRange | null>(null);
+  /** Whether the timeline is playing; the preview owns the clock and reports it here. */
+  const [playing, setPlaying] = useState(false);
   const projectRef = useRef(project);
   projectRef.current = project;
   const uiRef = useRef(ui);
@@ -396,7 +398,7 @@ export function useProject(id: string, initial: Project, draft = false) {
   }, [undo, redo]);
 
   if (!project || !layout || !range) return null;
-  return { project, intervalPlaybackRequest, ui, layout, range, saveState, flush, undo, redo, canUndo, canRedo, ...actions };
+  return { project, intervalPlaybackRequest, playing, setPlaying, ui, layout, range, saveState, flush, undo, redo, canUndo, canRedo, ...actions };
 }
 
 export type Editor = NonNullable<ReturnType<typeof useProject>>;

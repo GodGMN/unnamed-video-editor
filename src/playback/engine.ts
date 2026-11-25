@@ -234,6 +234,24 @@ export class PlaybackEngine {
     player.semitones = semitones;
   }
 
+  /**
+   * Whether a video clip under the playhead has no frame to show yet, as after a seek while
+   * playing. The clock holds still until it has, instead of running ahead of a blank picture.
+   */
+  waiting() {
+    if (!this.latest) return false;
+    const { project, time } = this.latest;
+    for (const track of project.tracks) {
+      if (track.kind !== 'video' || track.hidden) continue;
+      for (const clip of track.clips) {
+        if (time < clip.start || time >= clipEnd(clip) || project.media[clip.mediaId]?.importing || this.unavailable.has(clip.mediaId)) continue;
+        const frames = this.entries.get(clip.id)?.frames;
+        if (!frames?.ready(Math.max(0, toSource(clip, time)))) return true;
+      }
+    }
+    return false;
+  }
+
   /** The canvas changed size: decoders reopen at the new resolution. */
   resize() {
     for (const [id, entry] of this.entries) if (entry.frames) this.release(id);
