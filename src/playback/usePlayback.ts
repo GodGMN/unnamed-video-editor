@@ -41,6 +41,10 @@ export function usePlayback(editor: Editor, volume: number, transparent: boolean
   }, [editor.project, editor.ui.playhead, playing, volume, transparent]);
 
   // A source previewing from the Media panel takes over the player and its Space key.
+  const { setPlaying: share } = editor;
+  useEffect(() => { share(playing); }, [playing, share]);
+  useEffect(() => () => share(false), [share]);
+
   const source = editor.ui.source;
   useEffect(() => { if (source) { interval.current = null; setPlaying(false); } }, [source]);
 
@@ -71,6 +75,13 @@ export function usePlayback(editor: Editor, volume: number, transparent: boolean
     const tick = (now: number) => {
       const { editor, volume, transparent } = current.current;
       const range = interval.current ?? editor.range;
+      // A seek while playing waits for its frame: the playhead holds and the sound pauses meanwhile.
+      if (engine.current?.waiting()) {
+        clock.current = { time: position.current, started: now };
+        engine.current.update({ project: editor.project, time: position.current, playing: false, volume, transparent });
+        frame = requestAnimationFrame(tick);
+        return;
+      }
       const next = Math.max(range.start, Math.min(range.end, clock.current.time + (now - clock.current.started) / 1000));
       position.current = next;
       engine.current?.update({ project: editor.project, time: next, playing: next < range.end, volume, transparent });

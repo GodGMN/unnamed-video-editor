@@ -22,6 +22,8 @@ const AUDIO_CLIP_H = 52;
 
 /** Screen pixels within which a split snaps to the playhead, like the magnet's snap radius. */
 const SPLIT_SNAP_PX = 8;
+/** Fraction of the timeline's width the playhead reaches before playback scrolls the view. */
+const FOLLOW_AT = 0.8;
 /** Timeline zoom limits, in pixels per second. */
 const clampZoom = (pps: number) => Math.max(8, Math.min(320, pps));
 
@@ -127,6 +129,16 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
       pendingScroll.current = null;
     }
   }, [pps]);
+
+  // While playing, the view follows the playhead once it passes 80% of the width, so it never runs off screen.
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current;
+    if (!editor.playing || !scroll) return;
+    const x = ui.playhead * pps;
+    const width = scroll.clientWidth;
+    if (x > scroll.scrollLeft + width * FOLLOW_AT) scroll.scrollLeft = x - width * FOLLOW_AT;
+    else if (x < scroll.scrollLeft) scroll.scrollLeft = x - width * (1 - FOLLOW_AT);
+  }, [editor.playing, ui.playhead, pps]);
 
   // Delete or Backspace removes the selection, unless the key is meant for a text field or a dialog.
   useEffect(() => {

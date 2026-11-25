@@ -11,6 +11,8 @@ const LOOKAHEAD = 0.25;
 export interface Frames {
   request(time: number, playing: boolean): void;
   frame(time: number, playing: boolean): CanvasImageSource | null;
+  /** Whether playback can show `time` now, or will never get a frame for it. */
+  ready(time: number): boolean;
   dispose(): void;
 }
 
@@ -38,6 +40,7 @@ export class StillFrame implements Frames {
 
   request() {}
   frame() { return this.image; }
+  ready() { return !!this.image; }
   dispose() {
     this.disposed = true;
     this.image?.close();
@@ -73,6 +76,7 @@ export class AnimatedFrame implements Frames {
 
   request() {}
   frame(time: number) { return this.timing ? this.images[frameAt(this.timing, time)] : null; }
+  ready() { return !!this.timing; }
   dispose() {
     this.disposed = true;
     this.images.forEach((i) => i.close());
@@ -129,6 +133,8 @@ export class FrameCache implements Frames {
     const previous = [...this.frames].reverse().find((f) => f.timestamp <= time);
     return playing && previous && time - previous.timestamp < 0.25 ? previous.canvas : null;
   }
+
+  ready(time: number) { return this.ended || this.frame(time, true) !== null; }
 
   private async fill() {
     this.busy = true;
