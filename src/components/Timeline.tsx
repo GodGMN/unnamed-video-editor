@@ -24,8 +24,19 @@ const AUDIO_CLIP_H = 52;
 const SPLIT_SNAP_PX = 8;
 /** Fraction of the timeline's width the playhead reaches before playback scrolls the view. */
 const FOLLOW_AT = 0.8;
-/** Timeline zoom limits, in pixels per second. */
-const clampZoom = (pps: number) => Math.max(8, Math.min(320, pps));
+/** Timeline zoom limits, in pixels per second. Zooming out goes as far as fitting a project of `seconds`. */
+const clampZoom = (pps: number, fit: number) => Math.max(Math.min(8, fit), Math.min(320, pps));
+/** The zoom at which `seconds` of timeline fill `width` pixels. */
+const fitZoom = (width: number, seconds: number) => Math.max(0.001, (width - 20) / (Math.ceil(seconds) + 2));
+
+/** Ruler intervals, in seconds. */
+const TICK_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 14400];
+/** The shortest interval that leaves at least `px` pixels between ticks. */
+const tickStep = (pps: number, px: number) => TICK_STEPS.find((step) => step * pps >= px) ?? TICK_STEPS.at(-1)!;
+const pad = (n: number) => String(n).padStart(2, '0');
+/** mm:ss, or h:mm:ss on a timeline an hour or longer. */
+const tickLabel = (s: number, hours: boolean) =>
+  hours ? `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}` : `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
 
 const TRACK_H = { text: TEXT_TRACK_H, video: VIDEO_TRACK_H, audio: AUDIO_TRACK_H };
 
@@ -92,6 +103,11 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
   const scaleRef = useRef(PPS);
   const pendingScroll = useRef<number | null>(null);
   const [viewW, setViewW] = useState(0);
+  const fit = useRef(8);
+  fit.current = viewW ? fitZoom(viewW, layout.end) : 8;
+  // While a pointer drags in the timeline its width never shrinks: trimming the end would
+  // otherwise pull the scroll back under the pointer and trim further.
+  const [heldWidth, setHeldWidth] = useState(0);
   const [trackMenu, setTrackMenu] = useState<{ id: string; left: number; top: number } | null>(null);
   const [confirmTrack, setConfirmTrack] = useState<string | null>(null);
 
@@ -111,7 +127,7 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
       if (!scroll || event.deltaY === 0) return;
       const oldScale = scaleRef.current;
       const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroll.clientWidth : 1);
-      const nextScale = clampZoom(oldScale * Math.exp(-Math.max(-100, Math.min(100, delta)) * 0.002));
+      const nextScale = clampZoom(oldScale * Math.exp(-Math.max(-100, Math.min(100, delta)) * 0.002), fit.current);
       if (nextScale === oldScale) return;
       const anchor = Math.max(0, Math.min(scroll.clientWidth, event.clientX - scroll.getBoundingClientRect().left));
       const left = pendingScroll.current ?? scroll.scrollLeft;
@@ -222,13 +238,25 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
 
   // Ticks run past the content and on to the right edge of the viewport when zoomed out.
   const lastTick = Math.max(Math.ceil(layout.end) + 2, Math.ceil(viewW / pps));
-  const tlWidth = (Math.ceil(layout.end) + 2) * pps + 20;
+  const contentWidth = (Math.ceil(layout.end) + 2) * pps + 20;
+  const tlWidth = Math.max(contentWidth, heldWidth);
+  const holdWidth = () => {
+    setHeldWidth(contentWidth);
+    const release = () => {
+      setHeldWidth(0);
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+  };
 
   /** Zooms so the whole project fills the visible width, and scrolls back to the start. */
   const fitToView = () => {
     const scroll = scrollRef.current;
     if (!scroll) return;
-    const nextScale = layout.end > 0 ? clampZoom((scroll.clientWidth - 20) / (Math.ceil(layout.end) + 2)) : PPS;
+    const fitted = fitZoom(scroll.clientWidth, layout.end);
+    const nextScale = layout.end > 0 ? clampZoom(fitted, fitted) : PPS;
     pendingScroll.current = 0;
     scaleRef.current = nextScale;
     setPps(nextScale);
@@ -387,12 +415,15 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
   };
 
   const ticks = [];
-  for (let s = 0; s <= lastTick; s++) {
-    const major = s % (pps < 16 ? 10 : pps < 40 ? 5 : pps < 100 ? 2 : 1) === 0;
+  const minor = tickStep(pps, 8);
+  const major = tickStep(pps, 70);
+  const hours = lastTick >= 3600;
+  for (let s = 0; s <= lastTick; s += minor) {
+    const labelled = s % major === 0;
     ticks.push(
       <div key={s}>
-        <div className="tick" style={{ left: s * pps, height: major ? 10 : 5 }} />
-        {major && <span className="tick-label" style={{ left: s * pps + 4 }}>{String(Math.floor(s / 60)).padStart(2, '0')}:{String(s % 60).padStart(2, '0')}</span>}
+        <div className="tick" style={{ left: s * pps, height: labelled ? 10 : 5 }} />
+        {labelled && <span className="tick-label" style={{ left: s * pps + 4 }}>{tickLabel(s, hours)}</span>}
       </div>,
     );
   }
@@ -436,7 +467,7 @@ export function Timeline({ editor, onDropFiles }: { editor: Editor; onDropFiles:
           })}
         </div>
 
-        <div ref={scrollRef} className="tl-scroll" onPointerDown={onMarqueeDown}>
+        <div ref={scrollRef} className="tl-scroll" onPointerDown={onMarqueeDown} onPointerDownCapture={holdWidth}>
           <div ref={contentRef} style={{ position: 'relative', width: tlWidth, minWidth: '100%' }}>
             <div className="ruler" onPointerDown={onRulerDown} onDoubleClick={unlock}
               title={focused ? translate('doubleClickToReleaseTheLockedClip') : undefined}>
