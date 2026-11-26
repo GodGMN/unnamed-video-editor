@@ -538,6 +538,7 @@ export const en = {
   "speedBadge": "Plays at {value1}×",
   "keepPitch": "Keep pitch",
   "keepPitchHelp": "On: the voice sounds the same at any speed. Off: slower sounds deeper and faster sounds higher, like tape.",
+  "speedFastPreviewHint": "Above {value1}× the preview plays this clip without sound. The export keeps it.",
   "speedSlowAudioHint": "Below 0.5× even pitch-kept audio sounds smeared. Mute the audio for heavy slow motion.",
   "clipIsCropped": "Clip is cropped",
   "storageCloseOtherTabs": "Close other editor tabs, then retry the storage upgrade.",

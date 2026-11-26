@@ -240,10 +240,12 @@ export const STILL_DURATION = 5;
 export const animationDuration = (loop: number) => Math.round(Math.ceil(STILL_DURATION / loop - 1e-9) * loop * 1e6) / 1e6;
 export const DEFAULT_TRANSITION: Transition = { type: 'cut', duration: 0.5 };
 export const SPEED_MIN = 0.25;
-export const SPEED_MAX = 4;
-export const SPEED_PRESETS = [0.25, 0.5, 1, 1.5, 2, 4];
+export const SPEED_MAX = 16;
+export const SPEED_PRESETS = [0.25, 0.5, 1, 1.5, 2, 4, 8, 16];
 /** Below this speed even good time-stretching audibly smears the sound. */
 export const SPEED_AUDIO_WARNING = 0.5;
+/** Above this speed browsers mute or garble a playing media element, so the preview leaves the clip silent. Export keeps its sound. */
+export const SPEED_PREVIEW_AUDIO_MAX = 4;
 
 type ClipDefaults<C> = Omit<C, 'id' | 'mediaId' | 'start' | 'inS' | 'outS' | 'linkId'>;
 /** Property values of a fresh clip; also what the properties panel's reset buttons restore. */
