@@ -3,7 +3,7 @@ import { useT } from '../i18n';
 import { t as translate, formatNumber } from '../i18n/core';
 import type { CSSProperties, ReactNode } from 'react';
 import { useRef, useState } from 'react';
-import { AUDIO_CLIP_DEFAULTS, SPEED_AUDIO_WARNING, SPEED_MAX, SPEED_MIN, SPEED_PRESETS, audioFor, clipDuration, clipSpeed, DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, dbToFader, faderToDb, fmtDb, MISSING_MEDIA, NO_KEY, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
+import { AUDIO_CLIP_DEFAULTS, SPEED_AUDIO_WARNING, SPEED_MAX, SPEED_PREVIEW_AUDIO_MAX, SPEED_MIN, SPEED_PRESETS, audioFor, clipDuration, clipSpeed, DEFAULT_TRANSITION, GAIN_MAX_DB, GAIN_MIN_DB, dbToFader, faderToDb, fmtDb, MISSING_MEDIA, NO_KEY, VIDEO_CLIP_DEFAULTS, TRANSITION_HELP, TRANSITION_NAMES, curveName, findAudioClip, findTextClip, findVideoClip, fmtAudio, fmtBitrate, fmtFps, fmtSize, fmtTime, codecName, parseTime } from '../editor/model';
 import type { Media, MediaClip, AudioClip, ChromaKey, Fades, FitMode, TextAnchor, TextClip, TransitionType, VideoClip } from '../editor/model';
 import type { Editor } from '../editor/useProject';
 import { Dropper, Mute, Waveform } from './icons';
@@ -294,7 +294,7 @@ function SpeedSection({ editor, clip: cs }: { editor: Editor; clip: MediaClip })
     <div className="props-section" style={{ gap: 10 }}>
       <span className="eyebrow">{translate('clipSpeed')}</span>
       <NumberField unit="×" step={0.05} min={SPEED_MIN} max={SPEED_MAX} value={speed} defaultValue={1} aria-label={translate('clipSpeed')} onChange={(v) => setSpeed(cs.id, v)} />
-      <div className="seg" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }} role="group" aria-label={translate('speedPresets')}>
+      <div className="seg" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }} role="group" aria-label={translate('speedPresets')}>
         {SPEED_PRESETS.map((v) => (
           <button key={v} aria-pressed={speed === v} onClick={() => setSpeed(cs.id, v)}>
             {translate('speedTimes', { value1: formatNumber(v) })}
@@ -311,6 +311,7 @@ function SpeedSection({ editor, clip: cs }: { editor: Editor; clip: MediaClip })
         </div>
         <span className="hint">{translate('keepPitchHelp')}</span>
         {keepPitch && speed < SPEED_AUDIO_WARNING && <span className="hint" style={{ color: 'var(--warn)' }}>{translate('speedSlowAudioHint')}</span>}
+        {speed > SPEED_PREVIEW_AUDIO_MAX && <span className="hint">{translate('speedFastPreviewHint', { value1: formatNumber(SPEED_PREVIEW_AUDIO_MAX) })}</span>}
       </>}
     </div>
   );

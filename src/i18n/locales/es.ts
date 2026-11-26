@@ -520,6 +520,7 @@ export const es: Record<TranslationKey, Message> = {
   "speedBadge": "Se reproduce a {value1}×",
   "keepPitch": "Mantener tono",
   "keepPitchHelp": "Activado: la voz suena igual a cualquier velocidad. Desactivado: más lento suena más grave y más rápido más agudo, como una cinta.",
+  "speedFastPreviewHint": "Por encima de {value1}× la vista previa reproduce este clip sin sonido. La exportación lo conserva.",
   "speedSlowAudioHint": "Por debajo de 0,5× el audio suena emborronado aunque mantenga el tono. Silencia el audio para cámaras lentas extremas.",
   "clipIsCropped": "El clip está recortado",
   "storageCloseOtherTabs": "Cierra las demás pestañas del editor y vuelve a intentar la actualización del almacenamiento.",

@@ -45,7 +45,7 @@ test('an unlinked partner keeps its speed', () => {
 });
 
 test('speed is clamped and stills have none', () => {
-  assert.equal(clip(setClipSpeed(project(), 'v', 100), 0).speed, 4);
+  assert.equal(clip(setClipSpeed(project(), 'v', 100), 0).speed, 16);
   assert.equal(clip(setClipSpeed(project(), 'v', 0), 0).speed, 0.25);
   const still = { ...project(), media: { m: { ...media.m, still: true } } };
   assert.equal(setClipSpeed(still, 'v', 2), still);
@@ -92,8 +92,8 @@ test('keyframes stay on the same source frames at a different speed', () => {
 });
 
 test('saved projects accept speeds in range and reject others', () => {
-  validateProject(project([video('v', 10, { speed: 2 })], [audio('a', 10, { speed: 2, keepPitch: false })]));
-  assert.throws(() => validateProject(project([video('v', 10, { speed: 10 })])));
+  validateProject(project([video('v', 10, { speed: 16 })], [audio('a', 10, { speed: 2, keepPitch: false })]));
+  assert.throws(() => validateProject(project([video('v', 10, { speed: 20 })])));
   assert.throws(() => validateProject(project(undefined, [audio('a', 10, { keepPitch: 'yes' })])));
 });
 

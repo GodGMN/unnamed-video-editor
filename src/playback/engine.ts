@@ -1,5 +1,5 @@
 import { t as translate } from '../i18n/core';
-import { clipEnd, clipSpeed, findVideoClip, toSource } from '../editor/model';
+import { SPEED_PREVIEW_AUDIO_MAX, clipEnd, clipSpeed, findVideoClip, toSource } from '../editor/model';
 import type { AudioClip, MediaClip, Project } from '../editor/model';
 import { readMediaFile } from '../media/files';
 import { imageSize, sampleColor } from './chromaKey';
@@ -125,7 +125,7 @@ export class PlaybackEngine {
     }
     entry.used = ++this.serial;
     const target = Math.max(0, toSource(clip, time));
-    entry.frames?.request(target, playing);
+    entry.frames?.request(target, playing, clipSpeed(clip));
     if (entry.audio?.ready) this.syncAudio(entry, clip as AudioClip, target, playing);
   }
 
@@ -172,7 +172,8 @@ export class PlaybackEngine {
     if (context && player.gain) this.route(player, context, clip);
     const request = this.latest!;
     if (context && player.gain) {
-      player.gain.gain.setTargetAtTime(playing ? request.volume * audioGain(request.project, clip, request.time) : 0, context.currentTime, 0.01);
+      const audible = playing && clipSpeed(clip) <= SPEED_PREVIEW_AUDIO_MAX;
+      player.gain.gain.setTargetAtTime(audible ? request.volume * audioGain(request.project, clip, request.time) : 0, context.currentTime, 0.01);
     }
     element.muted = !context;
     if (player.busy) return;

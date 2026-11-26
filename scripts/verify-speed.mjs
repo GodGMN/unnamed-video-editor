@@ -74,7 +74,7 @@ try {
   };
   const close = (actual, expected, tolerance, what) => assert.ok(Math.abs(actual - expected) <= tolerance, `${what}: ${actual.toFixed(2)}, expected ${expected} ± ${tolerance}`);
 
-  for (const [speed, keepPitch, hz] of [[0.5, true, 440], [2, true, 440], [0.5, false, 220], [2, false, 880], [1, true, 440]]) {
+  for (const [speed, keepPitch, hz] of [[0.5, true, 440], [2, true, 440], [16, true, 440], [0.5, false, 220], [2, false, 880], [16, false, 7040], [1, true, 440]]) {
     const result = await exportClip('tone.mp4', speed, keepPitch);
     const m = measure(result);
     close(result.end, 2 / speed, 0.01, `${speed}× timeline length`);
